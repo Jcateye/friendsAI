@@ -1,0 +1,1371 @@
+{
+  "version": "2.6",
+  "children": [
+    {
+      "type": "frame",
+      "id": "ofOYt",
+      "x": 0,
+      "y": 0,
+      "name": "Login/Register",
+      "width": 393,
+      "height": 852,
+      "fill": "#FFFFFF",
+      "layout": "vertical",
+      "gap": 16,
+      "padding": 24,
+      "children": [
+        {
+          "type": "frame",
+          "id": "NxPgX",
+          "name": "loginTop",
+          "height": "fill_container",
+          "layout": "vertical",
+          "gap": 8,
+          "children": [
+            {
+              "type": "text",
+              "id": "zVh4d",
+              "name": "logo",
+              "fill": "#333333",
+              "content": "FriendsAI",
+              "fontFamily": "Inter",
+              "fontSize": 32,
+              "fontWeight": "bold"
+            },
+            {
+              "type": "text",
+              "id": "sZO0K",
+              "name": "slogan",
+              "fill": "#666666",
+              "content": "Write diary after meeting,\none-click briefing before meeting",
+              "fontFamily": "Inter",
+              "fontSize": 16,
+              "fontWeight": "normal"
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "51HB0",
+          "name": "loginCenter",
+          "width": "fill_container",
+          "layout": "vertical",
+          "gap": 16,
+          "children": [
+            {
+              "type": "frame",
+              "id": "gvaJn",
+              "name": "emailInput",
+              "width": "fill_container",
+              "height": 50,
+              "cornerRadius": 8,
+              "gap": 8,
+              "padding": 12,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "paQYq",
+                  "fill": "#999999",
+                  "content": "Email",
+                  "fontFamily": "Inter",
+                  "fontSize": 14,
+                  "fontWeight": "normal"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "gDbxe",
+              "name": "codeInputRow",
+              "width": "fill_container",
+              "gap": 8,
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "oh0n6",
+                  "name": "codeInput",
+                  "width": "fill_container",
+                  "height": 50,
+                  "cornerRadius": 8,
+                  "padding": 12,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "x0MF1",
+                      "fill": "#999999",
+                      "content": "Code",
+                      "fontFamily": "Inter",
+                      "fontSize": 14,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "Vrdzz",
+                  "name": "getCodeBtn",
+                  "width": 100,
+                  "height": 50,
+                  "fill": "#F0F0F0",
+                  "cornerRadius": 8,
+                  "padding": 12,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "MaTre",
+                      "fill": "#333333",
+                      "content": "Get Code",
+                      "fontFamily": "Inter",
+                      "fontSize": 14,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "jKi4c",
+          "name": "loginAction",
+          "width": "fill_container",
+          "layout": "vertical",
+          "gap": 16,
+          "children": [
+            {
+              "type": "frame",
+              "id": "ZWCAy",
+              "name": "loginBtn",
+              "width": "fill_container",
+              "height": 56,
+              "fill": "#000000",
+              "cornerRadius": 28,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "GOdpI",
+                  "fill": "#FFFFFF",
+                  "content": "Login / Register",
+                  "fontFamily": "Inter",
+                  "fontSize": 16,
+                  "fontWeight": "bold"
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "id": "oO0ah",
+              "name": "privacy",
+              "fill": "#999999",
+              "content": "Privacy Policy",
+              "textAlign": "center",
+              "fontFamily": "Inter",
+              "fontSize": 12,
+              "fontWeight": "normal"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "frame",
+      "id": "qm3Kp",
+      "x": 482,
+      "y": 0,
+      "name": "Conversation (Home)",
+      "width": 393,
+      "height": 852,
+      "fill": "#F9F9F9",
+      "layout": "vertical",
+      "children": [
+        {
+          "type": "frame",
+          "id": "dX11w",
+          "name": "homeTop",
+          "width": "fill_container",
+          "height": 60,
+          "fill": "#FFFFFF",
+          "padding": 16,
+          "children": [
+            {
+              "type": "text",
+              "id": "Su5cy",
+              "content": "☰",
+              "fontFamily": "Inter",
+              "fontSize": 24,
+              "fontWeight": "normal"
+            },
+            {
+              "type": "text",
+              "id": "neWoK",
+              "content": "Conversation",
+              "fontFamily": "Inter",
+              "fontSize": 18,
+              "fontWeight": "bold"
+            },
+            {
+              "type": "frame",
+              "id": "ehloY",
+              "width": 24,
+              "height": 24
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "NT4PX",
+          "name": "homeContent",
+          "width": "fill_container",
+          "height": "fill_container",
+          "layout": "vertical",
+          "gap": 24,
+          "padding": 16,
+          "children": [
+            {
+              "type": "frame",
+              "id": "CncwH",
+              "name": "inputCard",
+              "width": "fill_container",
+              "height": 180,
+              "fill": "#FFFFFF",
+              "cornerRadius": 16,
+              "padding": 20,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "84sJW",
+                  "fill": "#999999",
+                  "content": "Write down who you met today,\nwhat did you talk about...\n(10 mins done)",
+                  "lineHeight": 24,
+                  "fontFamily": "Inter",
+                  "fontSize": 16,
+                  "fontWeight": "normal"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "TTJTQ",
+              "name": "recentList",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": 12,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "kWVmf",
+                  "fill": "#666666",
+                  "content": "Recent Records",
+                  "fontFamily": "Inter",
+                  "fontSize": 14,
+                  "fontWeight": "bold"
+                },
+                {
+                  "type": "frame",
+                  "id": "6b3Qa",
+                  "name": "rec1",
+                  "width": "fill_container",
+                  "fill": "#FFFFFF",
+                  "cornerRadius": 12,
+                  "gap": 4,
+                  "padding": 16,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "KVsPZ",
+                      "content": "Today's Record",
+                      "fontFamily": "Inter",
+                      "fontSize": 16,
+                      "fontWeight": "bold"
+                    },
+                    {
+                      "type": "text",
+                      "id": "39G2F",
+                      "fill": "#666666",
+                      "content": "Met John, discussed pricing...",
+                      "fontFamily": "Inter",
+                      "fontSize": 14,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "frame",
+      "id": "vEfmo",
+      "x": 1000,
+      "y": 0,
+      "name": "Conversation Details",
+      "width": 393,
+      "height": 852,
+      "fill": "#F9F9F9",
+      "layout": "vertical",
+      "children": [
+        {
+          "type": "frame",
+          "id": "UJXUo",
+          "name": "topBar",
+          "width": "fill_container",
+          "height": 60,
+          "fill": "#FFFFFF",
+          "padding": 16,
+          "children": [
+            {
+              "type": "text",
+              "id": "pdRbS",
+              "content": "←",
+              "fontFamily": "Inter",
+              "fontSize": 24,
+              "fontWeight": "normal"
+            },
+            {
+              "type": "text",
+              "id": "xIrcv",
+              "content": "Today's Record 2026/01/28",
+              "fontFamily": "Inter",
+              "fontSize": 16,
+              "fontWeight": "bold"
+            },
+            {
+              "type": "frame",
+              "id": "ANtMz",
+              "fill": "#FFF3E0",
+              "cornerRadius": 4,
+              "padding": 4,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "00iQo",
+                  "fill": "#FF9800",
+                  "content": "Pending",
+                  "fontFamily": "Inter",
+                  "fontSize": 12,
+                  "fontWeight": "normal"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "buDmZ",
+          "name": "inputArea",
+          "width": "fill_container",
+          "fill": "#FFFFFF",
+          "layout": "vertical",
+          "gap": 12,
+          "padding": 16,
+          "children": [
+            {
+              "type": "text",
+              "id": "LS0wK",
+              "fill": "#333333",
+              "content": "Met John at Starbucks. He is interested in the premium plan but worried about the learning curve. Need to send him the onboarding video. His wife Sarah also likes coffee.",
+              "lineHeight": 24,
+              "fontFamily": "Inter",
+              "fontSize": 14,
+              "fontWeight": "normal"
+            },
+            {
+              "type": "frame",
+              "id": "o2a1h",
+              "name": "inputControl",
+              "width": "fill_container",
+              "height": 44,
+              "gap": 12,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "xMxyR",
+                  "content": "🎤",
+                  "fontFamily": "Inter",
+                  "fontSize": 20,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "frame",
+                  "id": "NT1i1",
+                  "width": "fill_container",
+                  "height": 44,
+                  "fill": "#F5F5F5",
+                  "cornerRadius": 22,
+                  "padding": 12,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "I7wyr",
+                      "fill": "#999999",
+                      "content": "Type to edit...",
+                      "fontFamily": "Inter",
+                      "fontSize": 14,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "text",
+                  "id": "o9yWS",
+                  "fill": "#007AFF",
+                  "content": "Save",
+                  "fontFamily": "Inter",
+                  "fontSize": 14,
+                  "fontWeight": "bold"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "20z4D",
+          "name": "aiResult",
+          "width": "fill_container",
+          "height": "fill_container",
+          "layout": "vertical",
+          "gap": 16,
+          "padding": 16,
+          "children": [
+            {
+              "type": "text",
+              "id": "rfX9K",
+              "fill": "#666666",
+              "content": "AI Analysis",
+              "fontFamily": "Inter",
+              "fontSize": 14,
+              "fontWeight": "bold"
+            },
+            {
+              "type": "frame",
+              "id": "MkrDC",
+              "name": "card1",
+              "width": "fill_container",
+              "fill": "#FFFFFF",
+              "cornerRadius": 12,
+              "gap": 12,
+              "padding": 16,
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "VUV7X",
+                  "width": 40,
+                  "height": 40,
+                  "fill": "#E0E0E0",
+                  "cornerRadius": 20
+                },
+                {
+                  "type": "text",
+                  "id": "NRbL6",
+                  "content": "John Doe",
+                  "fontFamily": "Inter",
+                  "fontSize": 14,
+                  "fontWeight": "bold"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "HdYFC",
+              "name": "card2",
+              "width": "fill_container",
+              "fill": "#FFFFFF",
+              "cornerRadius": 12,
+              "gap": 8,
+              "padding": 16,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "EULQe",
+                  "fill": "#666666",
+                  "content": "📅 New Event",
+                  "fontFamily": "Inter",
+                  "fontSize": 12,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "text",
+                  "id": "j8rFH",
+                  "content": "Meeting @ Starbucks",
+                  "fontFamily": "Inter",
+                  "fontSize": 14,
+                  "fontWeight": "bold"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "D2Okl",
+              "name": "card3",
+              "width": "fill_container",
+              "fill": "#FFFFFF",
+              "cornerRadius": 12,
+              "gap": 8,
+              "padding": 16,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "mqW4c",
+                  "fill": "#666666",
+                  "content": "💡 Facts",
+                  "fontFamily": "Inter",
+                  "fontSize": 12,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "text",
+                  "id": "RZsfi",
+                  "content": "• Wife: Sarah\n• Likes Coffee\n• Check: Learning curve",
+                  "lineHeight": 20,
+                  "fontFamily": "Inter",
+                  "fontSize": 14,
+                  "fontWeight": "normal"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "wI1Fr",
+              "name": "card4",
+              "width": "fill_container",
+              "fill": "#FFFFFF",
+              "cornerRadius": 12,
+              "gap": 8,
+              "padding": 16,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "kAxxw",
+                  "fill": "#666666",
+                  "content": "✅ Todo",
+                  "fontFamily": "Inter",
+                  "fontSize": 12,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "frame",
+                  "id": "ufOAc",
+                  "gap": 8,
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "VXsyz",
+                      "width": 16,
+                      "height": 16,
+                      "cornerRadius": 4
+                    },
+                    {
+                      "type": "text",
+                      "id": "5xDcs",
+                      "content": "Send onboarding video",
+                      "fontFamily": "Inter",
+                      "fontSize": 14,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "Vqly3",
+          "name": "confirmBtn",
+          "width": 361,
+          "height": 56,
+          "fill": "#000000",
+          "cornerRadius": 28,
+          "children": [
+            {
+              "type": "text",
+              "id": "xLT0k",
+              "fill": "#FFFFFF",
+              "content": "Confirm Archive",
+              "fontFamily": "Inter",
+              "fontSize": 16,
+              "fontWeight": "bold"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "frame",
+      "id": "nRFtE",
+      "x": 500,
+      "y": 1000,
+      "name": "Contact List",
+      "width": 393,
+      "height": 852,
+      "fill": "#F9F9F9",
+      "layout": "vertical",
+      "children": [
+        {
+          "type": "frame",
+          "id": "pZy56",
+          "name": "contactTop",
+          "width": "fill_container",
+          "fill": "#FFFFFF",
+          "layout": "vertical",
+          "gap": 12,
+          "padding": 16,
+          "children": [
+            {
+              "type": "text",
+              "id": "l9P3D",
+              "content": "Contacts",
+              "fontFamily": "Inter",
+              "fontSize": 24,
+              "fontWeight": "bold"
+            },
+            {
+              "type": "frame",
+              "id": "d5b8n",
+              "name": "searchBar",
+              "width": "fill_container",
+              "height": 40,
+              "fill": "#F5F5F5",
+              "cornerRadius": 8,
+              "gap": 8,
+              "padding": 8,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "7x5zo",
+                  "fill": "#999999",
+                  "content": "🔍 Search name, tag...",
+                  "fontFamily": "Inter",
+                  "fontSize": 14,
+                  "fontWeight": "normal"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "krpvw",
+              "name": "chips",
+              "gap": 8,
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "bbxIO",
+                  "fill": "#E0E0E0",
+                  "cornerRadius": 16,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "eEtNF",
+                      "content": "Recent",
+                      "fontFamily": "Inter",
+                      "fontSize": 12,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "qwVIZ",
+                  "cornerRadius": 16,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "ysfdi",
+                      "content": "Follow-up",
+                      "fontFamily": "Inter",
+                      "fontSize": 12,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "pI4x5",
+          "name": "contactList",
+          "width": "fill_container",
+          "layout": "vertical",
+          "gap": 12,
+          "padding": 16,
+          "children": [
+            {
+              "type": "frame",
+              "id": "270qR",
+              "name": "contactItem1",
+              "width": "fill_container",
+              "fill": "#FFFFFF",
+              "cornerRadius": 12,
+              "gap": 8,
+              "padding": 16,
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "toj2o",
+                  "name": "row1",
+                  "width": "fill_container",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "5lSrt",
+                      "gap": 12,
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "Vk9vL",
+                          "width": 40,
+                          "height": 40,
+                          "fill": "#E0E0E0",
+                          "cornerRadius": 20
+                        },
+                        {
+                          "type": "text",
+                          "id": "DeY0V",
+                          "content": "John Doe",
+                          "fontFamily": "Inter",
+                          "fontSize": 14,
+                          "fontWeight": "bold"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "vb880",
+                      "fill": "#999999",
+                      "content": "3d ago",
+                      "fontFamily": "Inter",
+                      "fontSize": 12,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "text",
+                  "id": "nSgBk",
+                  "fill": "#666666",
+                  "content": "Quote discussed, waiting for proposal...",
+                  "fontFamily": "Inter",
+                  "fontSize": 13,
+                  "fontWeight": "normal"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "frame",
+      "id": "hYQm9",
+      "x": 1000,
+      "y": 1000,
+      "name": "Contact Details",
+      "width": 393,
+      "height": 852,
+      "fill": "#F9F9F9",
+      "layout": "vertical",
+      "children": [
+        {
+          "type": "frame",
+          "id": "YWRc7",
+          "name": "profTop",
+          "width": "fill_container",
+          "fill": "#FFFFFF",
+          "layout": "vertical",
+          "gap": 12,
+          "padding": 24,
+          "children": [
+            {
+              "type": "frame",
+              "id": "hxOlt",
+              "width": 80,
+              "height": 80,
+              "fill": "#CCCCCC",
+              "cornerRadius": 40
+            },
+            {
+              "type": "text",
+              "id": "Kv0fR",
+              "content": "John Doe",
+              "fontFamily": "Inter",
+              "fontSize": 24,
+              "fontWeight": "bold"
+            },
+            {
+              "type": "text",
+              "id": "NLMnU",
+              "fill": "#666666",
+              "content": "CTO @ Technology Inc.",
+              "fontFamily": "Inter",
+              "fontSize": 14,
+              "fontWeight": "normal"
+            },
+            {
+              "type": "text",
+              "id": "hqVzp",
+              "fill": "#333333",
+              "content": "\"Key decision maker for Q3 budget\"",
+              "fontFamily": "Inter",
+              "fontSize": 14,
+              "fontWeight": "normal",
+              "fontStyle": "italic"
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "3XRkA",
+          "name": "prepCard",
+          "width": "fill_container",
+          "fill": "#FFF8E1",
+          "layout": "vertical",
+          "gap": 12,
+          "padding": 16,
+          "children": [
+            {
+              "type": "frame",
+              "id": "55X1g",
+              "name": "prepHeader",
+              "width": "fill_container",
+              "children": [
+                {
+                  "type": "text",
+                  "id": "rfwr8",
+                  "fill": "#FF6F00",
+                  "content": "⚡ Pre-meeting Briefing",
+                  "fontFamily": "Inter",
+                  "fontSize": 14,
+                  "fontWeight": "bold"
+                },
+                {
+                  "type": "text",
+                  "id": "5wVlP",
+                  "fill": "#FF6F00",
+                  "content": "Refresh",
+                  "fontFamily": "Inter",
+                  "fontSize": 12,
+                  "fontWeight": "normal"
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "id": "OefE1",
+              "fill": "#4E342E",
+              "content": "• **Last time**: Spoke about pricing, he was hesitant.\n• **Pending**: Send proposal (Overdue 2d)\n• **Profile**: Likes clear data, no fluff.\n• **Advice**: Start with ROI table.",
+              "lineHeight": 20,
+              "fontFamily": "Inter",
+              "fontSize": 14,
+              "fontWeight": "normal"
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "KycuC",
+          "name": "timeline",
+          "width": "fill_container",
+          "layout": "vertical",
+          "gap": 16,
+          "padding": 16,
+          "children": [
+            {
+              "type": "text",
+              "id": "96tO7",
+              "fill": "#666666",
+              "content": "Timeline",
+              "fontFamily": "Inter",
+              "fontSize": 14,
+              "fontWeight": "bold"
+            },
+            {
+              "type": "frame",
+              "id": "yqJRx",
+              "name": "timeItem1",
+              "width": "fill_container",
+              "fill": "#FFFFFF",
+              "cornerRadius": 12,
+              "gap": 8,
+              "padding": 16,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "KcrFl",
+                  "fill": "#999999",
+                  "content": "📞  Jan 25 · Call",
+                  "fontFamily": "Inter",
+                  "fontSize": 12,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "text",
+                  "id": "avQn0",
+                  "fill": "#333333",
+                  "content": "Discussed initial requirements. He emphasized security compliance.",
+                  "fontFamily": "Inter",
+                  "fontSize": 14,
+                  "fontWeight": "normal"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "frame",
+      "id": "kyy9r",
+      "x": 500,
+      "y": 2000,
+      "name": "Action (Agendas)",
+      "width": 393,
+      "height": 852,
+      "fill": "#F9F9F9",
+      "layout": "vertical",
+      "gap": 16,
+      "padding": 16,
+      "children": [
+        {
+          "type": "text",
+          "id": "AJePY",
+          "fill": "#000000",
+          "content": "Action",
+          "fontFamily": "Inter",
+          "fontSize": 24,
+          "fontWeight": "bold"
+        },
+        {
+          "type": "frame",
+          "id": "mNNcK",
+          "name": "followUpCard",
+          "width": "fill_container",
+          "fill": "#FFFFFF",
+          "cornerRadius": 12,
+          "layout": "vertical",
+          "gap": 12,
+          "padding": 16,
+          "children": [
+            {
+              "type": "frame",
+              "id": "c9x7h",
+              "width": "fill_container",
+              "children": [
+                {
+                  "type": "text",
+                  "id": "J4RrI",
+                  "fill": "#D32F2F",
+                  "content": "🔔 Follow-up",
+                  "fontFamily": "Inter",
+                  "fontSize": 14,
+                  "fontWeight": "bold"
+                },
+                {
+                  "type": "text",
+                  "id": "gxAhd",
+                  "fill": "#D32F2F",
+                  "content": "Overdue",
+                  "fontFamily": "Inter",
+                  "fontSize": 12,
+                  "fontWeight": "normal"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "slRIy",
+              "gap": 12,
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "RtPr4",
+                  "width": 40,
+                  "height": 40,
+                  "fill": "#E0E0E0",
+                  "cornerRadius": 20
+                },
+                {
+                  "type": "text",
+                  "id": "wZTW6",
+                  "content": "John Doe",
+                  "fontFamily": "Inter",
+                  "fontSize": 14,
+                  "fontWeight": "normal"
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "id": "1thss",
+              "fill": "#333333",
+              "content": "Promised to send proposal on Friday.",
+              "fontFamily": "Inter",
+              "fontSize": 14,
+              "fontWeight": "normal"
+            },
+            {
+              "type": "frame",
+              "id": "oZiKa",
+              "width": "fill_container",
+              "height": 36,
+              "fill": "#F5F5F5",
+              "cornerRadius": 18,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "1uUnT",
+                  "content": "Open Briefing",
+                  "fontFamily": "Inter",
+                  "fontSize": 14,
+                  "fontWeight": "normal"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "96WSz",
+          "name": "suggestCard",
+          "width": "fill_container",
+          "fill": "#FFFFFF",
+          "cornerRadius": 12,
+          "gap": 12,
+          "padding": 16,
+          "children": [
+            {
+              "type": "text",
+              "id": "qif0f",
+              "fill": "#0097A7",
+              "content": "✨ Suggested Contact",
+              "fontFamily": "Inter",
+              "fontSize": 14,
+              "fontWeight": "bold"
+            },
+            {
+              "type": "text",
+              "id": "90xzp",
+              "fill": "#333333",
+              "content": "Sarah (John's Wife) - Haven't spoken in 3 months. Good to keep warm.",
+              "lineHeight": 20,
+              "fontFamily": "Inter",
+              "fontSize": 14,
+              "fontWeight": "normal"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "frame",
+      "id": "emqXn",
+      "x": 1536,
+      "y": -23,
+      "name": "Settings",
+      "width": 393,
+      "height": 852,
+      "fill": "#FFFFFF",
+      "layout": "vertical",
+      "gap": 24,
+      "padding": 24,
+      "children": [
+        {
+          "type": "text",
+          "id": "C9dR5",
+          "content": "Settings",
+          "fontFamily": "Inter",
+          "fontSize": 24,
+          "fontWeight": "bold"
+        },
+        {
+          "type": "frame",
+          "id": "IsT04",
+          "name": "section1",
+          "width": "fill_container",
+          "layout": "vertical",
+          "gap": 12,
+          "children": [
+            {
+              "type": "text",
+              "id": "Qhhn4",
+              "fill": "#999999",
+              "content": "Account",
+              "fontFamily": "Inter",
+              "fontSize": 14,
+              "fontWeight": "normal"
+            },
+            {
+              "type": "text",
+              "id": "KNeLH",
+              "content": "haoqi@friends.ai",
+              "fontFamily": "Inter",
+              "fontSize": 16,
+              "fontWeight": "normal"
+            },
+            {
+              "type": "text",
+              "id": "SNdZ7",
+              "fill": "#FF3B30",
+              "content": "Log out",
+              "fontFamily": "Inter",
+              "fontSize": 16,
+              "fontWeight": "normal"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "frame",
+      "id": "nik4q",
+      "x": -500,
+      "y": 0,
+      "name": "Global Drawer",
+      "width": 300,
+      "height": 852,
+      "fill": "#1A1A1A",
+      "layout": "vertical",
+      "gap": 24,
+      "padding": 24,
+      "children": [
+        {
+          "type": "frame",
+          "id": "1ANz8",
+          "width": "fill_container",
+          "height": 40,
+          "fill": "#333333",
+          "cornerRadius": 8,
+          "children": [
+            {
+              "type": "text",
+              "id": "sjoHL",
+              "fill": "#999999",
+              "content": "🔍 Search...",
+              "fontFamily": "Inter",
+              "fontSize": 14,
+              "fontWeight": "normal"
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "a5a4P",
+          "name": "menu",
+          "width": "fill_container",
+          "height": "fill_container",
+          "layout": "vertical",
+          "gap": 16,
+          "children": [
+            {
+              "type": "text",
+              "id": "0iARP",
+              "fill": "#FFFFFF",
+              "content": "All Records",
+              "fontFamily": "Inter",
+              "fontSize": 14,
+              "fontWeight": "bold"
+            },
+            {
+              "type": "text",
+              "id": "FuzTB",
+              "fill": "#CCCCCC",
+              "content": "Pending Confirm",
+              "fontFamily": "Inter",
+              "fontSize": 14,
+              "fontWeight": "normal"
+            },
+            {
+              "type": "text",
+              "id": "czvVu",
+              "fill": "#CCCCCC",
+              "content": "Archived",
+              "fontFamily": "Inter",
+              "fontSize": 14,
+              "fontWeight": "normal"
+            },
+            {
+              "type": "text",
+              "id": "draCj",
+              "fill": "#CCCCCC",
+              "content": "Starred",
+              "fontFamily": "Inter",
+              "fontSize": 14,
+              "fontWeight": "normal"
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "r7asG",
+          "gap": 12,
+          "children": [
+            {
+              "type": "frame",
+              "id": "lWgch",
+              "width": 24,
+              "height": 24,
+              "fill": "#666666"
+            },
+            {
+              "type": "text",
+              "id": "dihF5",
+              "fill": "#CCCCCC",
+              "content": "Settings",
+              "fontFamily": "Inter",
+              "fontSize": 14,
+              "fontWeight": "normal"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "frame",
+      "id": "boDRs",
+      "x": 500,
+      "y": 2000,
+      "name": "Action (Agendas)",
+      "width": 393,
+      "height": 852,
+      "fill": "#F9F9F9",
+      "layout": "vertical",
+      "gap": 16,
+      "padding": 16,
+      "children": [
+        {
+          "type": "text",
+          "id": "GIFnG",
+          "fill": "#000000",
+          "content": "Action",
+          "fontFamily": "Inter",
+          "fontSize": 24,
+          "fontWeight": "bold"
+        },
+        {
+          "type": "frame",
+          "id": "vBEGI",
+          "name": "followUpCard",
+          "width": "fill_container",
+          "fill": "#FFFFFF",
+          "cornerRadius": 12,
+          "layout": "vertical",
+          "gap": 12,
+          "padding": 16,
+          "children": [
+            {
+              "type": "frame",
+              "id": "sRtQb",
+              "width": "fill_container",
+              "children": [
+                {
+                  "type": "text",
+                  "id": "MFJwS",
+                  "fill": "#D32F2F",
+                  "content": "🔔 Follow-up",
+                  "fontFamily": "Inter",
+                  "fontSize": 14,
+                  "fontWeight": "bold"
+                },
+                {
+                  "type": "text",
+                  "id": "ujOIW",
+                  "fill": "#D32F2F",
+                  "content": "Overdue",
+                  "fontFamily": "Inter",
+                  "fontSize": 12,
+                  "fontWeight": "normal"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "EqRzF",
+              "gap": 12,
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "pWcy7",
+                  "width": 40,
+                  "height": 40,
+                  "fill": "#E0E0E0",
+                  "cornerRadius": 20
+                },
+                {
+                  "type": "text",
+                  "id": "uRLnr",
+                  "content": "John Doe",
+                  "fontFamily": "Inter",
+                  "fontSize": 14,
+                  "fontWeight": "normal"
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "id": "oz8WE",
+              "fill": "#333333",
+              "content": "Promised to send proposal on Friday.",
+              "fontFamily": "Inter",
+              "fontSize": 14,
+              "fontWeight": "normal"
+            },
+            {
+              "type": "frame",
+              "id": "8cgIc",
+              "width": "fill_container",
+              "height": 36,
+              "fill": "#F5F5F5",
+              "cornerRadius": 18,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "neA7L",
+                  "content": "Open Briefing",
+                  "fontFamily": "Inter",
+                  "fontSize": 14,
+                  "fontWeight": "normal"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "jW1rt",
+          "name": "suggestCard",
+          "width": "fill_container",
+          "fill": "#FFFFFF",
+          "cornerRadius": 12,
+          "gap": 12,
+          "padding": 16,
+          "children": [
+            {
+              "type": "text",
+              "id": "k2LEM",
+              "fill": "#0097A7",
+              "content": "✨ Suggested Contact",
+              "fontFamily": "Inter",
+              "fontSize": 14,
+              "fontWeight": "bold"
+            },
+            {
+              "type": "text",
+              "id": "SjClK",
+              "fill": "#333333",
+              "content": "Sarah (John's Wife) - Haven't spoken in 3 months. Good to keep warm.",
+              "lineHeight": 20,
+              "fontFamily": "Inter",
+              "fontSize": 14,
+              "fontWeight": "normal"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
