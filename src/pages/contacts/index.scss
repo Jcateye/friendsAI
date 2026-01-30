@@ -1,0 +1,83 @@
+@import '../../app.scss';
+
+.contacts-page {
+  min-height: 100vh;
+  background-color: $bg-primary;
+  display: flex;
+  flex-direction: column;
+  padding-bottom: 140rpx;
+}
+
+.add-btn {
+  width: 72rpx;
+  height: 72rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.search-bar {
+  padding: 24rpx 32rpx;
+  background-color: $bg-primary;
+}
+
+.search-input-wrapper {
+  display: flex;
+  align-items: center;
+  background-color: $bg-secondary;
+  border-radius: $radius-lg;
+  padding: 20rpx 24rpx;
+  gap: 16rpx;
+}
+
+.search-input {
+  flex: 1;
+  font-size: $font-sm;
+  color: $text-primary;
+  background: transparent;
+}
+
+.clear-btn {
+  padding: 8rpx;
+}
+
+.contacts-content {
+  flex: 1;
+  overflow-y: auto;
+}
+
+.loading-state,
+.empty-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 120rpx 32rpx;
+}
+
+.empty-text {
+  font-size: $font-sm;
+  color: $text-tertiary;
+}
+
+.contacts-list {
+  padding: 0 32rpx;
+}
+
+.contact-group {
+  margin-bottom: 32rpx;
+}
+
+.group-header {
+  padding: 16rpx 0;
+  position: sticky;
+  top: 0;
+  background-color: $bg-primary;
+  z-index: 1;
+}
+
+.group-initial {
+  font-size: $font-xs;
+  font-weight: 600;
+  color: $text-tertiary;
+  text-transform: uppercase;
+}
