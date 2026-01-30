@@ -2323,7 +2323,7 @@
       "type": "frame",
       "id": "zFGu1",
       "x": 0,
-      "y": 860,
+      "y": 870,
       "name": "5. Contact Detail",
       "clip": true,
       "width": 375,
@@ -2864,7 +2864,8 @@
               "type": "frame",
               "id": "k35fv",
               "name": "timelineSection",
-              "width": "fill_container",
+              "width": 344,
+              "height": 150,
               "layout": "vertical",
               "gap": 12,
               "children": [
