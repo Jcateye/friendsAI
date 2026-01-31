@@ -5,22 +5,29 @@ import { formatDate, navigateTo } from '@/utils'
 import './index.scss'
 
 interface GlobalDrawerProps {
-  visible: boolean
-  records: ConversationRecord[]
-  onClose: () => void
-  onSettingsClick: () => void
+  visible?: boolean
+  isOpen?: boolean
+  records?: ConversationRecord[]
+  onClose?: () => void
+  onSettingsClick?: () => void
 }
 
 const GlobalDrawer: React.FC<GlobalDrawerProps> = ({
   visible,
+  isOpen,
   records,
   onClose,
   onSettingsClick,
 }) => {
+  const normalizedVisible = visible ?? isOpen ?? false
+  const safeRecords = records ?? []
+  const handleClose = () => {
+    onClose?.()
+  }
   const [filter, setFilter] = useState<FilterType>('all')
   const [searchText, setSearchText] = useState('')
 
-  const filteredRecords = records.filter((r) => {
+  const filteredRecords = safeRecords.filter((r) => {
     if (filter === 'pending') return r.status === 'pending'
     if (filter === 'archived') return r.status === 'archived'
     return true
@@ -29,14 +36,14 @@ const GlobalDrawer: React.FC<GlobalDrawerProps> = ({
   )
 
   const handleRecordClick = (id: string) => {
-    onClose()
+    handleClose()
     navigateTo(`/pages/conversation-detail/index?id=${id}`)
   }
 
-  if (!visible) return null
+  if (!normalizedVisible) return null
 
   return (
-    <View className="drawer-overlay" onClick={onClose}>
+    <View className="drawer-overlay" onClick={handleClose}>
       <View className="drawer-panel" onClick={(e) => e.stopPropagation()}>
         <View className="drawer-top">
           <View className="drawer-search">
@@ -89,7 +96,7 @@ const GlobalDrawer: React.FC<GlobalDrawerProps> = ({
           ))}
         </ScrollView>
 
-        <View className="drawer-bottom" onClick={onSettingsClick}>
+        <View className="drawer-bottom" onClick={() => onSettingsClick?.()}>
           <View className="icon-settings" />
           <Text className="settings-text">设置</Text>
         </View>
