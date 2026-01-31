@@ -3,6 +3,7 @@ node_modules/
 
 # production
 dist/
+packages/*/dist/
 
 # misc
 .DS_Store
@@ -12,6 +13,7 @@ yarn-debug.log*
 yarn-error.log*
 
 # local env files
+.env
 .env.local
 .env.*.local
 
@@ -24,3 +26,11 @@ yarn-error.log*
 # Taro
 .temp/
 .rn_temp/
+
+# Process files
+*.pid
+.client.pid
+.server.pid
+
+# Logs
+logs/
