@@ -124,7 +124,7 @@ const ContactsPage: React.FC = () => {
         )}
       </View>
 
-      <TabBar currentTab="contacts" />
+      <TabBar current="contacts" />
 
       <GlobalDrawer
         isOpen={drawerOpen}

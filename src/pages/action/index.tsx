@@ -95,7 +95,7 @@ const ActionPage: React.FC = () => {
         </View>
       </View>
 
-      <TabBar currentTab="action" />
+      <TabBar current="action" />
 
       <GlobalDrawer
         isOpen={drawerOpen}

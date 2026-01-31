@@ -50,12 +50,21 @@ const LoginPage: React.FC = () => {
     try {
       setLoading(true)
       showLoading('登录中...')
-      const result = await authApi.login(email, code)
+      
+      // Mock 登录：没有后端服务时直接登录成功
+      const mockUser = {
+        id: '1',
+        email: email,
+        name: email.split('@')[0],
+        avatar: '',
+        createdAt: new Date().toISOString(),
+      }
+      const mockToken = 'mock_token_' + Date.now()
+      
+      setStorage('token', mockToken)
+      setStorage('user', mockUser)
+
       hideLoading()
-
-      setStorage('token', result.token)
-      setStorage('user', result.user)
-
       showToast('登录成功', 'success')
       Taro.switchTab({ url: '/pages/conversation/index' })
     } catch (error) {

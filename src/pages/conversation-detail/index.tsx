@@ -1,7 +1,6 @@
 import { View, Text, ScrollView } from '@tarojs/components'
 import { useState, useEffect } from 'react'
 import { useRouter } from '@tarojs/taro'
-import StatusBar from '@/components/StatusBar'
 import Header from '@/components/Header'
 import type { ConversationDetail as ConversationDetailType } from '@/types'
 import { navigateBack, showToast, showLoading, hideLoading } from '@/utils'
@@ -80,7 +79,6 @@ const ConversationDetailPage: React.FC = () => {
   if (loading || !detail) {
     return (
       <View className="detail-page">
-        <StatusBar />
         <Header title="加载中..." showBack />
         <View className="loading-state"><Text>加载中...</Text></View>
       </View>
@@ -89,7 +87,6 @@ const ConversationDetailPage: React.FC = () => {
 
   return (
     <View className="detail-page">
-      <StatusBar />
       <Header
         title={detail.title}
         showBack

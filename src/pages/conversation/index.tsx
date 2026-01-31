@@ -1,7 +1,6 @@
 import { View, Text, Textarea } from '@tarojs/components'
 import { useState, useEffect } from 'react'
 import Taro, { useDidShow } from '@tarojs/taro'
-import StatusBar from '@/components/StatusBar'
 import Header from '@/components/Header'
 import TabBar from '@/components/TabBar'
 import RecordCard from '@/components/RecordCard'
@@ -65,7 +64,6 @@ const ConversationPage: React.FC = () => {
 
   return (
     <View className="conversation-page">
-      <StatusBar />
       <Header
         title="对话"
         showMenu

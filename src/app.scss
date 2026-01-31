@@ -1,3 +1,5 @@
+@import "~taro-ui/dist/style/index.scss";
+
 // Design System Variables
 $primary: #7C9070;
 $primary-tint: rgba(124, 144, 112, 0.08);
@@ -46,4 +48,11 @@ page {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
+}
+
+// H5: hide built-in tabbar (we use a custom TabBar component)
+taro-tabbar,
+.taro-tabbar__tabbar,
+.weui-tabbar {
+  display: none !important;
 }

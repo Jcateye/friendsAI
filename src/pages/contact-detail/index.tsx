@@ -3,7 +3,6 @@ import { View, Text, ScrollView } from '@tarojs/components'
 import Taro, { useRouter } from '@tarojs/taro'
 import { AtIcon } from 'taro-ui'
 import Header from '../../components/Header'
-import StatusBar from '../../components/StatusBar' // Re-add StatusBar import
 import { ContactDetail, ContactEvent } from '../../types'
 import { api } from '../../services/api'
 import { formatDate, getAvatarStyle } from '../../utils'
@@ -59,7 +58,6 @@ const ContactDetailPage: React.FC = () => {
   if (loading) {
     return (
       <View className="contact-detail-page">
-        <StatusBar /> {/* Place StatusBar at the very top */}
         <Header title="" showBack onBack={handleBack} />
         <View className="loading-state">
           <Text>加载中...</Text>
@@ -71,7 +69,6 @@ const ContactDetailPage: React.FC = () => {
   if (!contact) {
     return (
       <View className="contact-detail-page">
-        <StatusBar /> {/* Place StatusBar at the very top */}
         <Header title="" showBack onBack={handleBack} />
         <View className="error-state">
           <Text>联系人不存在</Text>
@@ -85,7 +82,6 @@ const ContactDetailPage: React.FC = () => {
 
   return (
     <View className="contact-detail-page">
-      <StatusBar /> {/* Place StatusBar at the very top */}
       <Header
         title=""
         showBack
