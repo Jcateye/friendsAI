@@ -27,6 +27,12 @@
 .detail-content {
   flex: 1;
   padding-bottom: 120rpx;
+
+  .taro-scroll-view__scroll-content {
+    padding-bottom: 120rpx;
+    box-sizing: border-box;
+    width: 100%;
+  }
 }
 
 .profile-section {

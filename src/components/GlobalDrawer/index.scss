@@ -17,6 +17,7 @@
     border-radius: 0 32rpx 32rpx 0;
     display: flex;
     flex-direction: column;
+    overflow: hidden;
 
     .drawer-top {
       padding: 120rpx 32rpx 32rpx;
@@ -83,14 +84,20 @@
 
     .drawer-list {
       flex: 1;
-      padding: 0 32rpx;
+      padding: 0 40rpx 32rpx 32rpx;
+      width: 100%;
+      box-sizing: border-box;
+      overflow: hidden;
 
       .drawer-record {
         display: flex;
         align-items: center;
-        gap: 24rpx;
+        gap: 16rpx;
         padding: 28rpx 0;
         border-bottom: 1rpx solid #F0EFEC;
+        overflow: hidden;
+        width: 100%;
+        box-sizing: border-box;
 
         .record-info {
           flex: 1;
@@ -98,11 +105,15 @@
           flex-direction: column;
           gap: 8rpx;
           overflow: hidden;
+          min-width: 0;
 
           .record-title {
             font-size: 28rpx;
             font-weight: 600;
             color: #2D2D2D;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
           }
 
           .record-summary {
@@ -119,16 +130,24 @@
           flex-direction: column;
           align-items: flex-end;
           gap: 8rpx;
+          flex-shrink: 0;
+          min-width: 160rpx;
+          max-width: 200rpx;
+          overflow: hidden;
 
           .record-time {
             font-size: 22rpx;
             color: #8E8E93;
+            white-space: nowrap;
           }
 
           .record-status {
             height: 40rpx;
             padding: 4rpx 12rpx;
             border-radius: 8rpx;
+            white-space: nowrap;
+            display: inline-flex;
+            align-items: center;
 
             &.status-archived {
               background: rgba(124, 144, 112, 0.08);

@@ -14,14 +14,15 @@
 
   .scroll-content {
     flex: 1;
-    padding: 32rpx;
-    padding-bottom: 200rpx;
+    padding: 0;
 
     .input-section {
       background: #FFFFFF;
       border-radius: 32rpx;
       padding: 32rpx;
       margin-bottom: 32rpx;
+      box-sizing: border-box;
+      width: 100%;
 
       .section-label {
         font-size: 24rpx;
@@ -78,8 +79,10 @@
     .result-card {
       background: #FFFFFF;
       border-radius: 24rpx;
-      padding: 32rpx;
+      padding: 32rpx 40rpx;
       margin-bottom: 24rpx;
+      box-sizing: border-box;
+      width: 100%;
 
       .card-header {
         display: flex;
@@ -258,6 +261,12 @@
         }
       }
     }
+  }
+
+  .detail-inner {
+    padding: 32rpx 40rpx 200rpx;
+    box-sizing: border-box;
+    width: 100%;
   }
 
   .bottom-actions {
