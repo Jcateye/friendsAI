@@ -1,9 +1,10 @@
-import { View, Text, ScrollView } from '@tarojs/components'
+import { View, Text, ScrollView, Picker } from '@tarojs/components'
 import { useState, useEffect } from 'react'
 import { useRouter } from '@tarojs/taro'
 import Header from '@/components/Header'
-import type { ConversationDetail as ConversationDetailType } from '@/types'
+import type { ConversationDetail as ConversationDetailType, ExtractedItem, Contact } from '@/types'
 import { navigateBack, showToast, showLoading, hideLoading } from '@/utils'
+import { conversationApi, journalApi, contactApi } from '@/services/api'
 import './index.scss'
 
 const ConversationDetailPage: React.FC = () => {
@@ -12,6 +13,10 @@ const ConversationDetailPage: React.FC = () => {
 
   const [detail, setDetail] = useState<ConversationDetailType | null>(null)
   const [loading, setLoading] = useState(true)
+  const [items, setItems] = useState<ExtractedItem[]>([])
+  const [contacts, setContacts] = useState<Contact[]>([])
+  const [selectedContactId, setSelectedContactId] = useState<string>('')
+  const [extracting, setExtracting] = useState(false)
 
   useEffect(() => {
     loadDetail()
@@ -20,42 +25,18 @@ const ConversationDetailPage: React.FC = () => {
   const loadDetail = async () => {
     try {
       setLoading(true)
-      setDetail({
-        id: id || '2',
-        title: '今日记录 2026/01/28',
-        summary: '见了李四和王五，聊到新项目启动计划',
-        status: 'pending',
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        originalContent: '今天上午和张三聊了Q2合作方案，他对我们的报价有些顾虑，说比竞争对手高15%。我承诺周五前发一版优化后的方案给他。另外他提到下个月要带家人去云南旅游，问我有没有推荐的地方。',
-        archiveResult: {
-          recognizedPeople: [{
-            id: '1',
-            name: '张三',
-            initial: '张',
-            avatarColor: '#C9B8A8',
-            company: 'ABC公司',
-            role: 'CEO',
-          }],
-          newEvents: [{
-            id: '1',
-            type: 'visit',
-            date: '2026/01/28 上午',
-            location: '张三办公室',
-            summary: '讨论Q2合作方案，对方对报价有顾虑',
-          }],
-          extractedFacts: [
-            { id: '1', content: '对价格敏感，认为比竞对高15%', type: 'trait' },
-            { id: '2', content: '下月计划去云南家庭旅游', type: 'info' },
-          ],
-          todoItems: [{
-            id: '1',
-            content: '发送优化后的报价方案',
-            suggestedDate: '周五前',
-            completed: false,
-          }],
-        },
-      })
+      if (!id) return
+      const [detailData, extracted, contactList] = await Promise.all([
+        conversationApi.getDetail(id),
+        journalApi.listExtracted(id).catch(() => ({ items: [] })),
+        contactApi.getList().catch(() => []),
+      ])
+      setDetail(detailData)
+      setItems(extracted.items || [])
+      setContacts(contactList)
+      if (contactList[0]) {
+        setSelectedContactId(contactList[0].id)
+      }
     } catch (error) {
       showToast('加载失败')
     } finally {
@@ -63,17 +44,61 @@ const ConversationDetailPage: React.FC = () => {
     }
   }
 
-  const handleArchive = async () => {
+  const handleExtract = async () => {
+    if (!id) return
     try {
-      showLoading('归档中...')
-      await new Promise(r => setTimeout(r, 1000))
+      setExtracting(true)
+      showLoading('AI解析中...')
+      const result = await journalApi.extract(id)
+      setItems(result.items)
       hideLoading()
-      showToast('归档成功', 'success')
-      navigateBack()
+      showToast('解析完成', 'success')
     } catch (error) {
       hideLoading()
-      showToast('归档失败')
+      showToast('解析失败')
+    } finally {
+      setExtracting(false)
     }
+  }
+
+  const handleConfirm = async (item: ExtractedItem, action: 'confirm' | 'reject') => {
+    if (!id) return
+    if (!selectedContactId && action === 'confirm') {
+      showToast('请选择联系人')
+      return
+    }
+    try {
+      showLoading('提交中...')
+      await journalApi.confirmExtracted(id, {
+        itemId: item.id,
+        action,
+        contactId: action === 'confirm' ? selectedContactId : undefined,
+      })
+      hideLoading()
+      showToast('已提交', 'success')
+      const updated = items.filter((it) => it.id !== item.id)
+      setItems(updated)
+      if (detail && action === 'confirm') {
+        setDetail({ ...detail, status: 'archived' })
+      }
+    } catch (error) {
+      hideLoading()
+      showToast('提交失败')
+    }
+  }
+
+  const formatItem = (item: ExtractedItem) => {
+    const payload = item.payload_json || {}
+    if (item.type === 'event') {
+      return payload.summary || '事件'
+    }
+    if (item.type === 'fact') {
+      return `${payload.key || '事实'}：${payload.value || ''}`
+    }
+    if (item.type === 'action') {
+      return payload.title || payload.suggestionReason || '待办'
+    }
+    return '内容'
   }
 
   if (loading || !detail) {
@@ -105,95 +130,62 @@ const ConversationDetailPage: React.FC = () => {
             </View>
           </View>
 
-          {detail.archiveResult && (
-            <>
-              <View className="ai-result-label">
-                <View className="ai-icon">
-                  <View className="icon-sparkles" />
-                </View>
-                <Text className="ai-label-text">AI 归档结果</Text>
+          <View className="result-card">
+            <View className="card-header">
+              <Text className="card-title">AI 解析</Text>
+              <View className="card-badge">
+                <Text className="badge-text">{items.length}项</Text>
               </View>
-
-              <View className="result-card">
-                <View className="card-header">
-                  <Text className="card-title">识别到的人</Text>
-                  <View className="card-badge">
-                    <Text className="badge-text">{detail.archiveResult.recognizedPeople.length}人</Text>
+            </View>
+            {contacts.length > 0 && (
+              <View className="contact-picker">
+                <Text className="picker-label">关联联系人</Text>
+                <Picker
+                  mode="selector"
+                  range={contacts.map((c) => c.name)}
+                  onChange={(e) => setSelectedContactId(contacts[Number(e.detail.value)].id)}
+                >
+                  <View className="picker-value">
+                    <Text>{contacts.find((c) => c.id === selectedContactId)?.name || '请选择'}</Text>
                   </View>
-                </View>
-                {detail.archiveResult.recognizedPeople.map((person) => (
-                  <View key={person.id} className="person-row">
-                    <View className="person-avatar" style={{ backgroundColor: person.avatarColor }}>
-                      <Text className="avatar-initial">{person.initial}</Text>
-                    </View>
-                    <View className="person-info">
-                      <Text className="person-name">{person.name}</Text>
-                      <Text className="person-role">{person.company} {person.role}</Text>
-                    </View>
-                    <View className="icon-check-circle" />
-                  </View>
-                ))}
+                </Picker>
               </View>
-
-              <View className="result-card">
-                <View className="card-header">
-                  <Text className="card-title">新增事件</Text>
-                </View>
-                {detail.archiveResult.newEvents.map((event) => (
-                  <View key={event.id} className="event-row">
-                    <View className="event-icon">
-                      <View className="icon-calendar" />
+            )}
+            {items.length === 0 ? (
+              <View className="empty-state">
+                <Text className="empty-text">暂无解析结果</Text>
+              </View>
+            ) : (
+              <View className="result-list">
+                {items.map((item) => (
+                  <View key={item.id} className="result-row">
+                    <View className="result-info">
+                      <Text className="result-type">{item.type.toUpperCase()}</Text>
+                      <Text className="result-text">{formatItem(item)}</Text>
                     </View>
-                    <View className="event-info">
-                      <Text className="event-type">拜访会议</Text>
-                      <Text className="event-meta">{event.date} · {event.location}</Text>
-                      <Text className="event-summary">{event.summary}</Text>
+                    <View className="result-actions">
+                      <View className="action-btn confirm" onClick={() => handleConfirm(item, 'confirm')}>
+                        <Text>确认</Text>
+                      </View>
+                      <View className="action-btn reject" onClick={() => handleConfirm(item, 'reject')}>
+                        <Text>拒绝</Text>
+                      </View>
                     </View>
                   </View>
                 ))}
               </View>
-
-              <View className="result-card">
-                <View className="card-header">
-                  <Text className="card-title">提取到的事实</Text>
-                  <View className="card-badge purple">
-                    <Text className="badge-text">画像更新</Text>
-                  </View>
-                </View>
-                {detail.archiveResult.extractedFacts.map((fact) => (
-                  <View key={fact.id} className="fact-row">
-                    <View className="fact-dot" />
-                    <Text className="fact-text">{fact.content}</Text>
-                  </View>
-                ))}
-              </View>
-
-              <View className="result-card">
-                <Text className="card-title">待办事项</Text>
-                {detail.archiveResult.todoItems.map((todo) => (
-                  <View key={todo.id} className="todo-row">
-                    <View className="todo-checkbox" />
-                    <View className="todo-info">
-                      <Text className="todo-text">{todo.content}</Text>
-                      {todo.suggestedDate && (
-                        <Text className="todo-date">建议日期：{todo.suggestedDate}</Text>
-                      )}
-                    </View>
-                  </View>
-                ))}
-              </View>
-            </>
-          )}
+            )}
+          </View>
         </View>
       </ScrollView>
 
       <View className="bottom-actions">
-        <View className="edit-btn">
-          <Text className="edit-text">编辑后归档</Text>
+        <View className="edit-btn" onClick={handleExtract}>
+          <Text className="edit-text">{extracting ? '解析中...' : '重新解析'}</Text>
         </View>
-        <View className="confirm-btn" onClick={handleArchive}>
+        <View className="confirm-btn" onClick={handleExtract}>
           <View className="icon-check" />
-          <Text className="confirm-text">确认归档</Text>
+          <Text className="confirm-text">AI 解析</Text>
         </View>
       </View>
     </View>

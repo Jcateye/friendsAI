@@ -1,0 +1,24 @@
+[
+  {
+    "description": "User registers with email/phone and password",
+    "steps": [
+      "Open login page",
+      "Switch to register mode",
+      "Enter name, email or phone, and password",
+      "Submit registration",
+      "Verify user session is stored and redirected to conversation tab"
+    ],
+    "passes": true
+  },
+  {
+    "description": "User logs in with email/phone and password",
+    "steps": [
+      "Open login page",
+      "Enter email/phone and password",
+      "Submit login",
+      "Verify access token and workspace id stored",
+      "Verify redirect to conversation tab"
+    ],
+    "passes": true
+  }
+]

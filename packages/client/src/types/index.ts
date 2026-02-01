@@ -1,15 +1,12 @@
-// User & Auth
 export interface User {
   id: string
-  email: string
+  email?: string | null
+  phone?: string | null
   name?: string
-  avatar?: string
 }
 
-// Record Status
 export type RecordStatus = 'pending' | 'archived'
 
-// Conversation Record
 export interface ConversationRecord {
   id: string
   title: string
@@ -20,7 +17,11 @@ export interface ConversationRecord {
   contactIds?: string[]
 }
 
-// Contact
+export interface ConversationDetail extends ConversationRecord {
+  originalContent: string
+  archiveResult?: ArchiveResult
+}
+
 export interface Contact {
   id: string
   name: string
@@ -33,10 +34,8 @@ export interface Contact {
   lastContactSummary?: string
 }
 
-// Event Types
 export type EventType = 'meeting' | 'call' | 'visit' | 'email' | 'note' | 'other'
 
-// Event/Activity
 export interface ContactEvent {
   id: string
   type: EventType
@@ -46,14 +45,12 @@ export interface ContactEvent {
   todoCount?: number
 }
 
-// Extracted Facts
 export interface ExtractedFact {
   id: string
   content: string
   type: 'trait' | 'preference' | 'info'
 }
 
-// Todo Item
 export interface TodoItem {
   id: string
   content: string
@@ -61,7 +58,6 @@ export interface TodoItem {
   completed: boolean
 }
 
-// AI Archive Result
 export interface ArchiveResult {
   recognizedPeople: Contact[]
   newEvents: ContactEvent[]
@@ -69,19 +65,13 @@ export interface ArchiveResult {
   todoItems: TodoItem[]
 }
 
-// Conversation Detail
-export interface ConversationDetail extends ConversationRecord {
-  originalContent: string
-  archiveResult?: ArchiveResult
-}
-
-// Contact Detail with Briefing
 export interface ContactDetail extends Contact {
   briefing?: ContactBriefing
   events: ContactEvent[]
+  facts?: string[]
+  actions?: string[]
 }
 
-// Contact Briefing
 export interface ContactBriefing {
   lastSummary: string
   pendingTodos: string[]
@@ -89,7 +79,6 @@ export interface ContactBriefing {
   suggestion: string
 }
 
-// Follow-up Item
 export interface FollowUpItem {
   id: string
   contact: Contact
@@ -97,47 +86,69 @@ export interface FollowUpItem {
   urgent: boolean
 }
 
-// Suggestion Item
-export interface SuggestionItem {
-  id: string
-  contactName: string
-  reason: string
-  openingSuggestion: string
-}
-
-// Weekly Stats
 export interface WeeklyStats {
   records: number
   visits: number
   progress: number
 }
 
-// Connector
-export interface Connector {
+export interface ActionItem {
   id: string
-  name: string
-  type: 'feishu' | 'wechat' | 'dingtalk'
-  connected: boolean
-  scopes?: string[]
-  org?: string
-  user?: string
+  contact_id?: string
+  due_at?: string | null
+  status: string
+  suggestion_reason?: string
+  source_entry_id?: string
+  contact_name?: string
 }
 
-// Message Template
-export interface MessageTemplate {
+export interface ToolTask {
   id: string
-  name: string
-  description: string
+  action_item_id: string
+  type: string
+  payload_json: Record<string, any>
+  execute_at?: string | null
+  status: string
+  contact_id?: string
+  contact_name?: string
+  last_execution_status?: string | null
+  last_execution_response?: any
+  last_execution_at?: string | null
 }
 
-// Tab Type
+export interface JournalEntry {
+  id: string
+  workspace_id: string
+  author_id: string
+  raw_text: string
+  status: string
+  created_at: string
+  updated_at: string
+}
+
+export interface ExtractedItem {
+  id: string
+  journal_entry_id: string
+  type: 'event' | 'fact' | 'action'
+  payload_json: Record<string, any>
+  status: string
+  created_at: string
+  updated_at: string
+}
+
+export interface BriefSnapshot {
+  id: string
+  contact_id: string
+  content: string
+  generated_at: string
+  source_hash: string
+}
+
 export type TabType = 'conversation' | 'contacts' | 'action'
 
-// Loading State
 export interface LoadingState {
   loading: boolean
   error: string | null
 }
 
-// Filter Type
 export type FilterType = 'all' | 'pending' | 'archived' | 'recent' | 'follow' | 'important'

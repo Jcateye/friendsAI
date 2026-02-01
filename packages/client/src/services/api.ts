@@ -5,334 +5,406 @@ import type {
   ConversationDetail,
   Contact,
   ContactDetail,
+  ContactEvent,
   FollowUpItem,
-  SuggestionItem,
   WeeklyStats,
-  Connector,
-  MessageTemplate,
+  ActionItem,
+  ToolTask,
+  ExtractedItem,
+  BriefSnapshot,
+  JournalEntry
 } from '@/types'
+import { getAvatarColor, getInitial } from '@/utils'
+import {
+  enqueueOutbox,
+  flushOutbox,
+  generateId,
+  getContactsCacheRaw,
+  getJournalsCacheRaw,
+  setContactsCacheRaw,
+  setJournalsCacheRaw,
+} from '@/services/offlineStore'
 
-const BASE_URL = 'https://api.friendsai.com'
+const BASE_URL = process.env.TARO_APP_API_BASE_URL || 'http://localhost:3000/v1'
 
-// Request wrapper
+const getWorkspaceId = () => Taro.getStorageSync('workspaceId')
+
 const request = async <T,>(options: Taro.request.Option): Promise<T> => {
   try {
     const token = Taro.getStorageSync('token')
-    const response = await Taro.request({
+    const workspaceId = getWorkspaceId()
+    const doReq = (accessToken?: string) =>
+      Taro.request({
       ...options,
       url: `${BASE_URL}${options.url}`,
       header: {
         'Content-Type': 'application/json',
-        Authorization: token ? `Bearer ${token}` : '',
+        Authorization: accessToken ? `Bearer ${accessToken}` : token ? `Bearer ${token}` : '',
+        ...(workspaceId ? { 'X-Workspace-Id': workspaceId } : {}),
         ...options.header,
       },
     })
 
+    const response = await doReq()
+
     if (response.statusCode >= 200 && response.statusCode < 300) {
       return response.data as T
     }
-    throw new Error(response.data?.message || '请求失败')
+
+    // Auto refresh once on 401 for production-ish MVP stability.
+    if (response.statusCode === 401 && options.url !== '/auth/refresh') {
+      const refreshToken = Taro.getStorageSync('refreshToken')
+      if (refreshToken) {
+        try {
+          const refreshed = await Taro.request({
+            url: `${BASE_URL}/auth/refresh`,
+            method: 'POST',
+            header: { 'Content-Type': 'application/json' },
+            data: { refreshToken },
+          })
+          if (refreshed.statusCode >= 200 && refreshed.statusCode < 300) {
+            const data = refreshed.data as any
+            if (data?.accessToken) Taro.setStorageSync('token', data.accessToken)
+            if (data?.refreshToken) Taro.setStorageSync('refreshToken', data.refreshToken)
+            const retryResp = await doReq(data.accessToken)
+            if (retryResp.statusCode >= 200 && retryResp.statusCode < 300) {
+              return retryResp.data as T
+            }
+          }
+        } catch (e) {
+          // ignore and fall through
+        }
+      }
+    }
+
+    throw new Error((response.data as any)?.message || '请求失败')
   } catch (error) {
     console.error('API Error:', error)
     throw error
   }
 }
 
-// Auth APIs
+const mapContact = (raw: any): Contact => ({
+  id: raw.id,
+  name: raw.name,
+  initial: getInitial(raw.name || ''),
+  avatarColor: getAvatarColor(raw.name || ''),
+  company: raw.company,
+  role: raw.role,
+  tags: raw.tags || [],
+  lastContactTime: raw.lastContactTime,
+  lastContactSummary: raw.lastContactSummary,
+})
+
 export const authApi = {
-  sendCode: (email: string) =>
-    request<{ success: boolean }>({
-      url: '/auth/send-code',
+  register: (data: { email?: string; phone?: string; name: string; password: string }) =>
+    request<{ accessToken: string; refreshToken: string; user: User; workspace: { id: string; name: string } }>({
+      url: '/auth/register',
       method: 'POST',
-      data: { email },
+      data,
     }),
 
-  login: (email: string, code: string) =>
-    request<{ token: string; user: User }>({
+  login: (emailOrPhone: string, password: string) =>
+    request<{ accessToken: string; refreshToken: string; user: User; workspace?: { id: string; name: string } }>({
       url: '/auth/login',
       method: 'POST',
-      data: { email, code },
+      data: { emailOrPhone, password },
     }),
 
-  logout: () =>
-    request<{ success: boolean }>({
+  refresh: (refreshToken: string) =>
+    request<{ accessToken: string; refreshToken: string }>({
+      url: '/auth/refresh',
+      method: 'POST',
+      data: { refreshToken },
+    }),
+
+  logout: (refreshToken: string) =>
+    request<{ status: string }>({
       url: '/auth/logout',
       method: 'POST',
+      data: { refreshToken },
     }),
 }
 
-// Conversation APIs
+export const journalApi = {
+  list: () =>
+    request<{ items: JournalEntry[] }>({
+      url: '/journal-entries',
+      method: 'GET',
+    })
+      .then((res) => {
+        setJournalsCacheRaw(res.items)
+        return res
+      })
+      .catch(async () => {
+        await flushOutbox().catch(() => undefined)
+        return { items: getJournalsCacheRaw() as JournalEntry[] }
+      }),
+
+  create: (data: { rawText: string; contactIds?: string[] }) =>
+    (async () => {
+      const id = generateId()
+      try {
+        const created = await request<JournalEntry>({
+          url: '/journal-entries',
+          method: 'POST',
+          data: { ...data, id },
+        })
+        const cached = getJournalsCacheRaw()
+        setJournalsCacheRaw([created, ...cached.filter((j: any) => j.id !== created.id)])
+        return created
+      } catch (error) {
+        const offline: JournalEntry = {
+          id,
+          workspace_id: getWorkspaceId(),
+          author_id: '',
+          raw_text: data.rawText,
+          status: 'new',
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        }
+        const cached = getJournalsCacheRaw()
+        setJournalsCacheRaw([offline, ...cached.filter((j: any) => j.id !== id)])
+        enqueueOutbox({
+          id,
+          kind: 'journal_create',
+          url: '/journal-entries',
+          method: 'POST',
+          data: { ...data, id },
+          createdAt: new Date().toISOString(),
+        })
+        return offline
+      }
+    })(),
+
+  get: (id: string) =>
+    request<JournalEntry>({
+      url: `/journal-entries/${id}`,
+      method: 'GET',
+    }).catch(() => {
+      const cached = getJournalsCacheRaw()
+      const found = cached.find((j: any) => j.id === id)
+      if (found) return found as JournalEntry
+      throw new Error('Not found')
+    }),
+
+  extract: (id: string) =>
+    request<{ items: ExtractedItem[] }>({
+      url: `/journal-entries/${id}/extract`,
+      method: 'POST',
+      data: {},
+    }),
+
+  listExtracted: (id: string) =>
+    request<{ items: ExtractedItem[] }>({
+      url: `/journal-entries/${id}/extract`,
+      method: 'GET',
+    }),
+
+  confirmExtracted: (id: string, data: { itemId: string; action: 'confirm' | 'reject' | 'edit'; payloadJson?: any; contactId?: string }) =>
+    request<any>({
+      url: `/journal-entries/${id}/confirm`,
+      method: 'POST',
+      data,
+    }),
+}
+
 export const conversationApi = {
-  getList: (filter?: string) =>
-    request<ConversationRecord[]>({
-      url: `/conversations${filter ? `?filter=${filter}` : ''}`,
-      method: 'GET',
-    }),
+  getList: async () => {
+    const data = await journalApi.list()
+    return data.items.map((entry) => ({
+      id: entry.id,
+      title: entry.raw_text.slice(0, 20) || '记录',
+      summary: entry.raw_text.slice(0, 60) || '',
+      status: entry.status === 'processed' ? 'archived' : 'pending',
+      createdAt: entry.created_at,
+      updatedAt: entry.updated_at,
+    })) as ConversationRecord[]
+  },
 
-  getDetail: (id: string) =>
-    request<ConversationDetail>({
-      url: `/conversations/${id}`,
-      method: 'GET',
-    }),
+  getDetail: async (id: string) => {
+    const entry = await journalApi.get(id)
+    return {
+      id: entry.id,
+      title: entry.raw_text.slice(0, 20) || '记录',
+      summary: entry.raw_text.slice(0, 60) || '',
+      status: entry.status === 'processed' ? 'archived' : 'pending',
+      createdAt: entry.created_at,
+      updatedAt: entry.updated_at,
+      originalContent: entry.raw_text,
+    } as ConversationDetail
+  },
 
-  create: (content: string) =>
-    request<ConversationDetail>({
-      url: '/conversations',
-      method: 'POST',
-      data: { content },
-    }),
-
-  archive: (id: string, edits?: Partial<ConversationDetail>) =>
-    request<ConversationDetail>({
-      url: `/conversations/${id}/archive`,
-      method: 'POST',
-      data: edits,
-    }),
-
-  delete: (id: string) =>
-    request<{ success: boolean }>({
-      url: `/conversations/${id}`,
-      method: 'DELETE',
-    }),
+  create: async (content: string) => {
+    const entry = await journalApi.create({ rawText: content })
+    return {
+      id: entry.id,
+      title: entry.raw_text.slice(0, 20) || '记录',
+      summary: entry.raw_text.slice(0, 60) || '',
+      status: 'pending',
+      createdAt: entry.created_at,
+      updatedAt: entry.updated_at,
+      originalContent: entry.raw_text,
+    } as ConversationDetail
+  },
 }
 
-// Contact APIs
 export const contactApi = {
-  getList: (filter?: string, search?: string) =>
-    request<Contact[]>({
-      url: `/contacts?${filter ? `filter=${filter}&` : ''}${search ? `search=${search}` : ''}`,
+  getList: async () => {
+    try {
+      const data = await request<{ items: any[] }>({
+        url: '/contacts',
+        method: 'GET',
+      })
+      setContactsCacheRaw(data.items)
+      return data.items.map(mapContact)
+    } catch (error) {
+      await flushOutbox().catch(() => undefined)
+      return getContactsCacheRaw().map(mapContact)
+    }
+  },
+
+  create: (data: { name: string; notes?: string }) =>
+    (async () => {
+      const id = generateId()
+      try {
+        const created = await request<any>({
+          url: '/contacts',
+          method: 'POST',
+          data: { ...data, id },
+        })
+        const cached = getContactsCacheRaw()
+        setContactsCacheRaw([created, ...cached.filter((c: any) => c.id !== created.id)])
+        return created
+      } catch (error) {
+        const offline = { id, name: data.name, notes: data.notes ?? null, offline: true }
+        const cached = getContactsCacheRaw()
+        setContactsCacheRaw([offline, ...cached.filter((c: any) => c.id !== id)])
+        enqueueOutbox({
+          id,
+          kind: 'contact_create',
+          url: '/contacts',
+          method: 'POST',
+          data: { ...data, id },
+          createdAt: new Date().toISOString(),
+        })
+        return offline
+      }
+    })(),
+
+  getDetail: async (id: string) => {
+    try {
+      const contact = await request<any>({
+        url: `/contacts/${id}`,
+        method: 'GET',
+      })
+      return mapContact(contact)
+    } catch (error) {
+      const cached = getContactsCacheRaw()
+      const found = cached.find((c: any) => c.id === id)
+      if (found) return mapContact(found)
+      throw error
+    }
+  },
+
+  getContext: (id: string) =>
+    request<any>({
+      url: `/contacts/${id}/context`,
       method: 'GET',
     }),
 
-  getDetail: (id: string) =>
-    request<ContactDetail>({
-      url: `/contacts/${id}`,
+  getBrief: (id: string) =>
+    request<BriefSnapshot | null>({
+      url: `/contacts/${id}/brief`,
       method: 'GET',
     }),
 
-  refreshBriefing: (id: string) =>
-    request<ContactDetail>({
-      url: `/contacts/${id}/briefing`,
+  refreshBrief: (id: string) =>
+    request<BriefSnapshot>({
+      url: `/contacts/${id}/brief`,
       method: 'POST',
-    }),
-
-  addEvent: (id: string, event: Partial<ContactDetail['events'][0]>) =>
-    request<ContactDetail>({
-      url: `/contacts/${id}/events`,
-      method: 'POST',
-      data: event,
+      data: { forceRefresh: true },
     }),
 }
 
-// Action APIs
 export const actionApi = {
-  getFollowUps: () =>
-    request<FollowUpItem[]>({
-      url: '/actions/follow-ups',
+  getOpenActions: (contactId?: string) =>
+    request<{ items: ActionItem[] }>({
+      url: `/action-items${contactId ? `?contactId=${contactId}` : ''}`,
       method: 'GET',
     }),
 
-  getSuggestions: () =>
-    request<SuggestionItem[]>({
-      url: '/actions/suggestions',
+  update: (id: string, data: { status?: string; dueAt?: string }) =>
+    request<ActionItem>({
+      url: `/action-items/${id}`,
+      method: 'PATCH',
+      data,
+    }),
+}
+
+export const toolTaskApi = {
+  list: (status: 'pending' | 'confirmed' | 'running' | 'done' | 'failed' | 'all' = 'pending') =>
+    request<{ items: ToolTask[] }>({
+      url: `/tool-tasks?status=${status}`,
       method: 'GET',
     }),
 
-  getWeeklyStats: () =>
-    request<WeeklyStats>({
-      url: '/actions/weekly-stats',
+  listPending: () => toolTaskApi.list('pending'),
+
+  confirm: (id: string) =>
+    request<ToolTask>({
+      url: `/tool-tasks/${id}/confirm`,
+      method: 'POST',
+      data: {},
+    }),
+
+  listExecutions: (id: string) =>
+    request<{ items: any[] }>({
+      url: `/tool-tasks/${id}/executions`,
       method: 'GET',
     }),
 }
 
-// Connector APIs
-export const connectorApi = {
-  getList: () =>
-    request<Connector[]>({
-      url: '/connectors',
-      method: 'GET',
-    }),
-
-  connect: (type: string) =>
-    request<Connector>({
-      url: `/connectors/${type}/connect`,
-      method: 'POST',
-    }),
-
-  disconnect: (type: string) =>
-    request<{ success: boolean }>({
-      url: `/connectors/${type}/disconnect`,
-      method: 'POST',
-    }),
-
-  test: (type: string) =>
-    request<{ success: boolean }>({
-      url: `/connectors/${type}/test`,
-      method: 'POST',
-    }),
-
-  getTemplates: (type: string) =>
-    request<MessageTemplate[]>({
-      url: `/connectors/${type}/templates`,
-      method: 'GET',
-    }),
-
-  sendMessage: (type: string, templateId: string, contactId: string, content: string) =>
-    request<{ success: boolean }>({
-      url: `/connectors/${type}/send`,
-      method: 'POST',
-      data: { templateId, contactId, content },
-    }),
-}
-
-// User APIs
-export const userApi = {
-  getProfile: () =>
-    request<User>({
-      url: '/user/profile',
-      method: 'GET',
-    }),
-
-  updateSettings: (settings: Record<string, any>) =>
-    request<{ success: boolean }>({
-      url: '/user/settings',
-      method: 'PUT',
-      data: settings,
-    }),
-
-  exportData: () =>
-    request<{ url: string }>({
-      url: '/user/export',
-      method: 'POST',
-    }),
-
-  clearData: () =>
-    request<{ success: boolean }>({
-      url: '/user/clear',
-      method: 'DELETE',
-    }),
-}
-
-// Legacy API shim for pages expecting `api.*`
 export const api = {
   getContacts: async () => {
-    try {
-      return await contactApi.getList()
-    } catch (error) {
-      console.warn('Fallback to mock contacts due to API error:', error)
-      return mockData.contacts
-    }
+    const data = await contactApi.getList()
+    return data
   },
+
   getContactDetail: async (id: string) => {
-    try {
-      return await contactApi.getDetail(id)
-    } catch (error) {
-      console.warn('Fallback to mock contact detail due to API error:', error)
-      const fallback = mockData.contacts.find(contact => contact.id === id)
-      if (!fallback) {
-        throw error
-      }
-      return {
-        ...fallback,
-        events: [],
-        briefing: {
-          lastSummary: fallback.lastContactSummary || '',
-          pendingTodos: [],
-          traits: [],
-          suggestion: '',
-        },
-      }
-    }
+    const contact = await contactApi.getDetail(id)
+    const [context, brief] = await Promise.all([
+      contactApi.getContext(id),
+      contactApi.getBrief(id),
+    ])
+
+    const events = (context.recentEvents || []).map((event: any) => ({
+      id: event.id,
+      type: 'meeting',
+      date: event.occurred_at || event.occurredAt,
+      summary: event.summary,
+    })) as ContactEvent[]
+
+    return {
+      ...contact,
+      events,
+      facts: (context.stableFacts || []).map((f: any) => `${f.key}: ${f.value}`),
+      actions: (context.openActions || []).map((a: any) => a.suggestion_reason || '待办'),
+      briefing: brief
+        ? {
+            lastSummary: brief.content,
+            pendingTodos: [],
+            traits: [],
+            suggestion: '',
+          }
+        : undefined,
+    } as ContactDetail
   },
 }
 
-// Mock data for development
 export const mockData = {
-  records: [
-    {
-      id: '1',
-      title: '拜访-张三 CEO',
-      summary: '讨论了Q2合作方案，对方对报价有疑虑',
-      status: 'archived' as const,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    },
-    {
-      id: '2',
-      title: '今日记录 2026/01/28',
-      summary: '见了李四和王五，聊到新项目启动计划',
-      status: 'pending' as const,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    },
-    {
-      id: '3',
-      title: '电话-赵六',
-      summary: '确认下周三的会议时间和地点',
-      status: 'archived' as const,
-      createdAt: new Date(Date.now() - 86400000).toISOString(),
-      updatedAt: new Date(Date.now() - 86400000).toISOString(),
-    },
-  ],
-  contacts: [
-    {
-      id: '1',
-      name: '张三',
-      initial: '张',
-      avatarColor: '#C9B8A8',
-      company: 'ABC公司',
-      role: 'CEO',
-      lastContactTime: new Date(Date.now() - 3 * 86400000).toISOString(),
-      lastContactSummary: '上次聊到报价，待发优化方案',
-    },
-    {
-      id: '2',
-      name: '李四',
-      initial: '李',
-      avatarColor: '#7C9070',
-      company: 'XYZ公司',
-      role: '产品总监',
-      lastContactTime: new Date(Date.now() - 7 * 86400000).toISOString(),
-      lastContactSummary: '新项目启动计划讨论中',
-    },
-    {
-      id: '3',
-      name: '王五',
-      initial: '王',
-      avatarColor: '#5B9BD5',
-      company: 'DEF公司',
-      role: 'CTO',
-      lastContactTime: new Date(Date.now() - 14 * 86400000).toISOString(),
-      lastContactSummary: '已完成合同签署，待跟进实施',
-    },
-  ],
-  followUps: [
-    {
-      id: '1',
-      contact: {
-        id: '1',
-        name: '张三',
-        initial: '张',
-        avatarColor: '#C9B8A8',
-      },
-      reason: '答应周五发报价方案',
-      urgent: true,
-    },
-    {
-      id: '2',
-      contact: {
-        id: '4',
-        name: '赵六',
-        initial: '赵',
-        avatarColor: '#9B8AA8',
-      },
-      reason: '已沉默14天',
-      urgent: false,
-    },
-  ],
-  weeklyStats: {
-    records: 5,
-    visits: 3,
-    progress: 2,
-  },
+  records: [] as ConversationRecord[],
+  contacts: [] as Contact[],
+  followUps: [] as FollowUpItem[],
+  weeklyStats: { records: 0, visits: 0, progress: 0 } as WeeklyStats,
 }

@@ -14,8 +14,11 @@
     "server:dev": "npm run dev -w @friends-ai/server",
     "server:build": "npm run build -w @friends-ai/server",
     "server:start": "npm run start -w @friends-ai/server",
+    "server:migrate": "npm run migrate -w @friends-ai/server",
     "dev": "concurrently \"npm run client:dev\" \"npm run server:dev\"",
-    "build": "npm run client:build && npm run server:build"
+    "build": "npm run client:build && npm run server:build",
+    "user-stories:verify": "node scripts/verify-user-stories.js",
+    "ralph": "bun run scripts/ralph/runner.ts"
   },
   "devDependencies": {
     "ajv": "^8.17.1",
@@ -23,5 +26,8 @@
   },
   "engines": {
     "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "openclaw": "^2026.1.30"
   }
 }

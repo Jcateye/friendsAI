@@ -3,6 +3,8 @@ import { View, Text, Switch } from '@tarojs/components'
 import Taro from '@tarojs/taro'
 import { AtIcon } from 'taro-ui'
 import Header from '../../components/Header'
+import { authApi } from '../../services/api'
+import { removeStorage, showToast } from '../../utils'
 import './index.scss'
 
 interface SettingItem {
@@ -124,7 +126,25 @@ const SettingsPage: React.FC = () => {
         ))}
 
         <View className="logout-section">
-          <View className="logout-btn" onClick={() => Taro.showToast({ title: '退出登录', icon: 'none' })}>
+          <View
+            className="logout-btn"
+            onClick={async () => {
+              try {
+                const refreshToken = Taro.getStorageSync('refreshToken')
+                if (refreshToken) {
+                  await authApi.logout(refreshToken)
+                }
+                removeStorage('token')
+                removeStorage('refreshToken')
+                removeStorage('workspaceId')
+                removeStorage('user')
+                showToast('已退出', 'success')
+                Taro.reLaunch({ url: '/pages/login/index' })
+              } catch (error) {
+                showToast('退出失败')
+              }
+            }}
+          >
             <Text className="logout-text">退出登录</Text>
           </View>
         </View>

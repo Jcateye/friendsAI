@@ -120,12 +120,32 @@
   padding: 24rpx 32rpx;
 }
 
+.section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16rpx;
+}
+
 .section-title {
   font-size: $font-xs;
   font-weight: 600;
   color: $text-tertiary;
   text-transform: uppercase;
-  margin-bottom: 16rpx;
+}
+
+.refresh-btn {
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+  padding: 8rpx 12rpx;
+  border-radius: $radius-full;
+  background-color: rgba(124, 144, 112, 0.12);
+}
+
+.refresh-text {
+  font-size: $font-xs;
+  color: #7C9070;
 }
 
 .briefing-card {

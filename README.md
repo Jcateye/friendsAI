@@ -58,6 +58,8 @@ friendsAI/
 
 ## 快速开始
 
+更完整的后端 + 本地 LLM proxy + OpenAI embeddings 配置见：`docs/dev-setup.md`。
+
 ### 环境要求
 - Node.js >= 18.0.0
 - npm >= 8.0.0

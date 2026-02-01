@@ -1,12 +1,12 @@
 import { View, Text, Textarea } from '@tarojs/components'
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import Taro, { useDidShow } from '@tarojs/taro'
 import Header from '@/components/Header'
 import TabBar from '@/components/TabBar'
 import RecordCard from '@/components/RecordCard'
 import GlobalDrawer from '@/components/GlobalDrawer'
 import type { ConversationRecord } from '@/types'
-import { mockData, conversationApi } from '@/services/api'
+import { conversationApi } from '@/services/api'
 import { navigateTo, showToast, showLoading, hideLoading } from '@/utils'
 import './index.scss'
 
@@ -23,7 +23,8 @@ const ConversationPage: React.FC = () => {
   const loadRecords = async () => {
     try {
       setLoading(true)
-      setRecords(mockData.records)
+      const items = await conversationApi.getList()
+      setRecords(items)
     } catch (error) {
       showToast('加载失败')
     } finally {
@@ -45,7 +46,7 @@ const ConversationPage: React.FC = () => {
       navigateTo(`/pages/conversation-detail/index?id=${result.id}`)
     } catch (error) {
       hideLoading()
-      navigateTo('/pages/conversation-detail/index?id=2')
+      showToast('创建失败')
     }
   }
 

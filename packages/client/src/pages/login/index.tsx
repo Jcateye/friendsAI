@@ -6,43 +6,14 @@ import { showToast, showLoading, hideLoading, setStorage } from '@/utils'
 import './index.scss'
 
 const LoginPage: React.FC = () => {
-  const [email, setEmail] = useState('')
-  const [code, setCode] = useState('')
-  const [countdown, setCountdown] = useState(0)
+  const [mode, setMode] = useState<'login' | 'register'>('login')
+  const [emailOrPhone, setEmailOrPhone] = useState('')
+  const [password, setPassword] = useState('')
+  const [name, setName] = useState('')
   const [loading, setLoading] = useState(false)
 
-  const handleSendCode = async () => {
-    if (!email || countdown > 0) return
-
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      showToast('请输入正确的邮箱地址')
-      return
-    }
-
-    try {
-      showLoading('发送中...')
-      await authApi.sendCode(email)
-      hideLoading()
-      showToast('验证码已发送', 'success')
-
-      setCountdown(60)
-      const timer = setInterval(() => {
-        setCountdown((prev) => {
-          if (prev <= 1) {
-            clearInterval(timer)
-            return 0
-          }
-          return prev - 1
-        })
-      }, 1000)
-    } catch (error) {
-      hideLoading()
-      showToast('发送失败，请重试')
-    }
-  }
-
   const handleLogin = async () => {
-    if (!email || !code) {
+    if (!emailOrPhone || !password) {
       showToast('请填写完整信息')
       return
     }
@@ -50,26 +21,54 @@ const LoginPage: React.FC = () => {
     try {
       setLoading(true)
       showLoading('登录中...')
-      
-      // Mock 登录：没有后端服务时直接登录成功
-      const mockUser = {
-        id: '1',
-        email: email,
-        name: email.split('@')[0],
-        avatar: '',
-        createdAt: new Date().toISOString(),
+      const result = await authApi.login(emailOrPhone, password)
+      setStorage('token', result.accessToken)
+      setStorage('refreshToken', result.refreshToken)
+      if (result.workspace?.id) {
+        setStorage('workspaceId', result.workspace.id)
       }
-      const mockToken = 'mock_token_' + Date.now()
-      
-      setStorage('token', mockToken)
-      setStorage('user', mockUser)
+      setStorage('user', result.user)
 
       hideLoading()
       showToast('登录成功', 'success')
       Taro.switchTab({ url: '/pages/conversation/index' })
     } catch (error) {
       hideLoading()
-      showToast('登录失败，请检查验证码')
+      showToast('登录失败，请检查信息')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleRegister = async () => {
+    if (!emailOrPhone || !password || !name) {
+      showToast('请填写完整信息')
+      return
+    }
+    try {
+      setLoading(true)
+      showLoading('注册中...')
+      const payload: { email?: string; phone?: string; name: string; password: string } = {
+        name,
+        password,
+      }
+      if (emailOrPhone.includes('@')) {
+        payload.email = emailOrPhone
+      } else {
+        payload.phone = emailOrPhone
+      }
+      const result = await authApi.register(payload)
+      // Register also issues tokens (auto-login) for smoother MVP UX.
+      if (result.accessToken) setStorage('token', result.accessToken)
+      if (result.refreshToken) setStorage('refreshToken', result.refreshToken)
+      if (result.workspace?.id) setStorage('workspaceId', result.workspace.id)
+      setStorage('user', result.user)
+      hideLoading()
+      showToast('注册成功', 'success')
+      Taro.switchTab({ url: '/pages/conversation/index' })
+    } catch (error) {
+      hideLoading()
+      showToast('注册失败，请重试')
     } finally {
       setLoading(false)
     }
@@ -87,42 +86,48 @@ const LoginPage: React.FC = () => {
         </View>
 
         <View className="form-area">
+          {mode === 'register' && (
+            <View className="input-wrapper">
+              <Input
+                className="input-field"
+                type="text"
+                placeholder="姓名"
+                value={name}
+                onInput={(e) => setName(e.detail.value)}
+              />
+            </View>
+          )}
           <View className="input-wrapper">
             <Input
               className="input-field"
               type="text"
-              placeholder="输入邮箱"
-              value={email}
-              onInput={(e) => setEmail(e.detail.value)}
+              placeholder="邮箱或手机号"
+              value={emailOrPhone}
+              onInput={(e) => setEmailOrPhone(e.detail.value)}
             />
           </View>
 
-          <View className="code-row">
-            <View className="input-wrapper code-input">
-              <Input
-                className="input-field"
-                type="number"
-                placeholder="验证码"
-                maxlength={6}
-                value={code}
-                onInput={(e) => setCode(e.detail.value)}
-              />
-            </View>
-            <View
-              className={`get-code-btn ${countdown > 0 ? 'disabled' : ''}`}
-              onClick={handleSendCode}
-            >
-              <Text className="get-code-text">
-                {countdown > 0 ? `${countdown}s` : '获取验证码'}
-              </Text>
-            </View>
+          <View className="input-wrapper">
+            <Input
+              className="input-field"
+              type="password"
+              placeholder="密码"
+              value={password}
+              onInput={(e) => setPassword(e.detail.value)}
+            />
           </View>
 
           <View
             className={`login-btn ${loading ? 'disabled' : ''}`}
-            onClick={handleLogin}
+            onClick={mode === 'login' ? handleLogin : handleRegister}
           >
-            <Text className="login-text">登录 / 注册</Text>
+            <Text className="login-text">{mode === 'login' ? '登录' : '注册'}</Text>
+          </View>
+
+          <View className="switch-mode" onClick={() => setMode(mode === 'login' ? 'register' : 'login')}>
+            <Text className="switch-text">
+              {mode === 'login' ? '没有账号？去注册' : '已有账号？去登录'}
+            </Text>
           </View>
         </View>
       </View>

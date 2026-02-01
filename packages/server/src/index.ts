@@ -1,30 +1,11 @@
-import express from 'express';
-import cors from 'cors';
-import dotenv from 'dotenv';
+import { createApp } from '@/app/app';
+import { env } from '@/config/env';
 
-dotenv.config();
+const app = createApp();
 
-const app = express();
-const PORT = process.env.PORT || 3000;
-
-// Middleware
-app.use(cors());
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
-
-// Health check
-app.get('/health', (_req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
-});
-
-// API routes placeholder
-app.get('/api', (_req, res) => {
-  res.json({ message: 'FriendsAI API Server' });
-});
-
-// Start server
-app.listen(PORT, () => {
-  console.log(`🚀 Server running on http://localhost:${PORT}`);
+app.listen(env.port, () => {
+  // eslint-disable-next-line no-console
+  console.log(`Server running on http://localhost:${env.port}`);
 });
 
 export default app;

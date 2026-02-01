@@ -4,7 +4,7 @@ import Taro, { useRouter } from '@tarojs/taro'
 import { AtIcon } from 'taro-ui'
 import Header from '../../components/Header'
 import { ContactDetail, ContactEvent } from '../../types'
-import { api } from '../../services/api'
+import { api, contactApi } from '../../services/api'
 import { formatDate, getAvatarStyle } from '../../utils'
 import './index.scss'
 
@@ -41,6 +41,32 @@ const ContactDetailPage: React.FC = () => {
 
   const handleStartConversation = () => {
     Taro.showToast({ title: '开始对话', icon: 'none' })
+  }
+
+  const handleRefreshBrief = async () => {
+    if (!id) return
+    try {
+      Taro.showLoading({ title: '生成中...', mask: true })
+      const brief = await contactApi.refreshBrief(id)
+      setContact((prev) =>
+        prev
+          ? {
+              ...prev,
+              briefing: {
+                lastSummary: brief.content,
+                pendingTodos: [],
+                traits: [],
+                suggestion: '',
+              },
+            }
+          : prev
+      )
+      Taro.hideLoading()
+      Taro.showToast({ title: '简报已更新', icon: 'success' })
+    } catch (error) {
+      Taro.hideLoading()
+      Taro.showToast({ title: '更新失败', icon: 'error' })
+    }
   }
 
   const renderEventIcon = (type: ContactEvent['type']) => {
@@ -122,11 +148,37 @@ const ContactDetailPage: React.FC = () => {
           </View>
         </View>
 
-        {briefingText && (
-          <View className="section">
+        <View className="section">
+          <View className="section-header">
             <Text className="section-title">简介</Text>
+            <View className="refresh-btn" onClick={handleRefreshBrief}>
+              <AtIcon value="reload" size="14" color="#7C9070" />
+              <Text className="refresh-text">刷新</Text>
+            </View>
+          </View>
+          <View className="briefing-card">
+            <Text className="briefing-text">{briefingText || '暂无简报，点击刷新生成'}</Text>
+          </View>
+        </View>
+
+        {contact.facts && contact.facts.length > 0 && (
+          <View className="section">
+            <Text className="section-title">画像事实</Text>
             <View className="briefing-card">
-              <Text className="briefing-text">{briefingText}</Text>
+              {contact.facts.slice(0, 8).map((f, idx) => (
+                <Text key={idx} className="briefing-text">- {f}{'\n'}</Text>
+              ))}
+            </View>
+          </View>
+        )}
+
+        {contact.actions && contact.actions.length > 0 && (
+          <View className="section">
+            <Text className="section-title">待办</Text>
+            <View className="briefing-card">
+              {contact.actions.slice(0, 8).map((a, idx) => (
+                <Text key={idx} className="briefing-text">- {a}{'\n'}</Text>
+              ))}
             </View>
           </View>
         )}

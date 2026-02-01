@@ -127,6 +127,17 @@
           color: #FFFFFF;
         }
       }
+
+      .switch-mode {
+        display: flex;
+        justify-content: center;
+        padding-top: 8rpx;
+
+        .switch-text {
+          font-size: 26rpx;
+          color: #7C9070;
+        }
+      }
     }
   }
 

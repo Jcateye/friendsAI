@@ -61,7 +61,7 @@ const ContactsPage: React.FC = () => {
   }
 
   const handleAddContact = () => {
-    Taro.showToast({ title: '添加联系人', icon: 'none' })
+    Taro.navigateTo({ url: '/pages/contact-create/index' })
   }
 
   return (

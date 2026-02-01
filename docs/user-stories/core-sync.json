@@ -1,0 +1,12 @@
+[
+  {
+    "description": "Client can push offline changes and pull updates",
+    "steps": [
+      "Send sync push with changes",
+      "Server stores change log",
+      "Client pulls changes with cursor",
+      "Server returns delta and next cursor"
+    ],
+    "passes": true
+  }
+]

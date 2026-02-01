@@ -1,0 +1,23 @@
+[
+  {
+    "description": "User creates a post-meeting journal entry",
+    "steps": [
+      "Open conversation tab",
+      "Enter meeting notes and submit",
+      "API creates journal entry",
+      "Entry appears in recent list"
+    ],
+    "passes": true
+  },
+  {
+    "description": "AI extracts items and user confirms",
+    "steps": [
+      "Open journal entry detail",
+      "Trigger AI extraction",
+      "Render extracted items list",
+      "User selects contact and confirms items",
+      "Entry marked processed and data saved"
+    ],
+    "passes": true
+  }
+]
