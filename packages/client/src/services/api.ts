@@ -25,7 +25,10 @@ import {
   setJournalsCacheRaw,
 } from '@/services/offlineStore'
 
-const BASE_URL = process.env.TARO_APP_API_BASE_URL || 'http://localhost:3000/v1'
+// H5 runtime may not define `process`, so guard access.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const env = (typeof process !== 'undefined' ? (process as any).env : {}) as Record<string, string>
+const BASE_URL = env.TARO_APP_API_BASE_URL || 'http://localhost:3000/v1'
 
 const getWorkspaceId = () => Taro.getStorageSync('workspaceId')
 

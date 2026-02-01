@@ -89,7 +89,7 @@ npm install
 ### MVP 一键启动
 
 ```bash
-./scripts/mvp.sh start
+./project.sh start:mvp
 ```
 
 ### 使用 npm 脚本

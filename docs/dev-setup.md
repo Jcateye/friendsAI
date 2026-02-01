@@ -11,7 +11,7 @@ docker compose -f docker-compose.dev.yml up -d
 你也可以直接使用一键脚本（会自动启动 DB + 迁移 + API + Worker + 前端）：
 
 ```bash
-./scripts/mvp.sh start
+./project.sh start:mvp
 ```
 
 默认会在本机暴露 `localhost:5432`，数据库名/用户/密码都是 `friendsai`。

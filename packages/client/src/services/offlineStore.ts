@@ -1,6 +1,9 @@
 import Taro from '@tarojs/taro'
 
-const BASE_URL = process.env.TARO_APP_API_BASE_URL || 'http://localhost:3000/v1'
+// H5 runtime may not define `process`, so guard access.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const env = (typeof process !== 'undefined' ? (process as any).env : {}) as Record<string, string>
+const BASE_URL = env.TARO_APP_API_BASE_URL || 'http://localhost:3000/v1'
 
 type OutboxKind = 'contact_create' | 'journal_create'
 
@@ -21,18 +24,20 @@ const KEYS = {
 
 const getJson = <T,>(key: string, fallback: T): T => {
   try {
+    if (typeof Taro.getStorageSync !== 'function') return fallback
     const v = Taro.getStorageSync(key)
     if (!v) return fallback
     return v as T
-  } catch {
+  } catch (err) {
     return fallback
   }
 }
 
 const setJson = (key: string, value: any) => {
   try {
+    if (typeof Taro.setStorageSync !== 'function') return
     Taro.setStorageSync(key, value)
-  } catch {
+  } catch (err) {
     // ignore
   }
 }
@@ -45,7 +50,7 @@ export const generateId = () => {
     if (c.crypto?.randomUUID) {
       return c.crypto.randomUUID()
     }
-  } catch {
+  } catch (err) {
     // ignore
   }
   // Fallback: uuid v4 generator
@@ -71,6 +76,9 @@ export const enqueueOutbox = (item: OutboxItem) => {
 }
 
 export const flushOutbox = async () => {
+  if (typeof Taro.getStorageSync !== 'function' || typeof Taro.request !== 'function') {
+    return
+  }
   const token = Taro.getStorageSync('token')
   const workspaceId = Taro.getStorageSync('workspaceId')
   if (!token || !workspaceId) {
@@ -101,7 +109,7 @@ export const flushOutbox = async () => {
         continue
       }
       remaining.push(item)
-    } catch {
+    } catch (err) {
       remaining.push(item)
     }
   }

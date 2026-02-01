@@ -14,6 +14,9 @@ CLIENT_LOG="$LOG_DIR/client.log"
 SERVER_LOG="$LOG_DIR/server.log"
 CLIENT_PID_FILE="$ROOT_DIR/.client.pid"
 SERVER_PID_FILE="$ROOT_DIR/.server.pid"
+WORKER_PID_FILE="$ROOT_DIR/.worker.pid"
+DB_PID_FILE="$ROOT_DIR/.db.pid"
+WORKER_LOG="$LOG_DIR/worker.log"
 
 if [[ -f "$ROOT_DIR/yarn.lock" ]]; then
   PKG_MANAGER="yarn"
@@ -30,10 +33,12 @@ FriendsAI 项目管理脚本
 
 命令:
   start [client|server|all]   启动服务 (默认 all)
+  start:mvp                   启动 MVP：DB + 迁移 + API + Worker + 前端
   stop [client|server|all]    停止服务 (默认 all)
+  stop:mvp                    停止 MVP：API + Worker + 前端（不关闭 DB）
   restart [client|server|all] 重启服务 (默认 all)
   build [client|server|all]   构建项目 (默认 all)
-  logs [client|server]        查看日志 (默认 client)
+  logs [client|server|worker] 查看日志 (默认 client)
   status                      查看服务状态
   clean-logs                  清理日志文件
 
@@ -43,6 +48,7 @@ FriendsAI 项目管理脚本
   ./project.sh stop server     # 停止后端
   ./project.sh logs server     # 查看后端日志
   ./project.sh build client    # 构建前端 H5
+  ./project.sh start:mvp       # 启动 MVP 全量（含 DB+迁移+worker）
 EOF
 }
 
@@ -66,6 +72,35 @@ is_server_running() {
     fi
   fi
   return 1
+}
+
+is_worker_running() {
+  if [[ -f "$WORKER_PID_FILE" ]]; then
+    local pid
+    pid="$(cat "$WORKER_PID_FILE")"
+    if [[ -n "$pid" ]] && kill -0 "$pid" >/dev/null 2>&1; then
+      return 0
+    fi
+  fi
+  return 1
+}
+
+start_db() {
+  if ! command -v docker >/dev/null 2>&1; then
+    echo "❌ 未检测到 docker，请先安装 Docker Desktop。"
+    exit 1
+  fi
+  if ! docker info >/dev/null 2>&1; then
+    echo "❌ Docker 未启动，请先打开 Docker Desktop。"
+    exit 1
+  fi
+  echo "🐘 启动 pgvector Postgres..."
+  docker compose -f docker-compose.dev.yml up -d
+}
+
+run_migrate() {
+  echo "🧱 运行数据库迁移..."
+  $PKG_MANAGER run server:migrate
 }
 
 start_client() {
@@ -92,6 +127,19 @@ start_server() {
   echo $! > "$SERVER_PID_FILE"
   echo "✅ 后端已启动，PID: $(cat "$SERVER_PID_FILE")"
   echo "   日志文件: $SERVER_LOG"
+}
+
+start_worker() {
+  if is_worker_running; then
+    echo "🟢 Worker 已在运行 (PID: $(cat "$WORKER_PID_FILE"))"
+    return 0
+  fi
+
+  echo "🧰 启动 Worker..."
+  nohup $PKG_MANAGER run -w @friends-ai/server worker > "$WORKER_LOG" 2>&1 &
+  echo $! > "$WORKER_PID_FILE"
+  echo "✅ Worker 已启动，PID: $(cat "$WORKER_PID_FILE")"
+  echo "   日志文件: $WORKER_LOG"
 }
 
 stop_client() {
@@ -126,6 +174,21 @@ stop_server() {
   fi
 }
 
+stop_worker() {
+  if is_worker_running; then
+    local pid
+    pid="$(cat "$WORKER_PID_FILE")"
+    echo "⏹️  停止 Worker (PID: $pid)..."
+    kill "$pid" 2>/dev/null || true
+    sleep 1
+    pkill -P "$pid" 2>/dev/null || true
+    rm -f "$WORKER_PID_FILE"
+    echo "✅ Worker 已停止"
+  else
+    echo "⚪ Worker 未运行"
+  fi
+}
+
 start() {
   local target="${1:-all}"
   case "$target" in
@@ -146,6 +209,15 @@ start() {
   esac
 }
 
+start_mvp() {
+  start_db
+  run_migrate
+  start_server
+  start_worker
+  start_client
+  echo "✅ MVP 已启动"
+}
+
 stop() {
   local target="${1:-all}"
   case "$target" in
@@ -164,6 +236,12 @@ stop() {
       exit 1
       ;;
   esac
+}
+
+stop_mvp() {
+  stop_client
+  stop_worker
+  stop_server
 }
 
 restart() {
@@ -217,8 +295,16 @@ logs() {
         echo "未找到后端日志文件: $SERVER_LOG"
       fi
       ;;
+    worker)
+      if [[ -f "$WORKER_LOG" ]]; then
+        echo "📋 Worker 日志 ($WORKER_LOG):"
+        tail -f "$WORKER_LOG"
+      else
+        echo "未找到 Worker 日志文件: $WORKER_LOG"
+      fi
+      ;;
     *)
-      echo "未知服务: $target (可选: client, server)"
+      echo "未知服务: $target (可选: client, server, worker)"
       exit 1
       ;;
   esac
@@ -238,6 +324,11 @@ status() {
   else
     echo "  ⚪ 后端: 未运行"
   fi
+  if is_worker_running; then
+    echo "  🟢 Worker: 运行中 (PID: $(cat "$WORKER_PID_FILE"))"
+  else
+    echo "  ⚪ Worker: 未运行"
+  fi
   echo ""
 }
 
@@ -251,8 +342,14 @@ case "${1:-}" in
   start)
     start "${2:-all}"
     ;;
+  start:mvp)
+    start_mvp
+    ;;
   stop)
     stop "${2:-all}"
+    ;;
+  stop:mvp)
+    stop_mvp
     ;;
   restart)
     restart "${2:-all}"
