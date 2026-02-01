@@ -86,6 +86,12 @@ npm install
 ./project.sh clean-logs      # 清理日志文件
 ```
 
+### MVP 一键启动
+
+```bash
+./scripts/mvp.sh start
+```
+
 ### 使用 npm 脚本
 
 ```bash
