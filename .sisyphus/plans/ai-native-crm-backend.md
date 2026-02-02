@@ -183,7 +183,7 @@
 
 ## TODOs
 
-- [ ] 1. NestJS 项目初始化与基础配置
+- [x] 1. NestJS 项目初始化与基础配置
 
   **做什么**:
   - 创建新的 NestJS 项目 (`nest new friends-ai-backend --strict --package-manager npm`)。
@@ -222,7 +222,7 @@
   - [ ] 运行 `npm run start:dev`，服务能够成功启动并显示默认欢迎信息。
   - [ ] 运行 `npm run test` 成功运行并通过默认测试。
 
-- [ ] 2. PostgreSQL与PGVector环境搭建
+- [x] 2. PostgreSQL与PGVector环境搭建
 
   **做什么**:
   - 确保本地或开发环境中安装了 PostgreSQL。
@@ -261,7 +261,7 @@
   - [ ] 在 `friends_ai_db` 中，`pgvector` 扩展已启用 (例如通过 `CREATE EXTENSION vector;` 并验证)。
   - [ ] 数据库连接参数已记录。
 
-- [ ] 3. TypeORM/Prisma ORM集成配置
+- [x] 3. TypeORM/Prisma ORM集成配置
 
   **做什么**:
   - 选择并安装一个适合 NestJS 的 ORM，例如 TypeORM 或 Prisma。考虑到 NestJS 官方文档中 TypeORM 的示例较多，且与 TypeScript 结合良好，优先选择 TypeORM。
@@ -301,7 +301,7 @@
   - [ ] 生成并运行了数据库迁移，`TestEntity` 对应的表已在 `friends_ai_db` 中创建。
   - [ ] 编写并运行了一个简单的单元测试，验证 TypeORM 能够连接数据库并执行基本查询（例如，保存并查找 `TestEntity`）。
 
-- [ ] 4. 用户认证模块 (注册、登录)
+- [x] 4. 用户认证模块 (注册、登录)
 
   **做什么**:
   - 在 NestJS 中创建用户模块 (User Module)。
@@ -351,7 +351,7 @@
     - [ ] 失败情况下返回适当的HTTP状态码和错误信息（如凭据无效）。
   - [ ] 所有相关单元测试和集成测试已通过，且覆盖注册和登录功能。
 
-- [ ] 5. Session管理机制
+- [x] 5. Session管理机制
 
   **做什么**:
   - 在 NestJS 中集成 Session 管理模块 (例如使用 `express-session` 或类似库)。
@@ -395,7 +395,7 @@
   - [ ] 登出 API (`POST /auth/logout`) 可用，销毁用户 Session。
   - [ ] 所有相关单元测试和集成测试已通过，且覆盖Session的创建、验证和销毁。
 
-- [ ] 6. 核心数据模型设计 (用户、联系人、对话、事件、画像)
+- [x] 6. 核心数据模型设计 (用户、联系人、对话、事件、画像)
 
   **做什么**:
   - 为 `User`, `Contact`, `Conversation`, `Event`, `Profile` 等核心实体设计 TypeORM 实体。
@@ -436,7 +436,7 @@
   - [ ] 生成了数据库迁移文件，运行后在 `friends_ai_db` 中创建了所有核心实体对应的表及关系。
   - [ ] 编写并通过单元测试，验证实体定义与数据库的映射正确性。
 
-- [ ] 7. 数据库迁移与模型同步
+- [x] 7. 数据库迁移与模型同步
 
   **做什么**:
   - 确保所有数据库模型更改都通过 TypeORM 迁移进行管理。

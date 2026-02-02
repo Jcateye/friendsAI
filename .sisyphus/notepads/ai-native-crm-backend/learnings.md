@@ -61,6 +61,25 @@
 2. **实体关系错误**: TypeORM 需要所有相关实体都在 entities 数组中
 3. **测试配置**: 测试模块需要显式导入所有实体，不能仅依赖 autoLoadEntities
 
+## 2026-02-01 更新
+
+### 新增: 万能验证码调试功能
+
+**需求**: 开发调试时邮箱验证码发送失败，需要万能验证码绕过
+
+**实现**:
+- `.env` 添加 `NODE_ENV=development` 和 `UNIVERSAL_VERIFY_CODE=123456`
+- 新增 `VerifyCodeService` 处理验证码生成和验证逻辑
+- 扩展 `AuthController`:
+  - `POST /auth/send-verify-code` - 发送验证码(开发模式直接返回)
+  - `POST /auth/register` - 支持可选验证码字段
+  - `POST /auth/login` - 支持可选验证码字段
+
+**逻辑**:
+- 开发模式 + 配置万能验证码时，生成和验证都接受万能码
+- 验证码5分钟有效期，内存存储(生产环境建议Redis)
+- 注册/登录时如果提供验证码则验证，不提供则保持原有流程
+
 ### 下一步计划
 
 - Task 8: 联系人模块 CRUD API
