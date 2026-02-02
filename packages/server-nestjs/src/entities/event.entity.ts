@@ -10,7 +10,7 @@ export class Event {
   title: string;
 
   @Column({ type: 'text', nullable: true })
-  description: string | null;
+  description: string;
 
   @Column({ type: 'jsonb', nullable: true })
   details: Record<string, any>;
@@ -26,7 +26,7 @@ export class Event {
   contact: Contact;
 
   @Column({ nullable: true })
-  contactId: string | null;
+  contactId: string;
 
   @CreateDateColumn()
   createdAt: Date;

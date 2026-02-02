@@ -16,6 +16,15 @@ export class User {
   @Column({ nullable: true })
   name: string;
 
+  @Column({ default: true })
+  notificationsEnabled: boolean;
+
+  @Column({ default: false })
+  darkModeEnabled: boolean;
+
+  @Column({ default: true })
+  autoSyncEnabled: boolean;
+
   @OneToMany(() => Contact, contact => contact.user)
   contacts: Contact[];
 

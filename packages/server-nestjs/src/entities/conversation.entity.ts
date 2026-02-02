@@ -10,8 +10,11 @@ export class Conversation {
   @Column({ type: 'text' })
   content: string;
 
+  @Column({ type: 'text', nullable: true }) // Added inputText
+  inputText?: string;
+
   @Column({ type: 'vector', nullable: true })
-  embedding: number[] | null;
+  embedding: number[];
 
   @Column({ type: 'jsonb', nullable: true })
   parsedData: Record<string, any>;
@@ -21,17 +24,17 @@ export class Conversation {
 
   @ManyToOne(() => User, user => user.conversations, { nullable: true })
   @JoinColumn({ name: 'userId' })
-  user: User | null;
+  user: User;
 
   @Column()
   userId: string;
 
   @ManyToOne(() => Contact, contact => contact.conversations, { nullable: true })
   @JoinColumn({ name: 'contactId' })
-  contact: Contact | null;
+  contact: Contact;
 
   @Column({ nullable: true })
-  contactId: string | null;
+  contactId: string;
 
   @CreateDateColumn()
   createdAt: Date;

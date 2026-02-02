@@ -1,7 +1,8 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, ManyToOne, OneToMany, JoinColumn } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, ManyToOne, OneToMany, JoinColumn, OneToOne } from 'typeorm';
 import { User } from './user.entity';
 import { Event } from './event.entity';
 import { Conversation } from './conversation.entity';
+import { Briefing } from './briefing.entity';
 
 @Entity()
 export class Contact {
@@ -12,35 +13,44 @@ export class Contact {
   name: string;
 
   @Column({ nullable: true })
-  email: string | null;
+  email: string;
 
   @Column({ nullable: true })
-  phone: string | null;
+  phone: string;
 
   @Column({ nullable: true })
-  company: string | null;
+  company: string;
 
   @Column({ nullable: true })
-  position: string | null;
+  position: string;
 
   @Column({ type: 'jsonb', nullable: true })
-  profile: Record<string, any> | null;
+  profile: Record<string, any>;
 
   @Column({ type: 'simple-array', nullable: true })
-  tags: string[] | null;
+  tags: string[];
+
+  @Column({ default: false })
+  isStarred: boolean;
 
   @ManyToOne(() => User, user => user.contacts, { nullable: true })
   @JoinColumn({ name: 'userId' })
-  user: User | null;
+  user: User;
 
   @Column({ nullable: true })
-  userId: string | null;
+  userId: string;
 
   @OneToMany(() => Event, event => event.contact)
   events: Event[];
 
   @OneToMany(() => Conversation, conversation => conversation.contact)
   conversations: Conversation[];
+
+  @OneToOne(() => Briefing, briefing => briefing.contact, {
+    cascade: true,
+    onDelete: 'CASCADE',
+  })
+  briefing: Briefing;
 
   @CreateDateColumn()
   createdAt: Date;
