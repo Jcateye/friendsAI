@@ -2,7 +2,16 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { AiService } from '../../ai/ai.service';
-import { Contact, Conversation, Event } from '../../entities';
+import { Contact } from '../../entities';
+import { Briefing } from '../../entities/briefing.entity';
+
+// Define the expected structure of the AI-generated briefing
+interface ContactBriefingData {
+  lastSummary: string;
+  pendingTodos: string[];
+  traits: string[];
+  suggestion: string;
+}
 
 @Injectable()
 export class BriefingService {
@@ -10,16 +19,14 @@ export class BriefingService {
     private readonly aiService: AiService,
     @InjectRepository(Contact)
     private contactRepository: Repository<Contact>,
-    @InjectRepository(Conversation)
-    private conversationRepository: Repository<Conversation>,
-    @InjectRepository(Event)
-    private eventRepository: Repository<Event>,
+    @InjectRepository(Briefing)
+    private briefingRepository: Repository<Briefing>,
   ) {}
 
   async generateBriefing(contactId: string, userId: string): Promise<string> {
     const contact = await this.contactRepository.findOne({
       where: { id: contactId, userId },
-      relations: ['conversations', 'events'], // Load related data
+      relations: ['conversations', 'events', 'briefing'],
     });
 
     if (!contact) {
@@ -28,12 +35,47 @@ export class BriefingService {
 
     const relevantInfo = this.extractRelevantInfo(contact);
     const aiPrompt = this.buildBriefingPrompt(contact, relevantInfo);
-    const briefing = await this.aiService.callAgent(aiPrompt);
+    let briefingResponse: string;
+    try {
+      briefingResponse = await this.aiService.callAgent(aiPrompt);
+    } catch (error) {
+      console.error('AI call failed for briefing generation:', error);
+      throw new Error('Failed to generate briefing from AI.');
+    }
 
-    return briefing;
+    let briefingData: ContactBriefingData;
+    try {
+      briefingData = JSON.parse(briefingResponse);
+    } catch (e) {
+      console.warn('AI briefing response was not valid JSON:', briefingResponse);
+      briefingData = {
+        lastSummary: 'AI简报生成失败，请稍后重试。',
+        pendingTodos: [],
+        traits: [],
+        suggestion: '请检查AI服务配置或重试。',
+      };
+    }
+
+    // Create or update the briefing entity
+    let briefing = contact.briefing;
+    if (!briefing) {
+      briefing = this.briefingRepository.create({
+        contact,
+        contactId: contact.id,
+      });
+    }
+    
+    briefing.lastSummary = briefingData.lastSummary;
+    briefing.pendingTodos = briefingData.pendingTodos;
+    briefing.traits = briefingData.traits;
+    briefing.suggestion = briefingData.suggestion;
+    
+    await this.briefingRepository.save(briefing);
+
+    // Return the briefing as JSON string
+    return JSON.stringify(briefingData);
   }
 
-  // Helper to extract relevant info from contact, conversations, events
   private extractRelevantInfo(contact: Contact): string {
     let info = `Contact Name: ${contact.name}\n`;
     if (contact.email) info += `Email: ${contact.email}\n`;
@@ -45,14 +87,14 @@ export class BriefingService {
 
     if (contact.conversations && contact.conversations.length > 0) {
       info += '\nRecent Conversations:\n';
-      contact.conversations.slice(0, 5).forEach(conv => { // Limit to 5 recent conversations
+      contact.conversations.slice(0, 5).forEach(conv => {
         info += `- ${conv.content.substring(0, 100)}... (Date: ${conv.createdAt.toLocaleDateString()})\n`;
       });
     }
 
     if (contact.events && contact.events.length > 0) {
       info += '\nRecent Events:\n';
-      contact.events.slice(0, 5).forEach(event => { // Limit to 5 recent events
+      contact.events.slice(0, 5).forEach(event => {
         info += `- ${event.title}: ${event.description?.substring(0, 100) || ''}... (Date: ${event.eventDate?.toLocaleDateString()})\n`;
       });
     }
@@ -60,11 +102,18 @@ export class BriefingService {
     return info;
   }
 
-  // Helper to build the AI prompt for briefing generation
   private buildBriefingPrompt(contact: Contact, relevantInfo: string): string {
     return `Generate a concise pre-meeting briefing for a meeting with ${contact.name}.
     Focus on key facts, recent interactions, and potential discussion points based on the provided information.
     The briefing should be actionable and no longer than 3-5 sentences.
+    Return the output as a JSON object with the following structure:
+    {
+      "lastSummary": "string - a brief summary of the contact's current status or last interaction",
+      "pendingTodos": ["string - list of pending tasks or follow-ups related to the contact"],
+      "traits": ["string - key personality traits or important facts about the contact"],
+      "suggestion": "string - a suggestion for discussion points or an opening line for the meeting"
+    }
+    Ensure the JSON is valid and only contains the briefing object, no extra text.
 
     Relevant Contact Information:
     ${relevantInfo}
@@ -73,8 +122,6 @@ export class BriefingService {
   }
 
   async refreshBriefing(contactId: string, userId: string): Promise<string> {
-    // For now, refreshBriefing just regenerates the briefing
-    // In a real scenario, this might involve re-fetching data or clearing a cache
     return this.generateBriefing(contactId, userId);
   }
 }

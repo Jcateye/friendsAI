@@ -1,52 +1,44 @@
-import { Controller, Get, Post, Patch, Delete, Body, Param, Query } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Delete, Body, Param, Query, UseGuards, Req } from '@nestjs/common';
+import { Request } from 'express';
 import { ContactsService } from './contacts.service';
+import { CreateContactDto, UpdateContactDto, ContactFilter } from './dtos/contact.dto';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
-interface CreateContactDto {
-  name: string;
-  email?: string;
-  phone?: string;
-  company?: string;
-  position?: string;
-  profile?: Record<string, any>;
-  tags?: string[];
+interface RequestWithUser extends Request {
+  user: { id: string };
 }
 
-interface UpdateContactDto {
-  name?: string;
-  email?: string;
-  phone?: string;
-  company?: string;
-  position?: string;
-  profile?: Record<string, any>;
-  tags?: string[];
-}
-
+@UseGuards(JwtAuthGuard)
 @Controller('contacts')
 export class ContactsController {
   constructor(private readonly contactsService: ContactsService) {}
 
   @Post()
-  create(@Body() createContactDto: CreateContactDto) {
-    return this.contactsService.create(createContactDto);
+  create(@Req() req: RequestWithUser, @Body() createContactDto: CreateContactDto) {
+    return this.contactsService.create(req.user.id, createContactDto);
   }
 
   @Get()
-  findAll(@Query('page') page: number = 1, @Query('limit') limit: number = 10) {
-    return this.contactsService.findAll(page, limit);
+  getList(
+    @Req() req: RequestWithUser,
+    @Query('filter') filter?: ContactFilter,
+    @Query('search') search?: string,
+  ) {
+    return this.contactsService.getList(req.user.id, filter, search);
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.contactsService.findOne(id);
+  findOne(@Req() req: RequestWithUser, @Param('id') id: string) {
+    return this.contactsService.findOne(req.user.id, id);
   }
 
   @Patch(':id')
-  update(@Param('id') id: string, @Body() updateContactDto: UpdateContactDto) {
-    return this.contactsService.update(id, updateContactDto);
+  update(@Req() req: RequestWithUser, @Param('id') id: string, @Body() updateContactDto: UpdateContactDto) {
+    return this.contactsService.update(req.user.id, id, updateContactDto);
   }
 
   @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.contactsService.remove(id);
+  remove(@Req() req: RequestWithUser, @Param('id') id: string) {
+    return this.contactsService.remove(req.user.id, id);
   }
 }

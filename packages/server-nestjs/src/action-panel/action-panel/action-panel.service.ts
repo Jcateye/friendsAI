@@ -1,112 +1,177 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, Between, LessThanOrEqual, MoreThanOrEqual } from 'typeorm';
+import { Contact } from '../../entities/contact.entity';
+import { User } from '../../entities/user.entity';
+import { Briefing } from '../../entities/briefing.entity';
+import { Conversation } from '../../entities/conversation.entity';
+import { Event } from '../../entities/event.entity';
 import { AiService } from '../../ai/ai.service';
-import { VectorService } from '../../ai/vector/vector.service';
-import { Contact, Conversation, Event } from '../../entities';
+
 
 @Injectable()
 export class ActionPanelService {
   constructor(
-    private readonly aiService: AiService,
-    private readonly vectorService: VectorService,
     @InjectRepository(Contact)
     private contactRepository: Repository<Contact>,
+    @InjectRepository(User)
+    private userRepository: Repository<User>,
+    @InjectRepository(Briefing)
+    private briefingRepository: Repository<Briefing>,
     @InjectRepository(Conversation)
     private conversationRepository: Repository<Conversation>,
     @InjectRepository(Event)
     private eventRepository: Repository<Event>,
+    private aiService: AiService,
   ) {}
 
-  async getFollowUps(userId: string): Promise<Contact[]> {
+  async getRecommendedContacts(userId: string): Promise<SuggestionItem[]> {
+    const user = await this.userRepository.findOne({ where: { id: userId } });
+    if (!user) {
+      throw new NotFoundException(`User with ID ${userId} not found.`);
+    }
+
     const contacts = await this.contactRepository.find({
       where: { userId },
-      relations: ['conversations', 'events'],
+      relations: ['briefing', 'conversations'],
+      order: { createdAt: 'DESC' },
+      take: 10,
     });
 
-    // Simple example: sort by last interaction date, or contacts with uncompleted tasks
-    // This logic can be greatly expanded and AI-enhanced
-    contacts.sort((a, b) => {
-      const lastInteractionA = this.getLastInteractionDate(a);
-      const lastInteractionB = this.getLastInteractionDate(b);
-      return lastInteractionA.getTime() - lastInteractionB.getTime(); // Older last interaction first
-    });
+    const promptContent = JSON.stringify(this.buildRecommendationPrompt(user, contacts));
 
-    return contacts;
-  }
+    const aiResponse = await this.aiService.callAgent(promptContent, { userId });
 
-  // Helper to get the most recent interaction date
-  private getLastInteractionDate(contact: Contact): Date {
-    let latestDate = contact.createdAt;
-
-    contact.conversations?.forEach(conv => {
-      if (conv.createdAt > latestDate) latestDate = conv.createdAt;
-    });
-
-    contact.events?.forEach(event => {
-      if (event.eventDate && event.eventDate > latestDate) latestDate = event.eventDate;
-    });
-
-    return latestDate;
-  }
-
-  async getRecommendedContacts(userId: string): Promise<{ contact: Contact; reason: string; openingLine: string }[]> {
-    const userContacts = await this.contactRepository.find({
-      where: { userId },
-      relations: ['conversations', 'events'],
-    });
-
-    if (userContacts.length === 0) {
-      return [];
+    if (!aiResponse) {
+        throw new Error('AI did not return a valid response for contact recommendations.');
     }
 
-    // This is a simplified recommendation logic. In a real scenario, it would involve:
-    // 1. Embedding user's own profile/goals
-    // 2. Embedding contact profiles/interaction history
-    // 3. Performing vector similarity search
-    // 4. Using AI to generate reasons and opening lines
-
-    const aiRecommendationPrompt = this.buildRecommendationPrompt(userContacts);
-    const aiResponse = await this.aiService.callAgent(aiRecommendationPrompt);
-
-    let recommendedData: { contactName: string; reason: string; openingLine: string }[] = [];
+    let recommendations: SuggestionItem[];
     try {
-      recommendedData = JSON.parse(aiResponse);
-    } catch (e) {
-      console.warn('AI recommendation response was not valid JSON:', aiResponse);
-      // Fallback: simple text summary or empty array
-      return [];
-    }
-
-    // Map AI's recommendation to actual Contact entities
-    const recommendations: { contact: Contact; reason: string; openingLine: string }[] = [];
-    for (const item of recommendedData) {
-      const contact = userContacts.find(c => c.name === item.contactName);
-      if (contact) {
-        recommendations.push({ contact, reason: item.reason, openingLine: item.openingLine });
+      recommendations = JSON.parse(aiResponse);
+      // Ensure the parsed content is an array of SuggestionItem
+      if (!Array.isArray(recommendations) || !recommendations.every(item => 'contactId' in item && 'reason' in item)) {
+        throw new Error('AI returned malformed recommendation data.');
       }
+    } catch (e) {
+      console.error('Failed to parse AI recommendation response:', e);
+      throw new Error('AI returned malformed recommendation data.');
     }
 
-    return recommendations;
+    const validRecommendations = recommendations.filter(rec =>
+        contacts.some(contact => contact.id === rec.contactId)
+    );
+
+    return validRecommendations;
   }
 
-  private buildRecommendationPrompt(contacts: Contact[]): string {
-    const contactsInfo = contacts.map(c => {
-      let info = `Name: ${c.name}`;
-      if (c.company) info += `, Company: ${c.company}`;
-      if (c.position) info += `, Position: ${c.position}`;
-      if (c.profile) info += `, Profile: ${JSON.stringify(c.profile)}`;
-      if (c.tags && c.tags.length > 0) info += `, Tags: ${c.tags.join(', ')}`;
-      return info;
-    }).join('\n');
+  async getFollowUps(userId: string): Promise<FollowUpItem[]> {
+    const contactsWithPendingTodos = await this.contactRepository
+      .createQueryBuilder('contact')
+      .leftJoinAndSelect('contact.briefing', 'briefing')
+      .where('contact.userId = :userId', { userId })
+      .andWhere('briefing.pendingTodos IS NOT NULL AND array_length(briefing.pendingTodos, 1) > 0')
+      .getMany();
 
-    return `Given the following list of contacts and their brief profiles, suggest 1-3 contacts for the user to engage with.
-    For each suggestion, provide a brief reason for the recommendation and a suggested opening line for a conversation.
-    The output should be a JSON array of objects, each with 'contactName', 'reason', 'openingLine'.
-
-    Contacts:
-    ${contactsInfo}
-
-    Recommendation:`;
+    return contactsWithPendingTodos.map(contact => ({
+      contactId: contact.id,
+      contactName: contact.name,
+      pendingTodos: contact.briefing.pendingTodos || [],
+    }));
   }
+
+  async getWeeklyStats(userId: string): Promise<WeeklyStats> {
+    const oneWeekAgo = new Date();
+    oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+
+    const newContacts = await this.contactRepository.count({
+      where: {
+        userId,
+        createdAt: MoreThanOrEqual(oneWeekAgo),
+      },
+    });
+
+    const newConversations = await this.conversationRepository.count({
+      where: {
+        userId,
+        createdAt: MoreThanOrEqual(oneWeekAgo),
+      },
+    });
+
+    // Event doesn't have userId directly, need to count through contacts
+    const newEvents = await this.eventRepository
+      .createQueryBuilder('event')
+      .innerJoin('event.contact', 'contact')
+      .where('contact.userId = :userId', { userId })
+      .andWhere('event.createdAt >= :oneWeekAgo', { oneWeekAgo })
+      .getCount();
+
+    return {
+      conversationsCount: newConversations,
+      newContactsCount: newContacts,
+      eventsCount: newEvents,
+    };
+  }
+
+  private buildRecommendationPrompt(user: User, contacts: Contact[]): object {
+    // This prompt needs to guide the AI to return structured JSON for contact recommendations.
+    // Example fields: contactId, reason, suggestedAction, openingLine
+    const contactInfo = contacts.map(c => ({
+      id: c.id,
+      name: c.name,
+      company: c.company,
+      position: c.position,
+      lastInteraction: c.updatedAt,
+      pendingTodos: c.briefing?.pendingTodos,
+      traits: c.briefing?.traits,
+    }));
+
+    const prompt = {
+        role: 'system',
+        content: `You are an AI assistant designed to recommend contacts for a user to reach out to.
+        Based on the user's information and their recent contacts, suggest up to 3 contacts.
+        For each suggestion, provide the contactId, a brief reason for the recommendation, a suggested action, and an openingLine.
+        The response MUST be a valid JSON array of objects, each matching the SuggestionItem interface.
+
+        User Name: ${user.name}
+        User Email: ${user.email}
+
+        Recent Contacts: ${JSON.stringify(contactInfo)}
+
+        Your response MUST be a valid JSON array matching the SuggestionItem[] interface.
+        Example JSON:
+        [
+          {
+            "contactId": "uuid-of-contact",
+            "reason": "Follow up on recent proposal discussion.",
+            "suggestedAction": "Send follow-up email.",
+            "openingLine": "Hi [Contact Name], following up on our recent discussion about the Q2 proposal."
+          }
+        ]
+        `,
+    };
+    return prompt;
+  }
+
+  // TODO: Add buildFollowUpPrompt if needed for AI-driven follow-ups
+}
+
+// Types
+export interface SuggestionItem {
+  contactId: string;
+  reason: string;
+  suggestedAction: string;
+  openingLine: string;
+}
+
+export interface FollowUpItem {
+  contactId: string;
+  contactName: string;
+  pendingTodos: string[];
+}
+
+export interface WeeklyStats {
+  conversationsCount: number;
+  newContactsCount: number;
+  eventsCount: number;
 }

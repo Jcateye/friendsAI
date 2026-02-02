@@ -82,16 +82,18 @@ export class ConversationProcessorService {
     // Process events
     if (parsedData.events && parsedData.events.length > 0) {
       for (const eventData of parsedData.events) {
-        const event = this.eventRepository.create({
-          ...eventData,
-          contactId: conversation.contactId || null, // Link event to conversation's contact if available
-        });
-        await this.vectorService.embedEvent(event); // Embed event text
+        const eventDataWithContact: any = { ...eventData };
+        if (conversation.contactId) {
+          eventDataWithContact.contactId = conversation.contactId;
+        }
+        const event: any = this.eventRepository.create(eventDataWithContact);
+        await this.vectorService.embedEvent(event);
       }
     }
 
     // Store facts and todos directly in conversation's parsedData for now
     conversation.parsedData = parsedData;
+    conversation.isArchived = true; // Mark as archived after processing
 
     // Embed conversation content and save
     const updatedConversation = await this.vectorService.embedConversation(conversation);
