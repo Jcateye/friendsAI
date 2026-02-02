@@ -1,10 +1,13 @@
-import { useState } from 'react'
-import { View, Text } from '@tarojs/components'
-import Taro from '@tarojs/taro'
+import { useState, useEffect } from 'react'
+import { View, Text, ScrollView } from '@tarojs/components'
+import Taro, { useDidShow } from '@tarojs/taro'
 import { AtIcon } from 'taro-ui'
 import Header from '../../components/Header'
 import TabBar from '../../components/TabBar'
 import GlobalDrawer from '../../components/GlobalDrawer'
+import { actionApi } from '../../services/api'
+import type { FollowUpItem, SuggestionItem, WeeklyStats } from '../../types'
+import { showToast } from '../../utils'
 import './index.scss'
 
 interface ActionItem {
@@ -62,6 +65,39 @@ const actions: ActionItem[] = [
 
 const ActionPage: React.FC = () => {
   const [drawerOpen, setDrawerOpen] = useState(false)
+  const [followUps, setFollowUps] = useState<FollowUpItem[]>([])
+  const [suggestions, setSuggestions] = useState<SuggestionItem[]>([])
+  const [weeklyStats, setWeeklyStats] = useState<WeeklyStats | null>(null)
+  const [loading, setLoading] = useState(true)
+
+  const loadActionData = async () => {
+    setLoading(true)
+    try {
+      const [followUpsData, suggestionsData, weeklyStatsData] = await Promise.all([
+        actionApi.getFollowUps(),
+        actionApi.getSuggestions(),
+        actionApi.getWeeklyStats(),
+      ])
+      setFollowUps(followUpsData)
+      setSuggestions(suggestionsData)
+      setWeeklyStats(weeklyStatsData)
+    } catch (error) {
+      console.error('Failed to load action data:', error)
+      showToast('加载行动数据失败', 'error')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useDidShow(() => {
+    loadActionData()
+  })
+
+  useEffect(() => {
+    // This useEffect is to handle initial load or if useDidShow has issues in some environments.
+    // It will effectively be called only once on mount if useDidShow handles subsequent renders.
+    loadActionData();
+  }, [])
 
   const handleActionClick = (action: ActionItem) => {
     Taro.showToast({ title: action.title, icon: 'none' })
@@ -74,26 +110,95 @@ const ActionPage: React.FC = () => {
         onMenuClick={() => setDrawerOpen(true)}
       />
 
-      <View className="action-content">
-        <View className="action-grid">
-          {actions.map(action => (
-            <View
-              key={action.id}
-              className="action-card"
-              onClick={() => handleActionClick(action)}
-            >
+      <ScrollView scrollY className="action-scroll-content">
+        <View className="action-content">
+          <View className="action-grid">
+            {actions.map(action => (
               <View
-                className="action-icon"
-                style={{ backgroundColor: action.color }}
+                key={action.id}
+                className="action-card"
+                onClick={() => handleActionClick(action)}
               >
-                <AtIcon value={action.icon} size="24" color="#fff" />
+                <View
+                  className="action-icon"
+                  style={{ backgroundColor: action.color }}
+                >
+                  <AtIcon value={action.icon} size="24" color="#fff" />
+                </View>
+                <Text className="action-title">{action.title}</Text>
+                <Text className="action-desc">{action.description}</Text>
               </View>
-              <Text className="action-title">{action.title}</Text>
-              <Text className="action-desc">{action.description}</Text>
+            ))}
+          </View>
+
+          {loading ? (
+            <View className="loading-state">
+              <Text>加载中...</Text>
             </View>
-          ))}
+          ) : (
+            <View className="dynamic-sections">
+              {/* Follow Ups Section */}
+              {followUps.length > 0 && (
+                <View className="section">
+                  <Text className="section-title">待办事项</Text>
+                  {followUps.map(item => (
+                    <View key={item.id} className="follow-up-item">
+                      <View className="item-icon" style={{ backgroundColor: item.contact.avatarColor }}>
+                        <Text className="icon-text">{item.contact.initial}</Text>
+                      </View>
+                      <View className="item-content">
+                        <Text className="item-title">{item.reason}</Text>
+                        <Text className="item-meta">与 {item.contact.name}</Text>
+                      </View>
+                      {item.urgent && <Text className="item-urgent">紧急</Text>}
+                    </View>
+                  ))}
+                </View>
+              )}
+
+              {/* Suggestions Section */}
+              {suggestions.length > 0 && (
+                <View className="section">
+                  <Text className="section-title">AI 推荐</Text>
+                  {suggestions.map(item => (
+                    <View key={item.id} className="suggestion-item">
+                      <View className="item-icon" style={{ backgroundColor: item.contact.avatarColor }}>
+                        <Text className="icon-text">{item.contact.initial}</Text>
+                      </View>
+                      <View className="item-content">
+                        <Text className="item-title">{item.reason}</Text>
+                        <Text className="item-meta">与 {item.contact.name}</Text>
+                      </View>
+                      {item.urgent && <Text className="item-urgent">重要</Text>}
+                    </View>
+                  ))}
+                </View>
+              )}
+
+              {/* Weekly Stats Section */}
+              {weeklyStats && (
+                <View className="section">
+                  <Text className="section-title">周统计</Text>
+                  <View className="stats-card">
+                    <View className="stat-item">
+                      <Text className="stat-value">{weeklyStats.records}</Text>
+                      <Text className="stat-label">记录</Text>
+                    </View>
+                    <View className="stat-item">
+                      <Text className="stat-value">{weeklyStats.visits}</Text>
+                      <Text className="stat-label">拜访</Text>
+                    </View>
+                    <View className="stat-item">
+                      <Text className="stat-value">{weeklyStats.progress}</Text>
+                      <Text className="stat-label">进展</Text>
+                    </View>
+                  </View>
+                </View>
+              )}
+            </View>
+          )}
         </View>
-      </View>
+      </ScrollView>
 
       <TabBar current="action" />
 

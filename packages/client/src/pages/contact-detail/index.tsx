@@ -4,7 +4,7 @@ import Taro, { useRouter } from '@tarojs/taro'
 import { AtIcon } from 'taro-ui'
 import Header from '../../components/Header'
 import { ContactDetail, ContactEvent } from '../../types'
-import { api } from '../../services/api'
+import { contactApi } from '../../services/api' // Change import from api to contactApi
 import { formatDate, getAvatarStyle } from '../../utils'
 import './index.scss'
 
@@ -16,14 +16,18 @@ const ContactDetailPage: React.FC = () => {
 
   useEffect(() => {
     const loadContact = async () => {
-      if (!id) return
+      if (!id) {
+        setLoading(false) // If no ID, stop loading and show no contact
+        return
+      }
       setLoading(true)
       try {
-        const data = await api.getContactDetail(id)
+        const data = await contactApi.getDetail(id) // Use contactApi.getDetail
         setContact(data)
       } catch (error) {
         console.error('Failed to load contact:', error)
         Taro.showToast({ title: '加载失败', icon: 'error' })
+        setContact(null) // Ensure contact is null on error
       } finally {
         setLoading(false)
       }

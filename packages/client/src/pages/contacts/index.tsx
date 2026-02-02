@@ -7,44 +7,56 @@ import TabBar from '../../components/TabBar'
 import ContactCard from '../../components/ContactCard'
 import GlobalDrawer from '../../components/GlobalDrawer'
 import { Contact } from '../../types'
-import { api } from '../../services/api'
+import { contactApi } from '../../services/api'
 import './index.scss'
+
+type ContactFilter = 'all' | 'recent' | 'pending' | 'starred'
 
 const ContactsPage: React.FC = () => {
   const [contacts, setContacts] = useState<Contact[]>([])
   const [searchKeyword, setSearchKeyword] = useState('')
+  const [activeFilter, setActiveFilter] = useState<ContactFilter>('all')
   const [loading, setLoading] = useState(true)
   const [drawerOpen, setDrawerOpen] = useState(false)
 
-  const loadContacts = async () => {
+  const loadContacts = async (filter: ContactFilter, keyword?: string) => {
     setLoading(true)
     try {
-      const data = await api.getContacts()
+      const data = await contactApi.getList(filter, keyword)
       setContacts(data)
     } catch (error) {
       console.error('Failed to load contacts:', error)
+      setContacts([])
     } finally {
       setLoading(false)
     }
   }
 
   useDidShow(() => {
-    loadContacts()
+    loadContacts(activeFilter, searchKeyword)
   })
 
   useEffect(() => {
-    loadContacts()
-  }, [])
+    const handler = setTimeout(() => {
+      loadContacts(activeFilter, searchKeyword)
+    }, 300)
+    return () => clearTimeout(handler)
+  }, [searchKeyword, activeFilter])
 
-  const filteredContacts = contacts.filter(contact =>
-    contact.name.toLowerCase().includes(searchKeyword.toLowerCase()) ||
-    contact.company?.toLowerCase().includes(searchKeyword.toLowerCase()) ||
-    contact.tags?.some(tag => tag.toLowerCase().includes(searchKeyword.toLowerCase()))
-  )
+  const filters: { key: ContactFilter; label: string }[] = [
+    { key: 'all', label: '全部' },
+    { key: 'recent', label: '最近联系' },
+    { key: 'pending', label: '待跟进' },
+    { key: 'starred', label: '重点' },
+  ]
 
-  // Group contacts by initial
-  const groupedContacts = filteredContacts.reduce((acc, contact) => {
-    const initial = contact.initial.toUpperCase()
+  const handleFilterClick = (filter: ContactFilter) => {
+    setActiveFilter(filter)
+  }
+
+  const groupedContacts = contacts.reduce((acc: Record<string, Contact[]>, contact: Contact) => {
+    // Derive initial from name if not provided by API
+    const initial = (contact.initial || (contact.name ? contact.name[0] : '#')).toUpperCase();
     if (!acc[initial]) {
       acc[initial] = []
     }
@@ -93,15 +105,27 @@ const ContactsPage: React.FC = () => {
         </View>
       </View>
 
+      <View className="filter-tabs">
+        {filters.map(filter => (
+          <View
+            key={filter.key}
+            className={`filter-tab ${activeFilter === filter.key ? 'active' : ''}`}
+            onClick={() => handleFilterClick(filter.key)}
+          >
+            <Text className="filter-text">{filter.label}</Text>
+          </View>
+        ))}
+      </View>
+
       <View className="contacts-content">
         {loading ? (
           <View className="loading-state">
             <Text>加载中...</Text>
           </View>
-        ) : filteredContacts.length === 0 ? (
+        ) : contacts.length === 0 ? (
           <View className="empty-state">
             <Text className="empty-text">
-              {searchKeyword ? '未找到匹配的联系人' : '暂无联系人'}
+              {searchKeyword || activeFilter !== 'all' ? '未找到匹配的联系人' : '暂无联系人'}
             </Text>
           </View>
         ) : (

@@ -1,12 +1,12 @@
 import { View, Text, Textarea } from '@tarojs/components'
-import { useState, useEffect } from 'react'
+import { useState } from 'react' // useEffect is no longer used
 import Taro, { useDidShow } from '@tarojs/taro'
 import Header from '@/components/Header'
 import TabBar from '@/components/TabBar'
 import RecordCard from '@/components/RecordCard'
 import GlobalDrawer from '@/components/GlobalDrawer'
 import type { ConversationRecord } from '@/types'
-import { mockData, conversationApi } from '@/services/api'
+import { conversationApi } from '@/services/api' // mockData is no longer used
 import { navigateTo, showToast, showLoading, hideLoading } from '@/utils'
 import './index.scss'
 
@@ -23,9 +23,12 @@ const ConversationPage: React.FC = () => {
   const loadRecords = async () => {
     try {
       setLoading(true)
-      setRecords(mockData.records)
+      const data = await conversationApi.getList() // 调用真实后端API
+      setRecords(data)
     } catch (error) {
+      console.error('Failed to load conversation records:', error)
       showToast('加载失败')
+      setRecords([]) // 加载失败时清空记录
     } finally {
       setLoading(false)
     }
@@ -45,7 +48,8 @@ const ConversationPage: React.FC = () => {
       navigateTo(`/pages/conversation-detail/index?id=${result.id}`)
     } catch (error) {
       hideLoading()
-      navigateTo('/pages/conversation-detail/index?id=2')
+      // 改进错误处理，显示具体错误信息
+      showToast((error as Error).message || '发送失败，请重试')
     }
   }
 

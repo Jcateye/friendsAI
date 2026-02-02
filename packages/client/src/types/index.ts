@@ -100,9 +100,10 @@ export interface FollowUpItem {
 // Suggestion Item
 export interface SuggestionItem {
   id: string
-  contactName: string
+  contact: Contact
   reason: string
   openingSuggestion: string
+  urgent: boolean
 }
 
 // Weekly Stats

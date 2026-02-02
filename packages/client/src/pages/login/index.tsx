@@ -51,25 +51,18 @@ const LoginPage: React.FC = () => {
       setLoading(true)
       showLoading('登录中...')
       
-      // Mock 登录：没有后端服务时直接登录成功
-      const mockUser = {
-        id: '1',
-        email: email,
-        name: email.split('@')[0],
-        avatar: '',
-        createdAt: new Date().toISOString(),
-      }
-      const mockToken = 'mock_token_' + Date.now()
+      // 调用后端登录接口
+      const { token, user } = await authApi.login(email, code)
       
-      setStorage('token', mockToken)
-      setStorage('user', mockUser)
+      setStorage('token', token)
+      setStorage('user', user)
 
       hideLoading()
       showToast('登录成功', 'success')
       Taro.switchTab({ url: '/pages/conversation/index' })
     } catch (error) {
       hideLoading()
-      showToast('登录失败，请检查验证码')
+      showToast((error as Error).message || '登录失败，请检查验证码或邮箱')
     } finally {
       setLoading(false)
     }

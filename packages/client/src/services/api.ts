@@ -12,7 +12,10 @@ import type {
   MessageTemplate,
 } from '@/types'
 
-const BASE_URL = 'https://api.friendsai.com'
+// 本地开发环境使用 localhost，生产环境使用真实域名
+const BASE_URL = process.env.NODE_ENV === 'development' 
+  ? 'http://localhost:3000' 
+  : 'https://api.friendsai.com'
 
 // Request wrapper
 const request = async <T,>(options: Taro.request.Option): Promise<T> => {
@@ -49,7 +52,7 @@ export const authApi = {
 
   login: (email: string, code: string) =>
     request<{ token: string; user: User }>({
-      url: '/auth/login',
+      url: '/auth/login-by-code',
       method: 'POST',
       data: { email, code },
     }),
