@@ -12,7 +12,10 @@ import type {
   ToolTask,
   ExtractedItem,
   BriefSnapshot,
-  JournalEntry
+  JournalEntry,
+  MessageTemplate,
+  ChatSession,
+  ChatMessage
 } from '@/types'
 import { getAvatarColor, getInitial } from '@/utils'
 import {
@@ -28,7 +31,14 @@ import {
 // H5 runtime may not define `process`, so guard access.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const env = (typeof process !== 'undefined' ? (process as any).env : {}) as Record<string, string>
-const BASE_URL = env.TARO_APP_API_BASE_URL || 'http://localhost:3000/v1'
+const resolveBaseUrl = () => {
+  if (env.TARO_APP_API_BASE_URL) return env.TARO_APP_API_BASE_URL
+  if (typeof window !== 'undefined' && window.location?.hostname) {
+    return `http://${window.location.hostname}:3000/v1`
+  }
+  return 'http://localhost:3000/v1'
+}
+const BASE_URL = resolveBaseUrl()
 
 const getWorkspaceId = () => Taro.getStorageSync('workspaceId')
 
@@ -99,19 +109,35 @@ const mapContact = (raw: any): Contact => ({
   lastContactSummary: raw.lastContactSummary,
 })
 
+const mapChatSession = (raw: any): ChatSession => ({
+  id: raw.id,
+  title: raw.title ?? null,
+  createdAt: raw.created_at,
+  updatedAt: raw.updated_at,
+})
+
+const mapChatMessage = (raw: any): ChatMessage => ({
+  id: raw.id,
+  sessionId: raw.session_id,
+  role: raw.role,
+  content: raw.content,
+  metadata: raw.metadata_json || {},
+  createdAt: raw.created_at,
+})
+
 export const authApi = {
-  register: (data: { email?: string; phone?: string; name: string; password: string }) =>
+  register: (data: { email?: string; phone?: string; name: string; password?: string; verifyCode?: string }) =>
     request<{ accessToken: string; refreshToken: string; user: User; workspace: { id: string; name: string } }>({
       url: '/auth/register',
       method: 'POST',
       data,
     }),
 
-  login: (emailOrPhone: string, password: string) =>
+  login: (emailOrPhone: string, password?: string, verifyCode?: string) =>
     request<{ accessToken: string; refreshToken: string; user: User; workspace?: { id: string; name: string } }>({
       url: '/auth/login',
       method: 'POST',
-      data: { emailOrPhone, password },
+      data: { emailOrPhone, password, verifyCode },
     }),
 
   refresh: (refreshToken: string) =>
@@ -366,6 +392,59 @@ export const toolTaskApi = {
       url: `/tool-tasks/${id}/executions`,
       method: 'GET',
     }),
+}
+
+export const feishuApi = {
+  getTemplates: () =>
+    request<{ items: MessageTemplate[] }>({
+      url: '/feishu/templates',
+      method: 'GET',
+    }),
+
+  sendTemplateMessage: (data: { templateId: string; receiverName: string; content: string }) =>
+    request<{ id: string; status: 'success' | 'error'; response?: Record<string, any> }>({
+      url: '/feishu/messages',
+      method: 'POST',
+      data,
+    }),
+}
+
+export const chatApi = {
+  listSessions: () =>
+    request<{ items: ChatSession[] }>({
+      url: '/chat/sessions',
+      method: 'GET',
+    }).then((res) => ({ items: (res.items || []).map(mapChatSession) })),
+
+  createSession: (data: { firstMessage: string; title?: string }) =>
+    request<{ session: ChatSession; messages: ChatMessage[] }>({
+      url: '/chat/sessions',
+      method: 'POST',
+      data,
+    }).then((res) => ({
+      session: mapChatSession(res.session),
+      messages: (res.messages || []).map(mapChatMessage),
+    })),
+
+  listMessages: (sessionId: string) =>
+    request<{ items: ChatMessage[] }>({
+      url: `/chat/sessions/${sessionId}/messages`,
+      method: 'GET',
+    }).then((res) => ({ items: (res.items || []).map(mapChatMessage) })),
+
+  appendMessage: (sessionId: string, data: { role?: 'user' | 'assistant' | 'tool'; content: string; metadata?: Record<string, any> }) =>
+    request<{ messages: ChatMessage[] }>({
+      url: `/chat/sessions/${sessionId}/messages`,
+      method: 'POST',
+      data,
+    }).then((res) => ({ messages: (res.messages || []).map(mapChatMessage) })),
+
+  updateMessage: (sessionId: string, messageId: string, data: { content?: string; metadata?: Record<string, any> }) =>
+    request<ChatMessage>({
+      url: `/chat/sessions/${sessionId}/messages/${messageId}`,
+      method: 'PATCH',
+      data,
+    }).then(mapChatMessage),
 }
 
 export const api = {

@@ -28,6 +28,7 @@ cp packages/server/.env.example packages/server/.env
 
 - `DATABASE_URL=postgres://friendsai:friendsai@localhost:5432/friendsai`
 - `JWT_SECRET=...`（随便一串即可）
+- 可选：`DEV_VERIFY_CODE=123456`（开发阶段万能验证码）
 
 ## 3) 迁移数据库
 

@@ -86,6 +86,31 @@ export interface FollowUpItem {
   urgent: boolean
 }
 
+export interface MessageTemplate {
+  id: string
+  name: string
+  description: string
+  defaultContent?: string
+}
+
+export type ChatRole = 'user' | 'assistant' | 'tool'
+
+export interface ChatSession {
+  id: string
+  title?: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export interface ChatMessage {
+  id: string
+  sessionId: string
+  role: ChatRole
+  content: string
+  metadata?: Record<string, any>
+  createdAt: string
+}
+
 export interface WeeklyStats {
   records: number
   visits: number

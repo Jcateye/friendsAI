@@ -37,7 +37,7 @@ const GlobalDrawer: React.FC<GlobalDrawerProps> = ({
 
   const handleRecordClick = (id: string) => {
     handleClose()
-    navigateTo(`/pages/conversation-detail/index?id=${id}`)
+    navigateTo(`/pages/conversation-chat/index?id=${id}`)
   }
 
   if (!normalizedVisible) return null

@@ -9,11 +9,12 @@ const LoginPage: React.FC = () => {
   const [mode, setMode] = useState<'login' | 'register'>('login')
   const [emailOrPhone, setEmailOrPhone] = useState('')
   const [password, setPassword] = useState('')
+  const [verifyCode, setVerifyCode] = useState('')
   const [name, setName] = useState('')
   const [loading, setLoading] = useState(false)
 
   const handleLogin = async () => {
-    if (!emailOrPhone || !password) {
+    if (!emailOrPhone || (!password && !verifyCode)) {
       showToast('请填写完整信息')
       return
     }
@@ -21,7 +22,7 @@ const LoginPage: React.FC = () => {
     try {
       setLoading(true)
       showLoading('登录中...')
-      const result = await authApi.login(emailOrPhone, password)
+      const result = await authApi.login(emailOrPhone, password || undefined, verifyCode || undefined)
       setStorage('token', result.accessToken)
       setStorage('refreshToken', result.refreshToken)
       if (result.workspace?.id) {
@@ -41,16 +42,17 @@ const LoginPage: React.FC = () => {
   }
 
   const handleRegister = async () => {
-    if (!emailOrPhone || !password || !name) {
+    if (!emailOrPhone || !name || (!password && !verifyCode)) {
       showToast('请填写完整信息')
       return
     }
     try {
       setLoading(true)
       showLoading('注册中...')
-      const payload: { email?: string; phone?: string; name: string; password: string } = {
+      const payload: { email?: string; phone?: string; name: string; password?: string; verifyCode?: string } = {
         name,
-        password,
+        password: password || undefined,
+        verifyCode: verifyCode || undefined,
       }
       if (emailOrPhone.includes('@')) {
         payload.email = emailOrPhone
@@ -111,9 +113,18 @@ const LoginPage: React.FC = () => {
             <Input
               className="input-field"
               type="password"
-              placeholder="密码"
+              placeholder="密码（或填验证码 123456）"
               value={password}
               onInput={(e) => setPassword(e.detail.value)}
+            />
+          </View>
+          <View className="input-wrapper">
+            <Input
+              className="input-field"
+              type="text"
+              placeholder="验证码（开发阶段：123456）"
+              value={verifyCode}
+              onInput={(e) => setVerifyCode(e.detail.value)}
             />
           </View>
 

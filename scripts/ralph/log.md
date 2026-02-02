@@ -45,3 +45,42 @@ This file tracks what each agent run has completed. Append your changes below.
 **Notes:** UI still minimal; add create contact UI and tool execution UI if needed.
 
 ---
+## 2026-02-01 - Chat flow + Feishu tool call UI
+
+**Task:** Implement default chat flow, AI entry, and Feishu template tool call with backend mock
+
+**Changes:**
+
+- `packages/client/src/pages/conversation-chat/index.tsx` - New multi-turn chat UI with AI trigger + tool card
+- `packages/client/src/pages/conversation-chat/index.scss` - Chat layout and tool call status styles
+- `packages/client/src/pages/conversation/index.tsx` - Navigate to chat page after send
+- `packages/client/src/components/BottomSheet/index.tsx` - Template loading/empty state + reset
+- `packages/client/src/services/api.ts` - Feishu templates + send API
+- `packages/server/src/presentation/http/routes/feishu.ts` - Mock Feishu endpoints
+- `packages/server/src/presentation/http/router.ts` - Feishu routes mount
+- `docs/user-stories/chat-feishu-tool.json` - Added user stories (passing)
+
+**Status:** Completed
+
+**Notes:** Feishu tool execution is mocked; hook to real provider/worker later.
+
+---
+## 2026-02-01 - Contextual chat sessions/messages
+
+**Task:** Implement chat session/message model with contextual replies
+
+**Changes:**
+
+- `packages/server/migrations/005_chat.sql` - Added chat_session and chat_message tables
+- `packages/server/src/infrastructure/repositories/chatRepo.ts` - Chat session/message repository
+- `packages/server/src/presentation/http/routes/chat.ts` - Chat APIs with contextual reply + tool suggestion
+- `packages/server/src/presentation/http/router.ts` - Mounted /chat routes
+- `packages/client/src/services/api.ts` - chatApi + mapping for sessions/messages
+- `packages/client/src/pages/conversation/index.tsx` - Chat UI uses session/message model with context + tool calls
+- `docs/user-stories/chat-context.json` - Marked passing
+
+**Status:** Completed
+
+**Notes:** Assistant replies are rule-based but contextual to prior user message.
+
+---

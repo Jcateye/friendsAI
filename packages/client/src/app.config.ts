@@ -2,6 +2,7 @@ export default defineAppConfig({
   pages: [
     'pages/login/index',
     'pages/conversation/index',
+    'pages/conversation-chat/index',
     'pages/conversation-detail/index',
     'pages/contacts/index',
     'pages/contact-detail/index',

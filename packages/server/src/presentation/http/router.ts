@@ -7,6 +7,8 @@ import { contextRouter } from '@/presentation/http/routes/context';
 import { actionRouter } from '@/presentation/http/routes/action';
 import { syncRouter } from '@/presentation/http/routes/sync';
 import { toolTasksRouter } from '@/presentation/http/routes/toolTasks';
+import { feishuRouter } from '@/presentation/http/routes/feishu';
+import { chatRouter } from '@/presentation/http/routes/chat';
 
 export const router = Router();
 
@@ -18,6 +20,8 @@ router.use('/contacts', contextRouter);
 router.use('/action-items', actionRouter);
 router.use('/tool-tasks', toolTasksRouter);
 router.use('/sync', syncRouter);
+router.use('/feishu', feishuRouter);
+router.use('/chat', chatRouter);
 
 router.get('/', (_req, res) => {
   res.json({ message: 'FriendsAI API Server' });

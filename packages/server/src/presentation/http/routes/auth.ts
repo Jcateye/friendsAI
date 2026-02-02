@@ -11,7 +11,10 @@ export const authRouter = Router();
 const loginSchema = z.object({
   body: z.object({
     emailOrPhone: z.string().min(3),
-    password: z.string().min(6)
+    password: z.string().min(6).optional(),
+    verifyCode: z.string().min(4).optional()
+  }).refine((data) => !!data.password || !!data.verifyCode, {
+    message: 'password or verifyCode is required'
   })
 });
 
@@ -26,19 +29,26 @@ const registerSchema = z.object({
     email: z.string().email().optional(),
     phone: z.string().min(6).optional(),
     name: z.string().min(1),
-    password: z.string().min(6)
+    password: z.string().min(6).optional(),
+    verifyCode: z.string().min(4).optional()
   })
+    .refine((data) => !!data.email || !!data.phone, {
+      message: 'email or phone is required'
+    })
+    .refine((data) => !!data.password || !!data.verifyCode, {
+      message: 'password or verifyCode is required'
+    })
 });
 
 authRouter.post('/register', validate(registerSchema), asyncHandler(async (req, res) => {
-  const { email, phone, name, password } = req.body;
-  const result = await registerUseCase({ email, phone, name, password });
+  const { email, phone, name, password, verifyCode } = req.body;
+  const result = await registerUseCase({ email, phone, name, password, verifyCode });
   res.json(result);
 }));
 
 authRouter.post('/login', validate(loginSchema), asyncHandler(async (req, res) => {
-  const { emailOrPhone, password } = req.body;
-  const result = await loginUseCase({ emailOrPhone, password });
+  const { emailOrPhone, password, verifyCode } = req.body;
+  const result = await loginUseCase({ emailOrPhone, password, verifyCode });
   res.json(result);
 }));
 

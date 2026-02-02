@@ -48,5 +48,11 @@ export const env = {
   briefCacheTtlSec: Number(process.env.BRIEF_CACHE_TTL_SEC ?? 60 * 10),
   toolWorkerIntervalMs: Number(process.env.TOOL_WORKER_INTERVAL_MS ?? 5000),
   toolProvider: process.env.TOOL_PROVIDER ?? 'mock',
-  toolWebhookUrl: process.env.TOOL_WEBHOOK_URL ?? ''
+  toolWebhookUrl: process.env.TOOL_WEBHOOK_URL ?? '',
+  // Dev-only universal verify code (disabled in production unless explicitly set).
+  devVerifyCode: (() => {
+    if (process.env.DEV_VERIFY_CODE) return process.env.DEV_VERIFY_CODE;
+    const nodeEnv = process.env.NODE_ENV ?? 'development';
+    return nodeEnv === 'production' ? '' : '123456';
+  })()
 };

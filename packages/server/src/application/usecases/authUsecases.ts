@@ -5,8 +5,14 @@ import { env } from '@/config/env';
 import { createUser, createSession, findSession, findUserByEmailOrPhone, findUserById, revokeSession } from '@/infrastructure/repositories/userRepo';
 import { addMember, createWorkspace, listWorkspacesForUser } from '@/infrastructure/repositories/workspaceRepo';
 
-export const registerUseCase = async (data: { email?: string; phone?: string; name: string; password: string }) => {
-  const passwordHash = await bcrypt.hash(data.password, 10);
+export const registerUseCase = async (data: { email?: string; phone?: string; name: string; password?: string; verifyCode?: string }) => {
+  const devCode = env.devVerifyCode;
+  const canBypass = !!devCode && data.verifyCode === devCode;
+  const password = data.password ?? (canBypass ? devCode : undefined);
+  if (!password) {
+    throw new ApiError(400, 'Password or verifyCode is required');
+  }
+  const passwordHash = await bcrypt.hash(password, 10);
   const user = await createUser({
     email: data.email,
     phone: data.phone,
@@ -19,14 +25,36 @@ export const registerUseCase = async (data: { email?: string; phone?: string; na
   return { user, workspace, ...tokens };
 };
 
-export const loginUseCase = async (data: { emailOrPhone: string; password: string }) => {
-  const user = await findUserByEmailOrPhone(data.emailOrPhone);
+export const loginUseCase = async (data: { emailOrPhone: string; password?: string; verifyCode?: string }) => {
+  const devCode = env.devVerifyCode;
+  const canBypass = !!devCode && data.verifyCode === devCode;
+  let user = await findUserByEmailOrPhone(data.emailOrPhone);
   if (!user) {
-    throw new ApiError(401, 'Invalid credentials');
+    if (!canBypass) {
+      throw new ApiError(401, 'Invalid credentials');
+    }
+    // Dev-only: auto create user + workspace when verifyCode matches.
+    const passwordHash = await bcrypt.hash(devCode!, 10);
+    const isEmail = data.emailOrPhone.includes('@');
+    user = await createUser({
+      email: isEmail ? data.emailOrPhone : undefined,
+      phone: isEmail ? undefined : data.emailOrPhone,
+      name: isEmail ? data.emailOrPhone.split('@')[0] : data.emailOrPhone,
+      passwordHash
+    });
+    const workspace = await createWorkspace(`${user.name}'s workspace`);
+    await addMember(workspace.id, user.id, 'owner');
+    const tokens = await issueTokens(user.id, workspace.id);
+    return { user, workspace, ...tokens };
   }
-  const ok = await bcrypt.compare(data.password, user.password_hash);
-  if (!ok) {
-    throw new ApiError(401, 'Invalid credentials');
+  if (!canBypass) {
+    if (!data.password) {
+      throw new ApiError(401, 'Invalid credentials');
+    }
+    const ok = await bcrypt.compare(data.password, user.password_hash);
+    if (!ok) {
+      throw new ApiError(401, 'Invalid credentials');
+    }
   }
 
   const workspaces = await listWorkspacesForUser(user.id);

@@ -1,4 +1,4 @@
 export default definePageConfig({
   navigationStyle: 'custom',
-  navigationBarTitleText: '会话解析',
+  navigationBarTitleText: '对话',
 })

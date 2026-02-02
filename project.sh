@@ -24,6 +24,19 @@ else
   PKG_MANAGER="npm"
 fi
 
+load_env() {
+  local env_file="$ROOT_DIR/packages/server/.env"
+  if [[ -f "$env_file" ]]; then
+    # shellcheck disable=SC1090
+    set -a
+    source "$env_file"
+    set +a
+  fi
+  export DATABASE_URL="${DATABASE_URL:-postgres://friendsai:friendsai@localhost:5432/friendsai}"
+  export JWT_SECRET="${JWT_SECRET:-dev-smoke-secret}"
+  export PORT="${PORT:-3000}"
+}
+
 print_usage() {
   cat <<'EOF'
 FriendsAI 项目管理脚本
@@ -114,6 +127,7 @@ start_client() {
   echo $! > "$CLIENT_PID_FILE"
   echo "✅ 前端已启动，PID: $(cat "$CLIENT_PID_FILE")"
   echo "   日志文件: $CLIENT_LOG"
+  echo "   访问地址：请在日志中查看 devServer URL（常见为 http://localhost:10086）"
 }
 
 start_server() {
@@ -122,11 +136,13 @@ start_server() {
     return 0
   fi
 
+  load_env
   echo "🚀 启动后端开发服务..."
   nohup $PKG_MANAGER run server:dev > "$SERVER_LOG" 2>&1 &
   echo $! > "$SERVER_PID_FILE"
   echo "✅ 后端已启动，PID: $(cat "$SERVER_PID_FILE")"
   echo "   日志文件: $SERVER_LOG"
+  echo "   API 健康检查：http://localhost:${PORT:-3000}/health"
 }
 
 start_worker() {
@@ -135,6 +151,7 @@ start_worker() {
     return 0
   fi
 
+  load_env
   echo "🧰 启动 Worker..."
   nohup $PKG_MANAGER run -w @friends-ai/server worker > "$WORKER_LOG" 2>&1 &
   echo $! > "$WORKER_PID_FILE"
@@ -210,12 +227,17 @@ start() {
 }
 
 start_mvp() {
+  load_env
+  export DEV_VERIFY_CODE="${DEV_VERIFY_CODE:-123456}"
   start_db
   run_migrate
   start_server
   start_worker
   start_client
   echo "✅ MVP 已启动"
+  echo "👉 访问提示："
+  echo "   前端地址：查看 $CLIENT_LOG 内输出的 devServer URL（常见 http://localhost:10086）"
+  echo "   API 地址：http://localhost:${PORT:-3000}/health"
 }
 
 stop() {

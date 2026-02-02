@@ -3,7 +3,14 @@ import Taro from '@tarojs/taro'
 // H5 runtime may not define `process`, so guard access.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const env = (typeof process !== 'undefined' ? (process as any).env : {}) as Record<string, string>
-const BASE_URL = env.TARO_APP_API_BASE_URL || 'http://localhost:3000/v1'
+const resolveBaseUrl = () => {
+  if (env.TARO_APP_API_BASE_URL) return env.TARO_APP_API_BASE_URL
+  if (typeof window !== 'undefined' && window.location?.hostname) {
+    return `http://${window.location.hostname}:3000/v1`
+  }
+  return 'http://localhost:3000/v1'
+}
+const BASE_URL = resolveBaseUrl()
 
 type OutboxKind = 'contact_create' | 'journal_create'
 

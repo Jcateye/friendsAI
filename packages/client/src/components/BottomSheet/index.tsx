@@ -1,5 +1,5 @@
 import { View, Text, Textarea, ScrollView } from '@tarojs/components'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { MessageTemplate } from '@/types'
 import './index.scss'
 
@@ -8,6 +8,7 @@ interface BottomSheetProps {
   title: string
   subtitle?: string
   templates: MessageTemplate[]
+  loading?: boolean
   initialContent?: string
   onClose: () => void
   onSend: (templateId: string, content: string) => void
@@ -18,12 +19,23 @@ const BottomSheet: React.FC<BottomSheetProps> = ({
   title,
   subtitle,
   templates,
+  loading = false,
   initialContent = '',
   onClose,
   onSend,
 }) => {
   const [selectedTemplate, setSelectedTemplate] = useState(templates[0]?.id || '')
   const [content, setContent] = useState(initialContent)
+
+  useEffect(() => {
+    if (!visible) return
+    setSelectedTemplate(templates[0]?.id || '')
+  }, [templates, visible])
+
+  useEffect(() => {
+    if (!visible) return
+    setContent(initialContent)
+  }, [initialContent, visible])
 
   const handleSend = () => {
     if (selectedTemplate && content.trim()) {
@@ -59,21 +71,33 @@ const BottomSheet: React.FC<BottomSheetProps> = ({
           <View className="template-section">
             <Text className="section-label">选择模板</Text>
             <View className="template-list">
-              {templates.map((template) => (
-                <View
-                  key={template.id}
-                  className={`template-item ${selectedTemplate === template.id ? 'selected' : ''}`}
-                  onClick={() => setSelectedTemplate(template.id)}
-                >
-                  <View className={`radio ${selectedTemplate === template.id ? 'checked' : ''}`}>
-                    {selectedTemplate === template.id && <View className="radio-dot" />}
-                  </View>
+              {loading ? (
+                <View className="template-item">
                   <View className="template-info">
-                    <Text className="template-name">{template.name}</Text>
-                    <Text className="template-desc">{template.description}</Text>
+                    <Text className="template-desc">加载中...</Text>
                   </View>
                 </View>
-              ))}
+              ) : templates.length === 0 ? (
+                <View className="template-item">
+                  <View className="template-info">
+                    <Text className="template-desc">暂无可用模板</Text>
+                  </View>
+                </View>
+              ) : templates.map((template) => (
+                  <View
+                    key={template.id}
+                    className={`template-item ${selectedTemplate === template.id ? 'selected' : ''}`}
+                    onClick={() => setSelectedTemplate(template.id)}
+                  >
+                    <View className={`radio ${selectedTemplate === template.id ? 'checked' : ''}`}>
+                      {selectedTemplate === template.id && <View className="radio-dot" />}
+                    </View>
+                    <View className="template-info">
+                      <Text className="template-name">{template.name}</Text>
+                      <Text className="template-desc">{template.description}</Text>
+                    </View>
+                  </View>
+                ))}
             </View>
           </View>
 

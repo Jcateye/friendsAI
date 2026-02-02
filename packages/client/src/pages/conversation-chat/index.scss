@@ -1,12 +1,20 @@
-.conversation-page {
+.chat-page {
   min-height: 100vh;
   background: #F7F6F3;
   display: flex;
   flex-direction: column;
 
+  .loading-state {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #8E8E93;
+  }
+
   .message-list {
     flex: 1;
-    padding: 32rpx 32rpx 360rpx;
+    padding: 32rpx 32rpx 220rpx;
     box-sizing: border-box;
   }
 
@@ -164,14 +172,13 @@
 
   .composer {
     position: fixed;
-    bottom: 160rpx;
+    bottom: 0;
     left: 0;
     right: 0;
     background: #FFFFFF;
     border-top: 1rpx solid #F0EFEC;
-    padding: 20rpx 24rpx 24rpx;
+    padding: 20rpx 24rpx 40rpx;
     box-sizing: border-box;
-    z-index: 110;
 
     .composer-box {
       position: relative;
