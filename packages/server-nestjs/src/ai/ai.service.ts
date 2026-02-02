@@ -1,30 +1,46 @@
 import { Injectable, InternalServerErrorException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import OpenAI from 'openai';
+import { ChatOpenAI, OpenAIEmbeddings } from '@langchain/openai';
+import { HumanMessage, SystemMessage, BaseMessage } from '@langchain/core/messages';
 
 @Injectable()
 export class AiService {
-  private openai: OpenAI;
-  private model: string;
-  private embeddingModel: string;
+  private chatModel: ChatOpenAI;
+  private embeddings: OpenAIEmbeddings;
 
   constructor(private configService: ConfigService) {
     const apiKey = this.configService.get<string>('OPENAI_API_KEY');
+    const baseURL = this.configService.get<string>('OPENAI_BASE_URL');
+    const modelName = this.configService.get<string>('OPENAI_MODEL') || 'gpt-3.5-turbo';
+    const embeddingModelName = this.configService.get<string>('OPENAI_EMBEDDING_MODEL') || 'text-embedding-ada-002';
+
     if (!apiKey) {
       throw new InternalServerErrorException('OPENAI_API_KEY is not configured.');
     }
-    this.openai = new OpenAI({ apiKey });
-    this.model = 'gpt-3.5-turbo'; // Default model for chat/agent calls
-    this.embeddingModel = 'text-embedding-ada-002'; // Default model for embeddings
+
+    // Initialize LangChain Chat Model (supports OpenAI and compatible local models)
+    this.chatModel = new ChatOpenAI({
+      openAIApiKey: apiKey,
+      modelName: modelName,
+      configuration: {
+        baseURL: baseURL,
+      },
+      temperature: 0.7,
+    });
+
+    // Initialize LangChain Embeddings
+    this.embeddings = new OpenAIEmbeddings({
+      openAIApiKey: apiKey,
+      modelName: embeddingModelName,
+      configuration: {
+        baseURL: baseURL,
+      },
+    });
   }
 
   async generateEmbedding(text: string): Promise<number[]> {
     try {
-      const response = await this.openai.embeddings.create({
-        model: this.embeddingModel,
-        input: text,
-      });
-      return response.data[0].embedding;
+      return await this.embeddings.embedQuery(text);
     } catch (error) {
       console.error('Error generating embedding:', error);
       throw new InternalServerErrorException('Failed to generate embedding.');
@@ -33,23 +49,20 @@ export class AiService {
 
   async callAgent(prompt: string, context?: any): Promise<string> {
     try {
-      const messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
-        { role: 'system', content: 'You are a helpful assistant.' },
-        { role: 'user', content: prompt },
+      const messages: BaseMessage[] = [
+        new SystemMessage('You are a helpful assistant.'),
       ];
 
       if (context) {
-        messages.splice(1, 0, { role: 'system', content: `Context: ${JSON.stringify(context)}` });
+        messages.push(new SystemMessage(`Context: ${JSON.stringify(context)}`));
       }
 
-      const response = await this.openai.chat.completions.create({
-        model: this.model,
-        messages: messages,
-        temperature: 0.7,
-        max_tokens: 500,
-      });
+      messages.push(new HumanMessage(prompt));
 
-      return response.choices[0].message?.content || '';
+      const response = await this.chatModel.invoke(messages);
+      
+      // LangChain response content can be string or complex object, for ChatOpenAI it's usually string
+      return typeof response.content === 'string' ? response.content : JSON.stringify(response.content);
     } catch (error) {
       console.error('Error calling AI agent:', error);
       throw new InternalServerErrorException('Failed to call AI agent.');
