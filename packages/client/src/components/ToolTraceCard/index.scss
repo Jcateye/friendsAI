@@ -1,0 +1,242 @@
+.tool-trace-card {
+  width: 100%;
+  background: #FFFFFF;
+  border-radius: 24rpx;
+  padding: 28rpx 32rpx;
+  box-sizing: border-box;
+  border: 1rpx solid #F0EFEC;
+  display: flex;
+  flex-direction: column;
+  gap: 20rpx;
+
+  .card-header {
+    display: flex;
+    align-items: center;
+    gap: 20rpx;
+  }
+
+  .status-icon {
+    width: 52rpx;
+    height: 52rpx;
+    border-radius: 16rpx;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(142, 142, 147, 0.12);
+
+    .icon {
+      width: 28rpx;
+      height: 28rpx;
+      background-size: contain;
+      background-repeat: no-repeat;
+    }
+  }
+
+  .header-text {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 6rpx;
+
+    .tool-title {
+      font-size: 28rpx;
+      font-weight: 600;
+      color: #2D2D2D;
+    }
+
+    .tool-subtitle {
+      font-size: 24rpx;
+      color: #6B6B6B;
+    }
+  }
+
+  .status-badge {
+    height: 40rpx;
+    padding: 4rpx 16rpx;
+    border-radius: 10rpx;
+    background: rgba(142, 142, 147, 0.12);
+    display: flex;
+    align-items: center;
+
+    .status-text {
+      font-size: 22rpx;
+      font-weight: 500;
+      color: #8E8E93;
+    }
+  }
+
+  .card-body {
+    .detail-text {
+      font-size: 26rpx;
+      color: #2D2D2D;
+      line-height: 1.6;
+    }
+  }
+
+  .progress {
+    display: flex;
+    align-items: center;
+    gap: 16rpx;
+
+    .progress-track {
+      flex: 1;
+      height: 10rpx;
+      background: #F0EFEC;
+      border-radius: 999rpx;
+      overflow: hidden;
+    }
+
+    .progress-bar {
+      height: 100%;
+      width: 0;
+      border-radius: 999rpx;
+      background: #8E8E93;
+      transition: width 0.3s ease;
+    }
+
+    .progress-text {
+      font-size: 22rpx;
+      color: #8E8E93;
+    }
+  }
+
+  .card-footer {
+    .meta-text {
+      font-size: 22rpx;
+      color: #8E8E93;
+    }
+  }
+
+  &.status-pending {
+    border-left: 6rpx solid #8E8E93;
+
+    .status-icon {
+      background: rgba(142, 142, 147, 0.12);
+
+      .icon {
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%238E8E93' stroke-width='2'%3E%3Ccircle cx='12' cy='12' r='6'/%3E%3C/svg%3E");
+      }
+    }
+  }
+
+  &.status-running {
+    border-left: 6rpx solid #5B9BD5;
+
+    .status-icon {
+      background: rgba(91, 155, 213, 0.12);
+
+      .icon {
+        border: 3rpx solid #5B9BD5;
+        border-top-color: transparent;
+        border-radius: 50%;
+        animation: tool-trace-spin 0.8s linear infinite;
+        background: none;
+      }
+    }
+
+    .status-badge {
+      background: rgba(91, 155, 213, 0.12);
+      .status-text { color: #5B9BD5; }
+    }
+
+    .progress-bar {
+      background: #5B9BD5;
+    }
+
+    .progress-text {
+      color: #5B9BD5;
+    }
+  }
+
+  &.status-success {
+    border-left: 6rpx solid #7C9070;
+
+    .status-icon {
+      background: rgba(124, 144, 112, 0.12);
+
+      .icon {
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%237C9070' stroke-width='2'%3E%3Cpolyline points='20 6 9 17 4 12'/%3E%3C/svg%3E");
+      }
+    }
+
+    .status-badge {
+      background: rgba(124, 144, 112, 0.12);
+      .status-text { color: #7C9070; }
+    }
+
+    .progress-bar {
+      background: #7C9070;
+    }
+
+    .progress-text {
+      color: #7C9070;
+    }
+  }
+
+  &.status-failed {
+    border-left: 6rpx solid #D4845E;
+
+    .status-icon {
+      background: rgba(212, 132, 94, 0.12);
+
+      .icon {
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%23D4845E' stroke-width='2'%3E%3Cline x1='18' y1='6' x2='6' y2='18'/%3E%3Cline x1='6' y1='6' x2='18' y2='18'/%3E%3C/svg%3E");
+      }
+    }
+
+    .status-badge {
+      background: rgba(212, 132, 94, 0.12);
+      .status-text { color: #D4845E; }
+    }
+
+    .progress-bar {
+      background: #D4845E;
+    }
+
+    .progress-text {
+      color: #D4845E;
+    }
+  }
+
+  &.status-timeout {
+    border-left: 6rpx solid #9B8AA8;
+
+    .status-icon {
+      background: rgba(155, 138, 168, 0.12);
+
+      .icon {
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%239B8AA8' stroke-width='2'%3E%3Ccircle cx='12' cy='12' r='9'/%3E%3Cpath d='M12 7v5l3 3'/%3E%3C/svg%3E");
+      }
+    }
+
+    .status-badge {
+      background: rgba(155, 138, 168, 0.12);
+      .status-text { color: #9B8AA8; }
+    }
+
+    .progress-bar {
+      background: #9B8AA8;
+    }
+
+    .progress-text {
+      color: #9B8AA8;
+    }
+  }
+
+  &.status-canceled {
+    border-left: 6rpx solid #8E8E93;
+
+    .status-icon {
+      background: rgba(142, 142, 147, 0.12);
+
+      .icon {
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%238E8E93' stroke-width='2'%3E%3Ccircle cx='12' cy='12' r='9'/%3E%3Cline x1='8' y1='12' x2='16' y2='12'/%3E%3C/svg%3E");
+      }
+    }
+  }
+}
+
+@keyframes tool-trace-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
