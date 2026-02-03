@@ -1,10 +1,5 @@
 // User & Auth
-export interface User {
-  id: string
-  email: string
-  name?: string
-  avatar?: string
-}
+export * from './user.dto'
 
 // Record Status
 export type RecordStatus = 'pending' | 'archived'

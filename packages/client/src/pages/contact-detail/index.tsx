@@ -40,11 +40,13 @@ const ContactDetailPage: React.FC = () => {
   }
 
   const handleEdit = () => {
-    Taro.showToast({ title: '编辑联系人', icon: 'none' })
+    if (contact) {
+      Taro.navigateTo({ url: `/pages/contact-form/index?id=${contact.id}` })
+    }
   }
 
   const handleStartConversation = () => {
-    Taro.showToast({ title: '开始对话', icon: 'none' })
+    Taro.switchTab({ url: '/pages/conversation/index' })
   }
 
   const renderEventIcon = (type: ContactEvent['type']) => {

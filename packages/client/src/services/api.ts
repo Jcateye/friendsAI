@@ -107,10 +107,24 @@ export const contactApi = {
       method: 'GET',
     }),
 
+  create: (payload: Partial<Contact>) =>
+    request<ContactDetail>({
+      url: '/contacts',
+      method: 'POST',
+      data: payload,
+    }),
+
   getDetail: (id: string) =>
     request<ContactDetail>({
       url: `/contacts/${id}`,
       method: 'GET',
+    }),
+
+  update: (id: string, payload: Partial<Contact>) =>
+    request<ContactDetail>({
+      url: `/contacts/${id}`,
+      method: 'PATCH',
+      data: payload,
     }),
 
   refreshBriefing: (id: string) =>

@@ -5,6 +5,7 @@ export default defineAppConfig({
     'pages/conversation-detail/index',
     'pages/contacts/index',
     'pages/contact-detail/index',
+    'pages/contact-form/index',
     'pages/action/index',
     'pages/settings/index',
     'pages/connector/index',
