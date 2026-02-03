@@ -55,6 +55,7 @@ friendsAI/
 - **框架**: Express.js
 - **语言**: TypeScript
 - **运行时**: Node.js 18+
+- **包管理**: Bun
 
 ## 快速开始
 
@@ -62,12 +63,12 @@ friendsAI/
 
 ### 环境要求
 - Node.js >= 18.0.0
-- npm >= 8.0.0
+- Bun >= 1.2.0
 
 ### 安装依赖
 
 ```bash
-npm install
+bun install
 ```
 
 ### 使用 project.sh 脚本 (推荐)
@@ -92,14 +93,14 @@ npm install
 ./project.sh start:mvp
 ```
 
-### 使用 npm 脚本
+### 使用 bun 脚本
 
 ```bash
-npm run dev              # 同时启动前后端
-npm run client:dev       # 前端 H5 开发
-npm run client:dev:weapp # 微信小程序开发
-npm run server:dev       # 后端开发
-npm run build            # 构建前后端
+bun run dev              # 同时启动前后端
+bun run client:dev       # 前端 H5 开发
+bun run client:dev:weapp # 微信小程序开发
+bun run server:dev       # 后端开发
+bun run build            # 构建前后端
 ```
 
 ## 可用命令
@@ -116,19 +117,19 @@ npm run build            # 构建前后端
 | `./project.sh status` | 查看服务状态 |
 | `./project.sh clean-logs` | 清理日志 |
 
-### npm 脚本
+### bun 脚本
 
 | 命令 | 说明 |
 |------|------|
-| `npm run dev` | 同时启动前后端开发服务 |
-| `npm run build` | 构建前后端 |
-| `npm run client:dev` | 前端 H5 开发模式 |
-| `npm run client:dev:weapp` | 前端微信小程序开发模式 |
-| `npm run client:build` | 构建前端 H5 |
-| `npm run client:build:weapp` | 构建微信小程序 |
-| `npm run server:dev` | 后端开发模式 |
-| `npm run server:build` | 构建后端 |
-| `npm run server:start` | 启动后端生产服务 |
+| `bun run dev` | 同时启动前后端开发服务 |
+| `bun run build` | 构建前后端 |
+| `bun run client:dev` | 前端 H5 开发模式 |
+| `bun run client:dev:weapp` | 前端微信小程序开发模式 |
+| `bun run client:build` | 构建前端 H5 |
+| `bun run client:build:weapp` | 构建微信小程序 |
+| `bun run server:dev` | 后端开发模式 |
+| `bun run server:build` | 构建后端 |
+| `bun run server:start` | 启动后端生产服务 |
 
 ## 目录说明
 
