@@ -351,23 +351,33 @@ const ConversationPage: React.FC = () => {
         ))}
       </ScrollView>
 
-      <View className="composer">
-        <View className="composer-box">
+      <View className="input-card">
+        <View className="input-field">
           <Textarea
-            className="composer-input"
-            placeholder="输入内容..."
+            className="input-textarea"
+            placeholder="发送消息给 AI 助手"
             value={inputText}
             onInput={(e) => setInputText(e.detail.value)}
             maxlength={500}
+            autoHeight
           />
-          <View className="ai-entry" onClick={handleOpenAnalysis}>
-            <Text className="ai-entry-text">AI</Text>
-          </View>
         </View>
-        <View className="composer-actions">
-          <View className="send-btn" onClick={handleSend}>
-            <View className="icon-send" />
-            <Text className="send-text">发送</Text>
+        <View className="toolbar">
+          <View className="left-btns">
+            <View className="tool-btn plus-btn">
+              <View className="icon-plus" />
+            </View>
+            <View className="tool-btn sparkles-btn active" onClick={handleOpenAnalysis}>
+              <View className="icon-sparkles" />
+            </View>
+          </View>
+          <View className="right-btns">
+            <View className="tool-btn mic-btn">
+              <View className="icon-mic" />
+            </View>
+            <View className="send-btn" onClick={handleSend}>
+              <View className="icon-arrow-up" />
+            </View>
           </View>
         </View>
       </View>

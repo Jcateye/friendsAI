@@ -80,6 +80,7 @@
       color: #2D2D2D;
       border: 1rpx solid #F0EFEC;
       border-bottom-left-radius: 8rpx;
+      box-shadow: 0 2rpx 20rpx rgba(0, 0, 0, 0.02);
     }
 
     .bubble-text {
@@ -170,78 +171,114 @@
     }
   }
 
-  .composer {
+  .input-card {
     position: fixed;
     bottom: 0;
     left: 0;
     right: 0;
+    width: 100%;
     background: #FFFFFF;
-    border-top: 1rpx solid #F0EFEC;
-    padding: 20rpx 24rpx 40rpx;
+    border-radius: 32rpx 32rpx 0 0;
+    box-shadow: 0 -4rpx 32rpx rgba(0, 0, 0, 0.08);
+    padding: 32rpx;
     box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    gap: 24rpx;
 
-    .composer-box {
-      position: relative;
-      background: #F7F6F3;
-      border-radius: 24rpx;
-      padding: 24rpx 88rpx 24rpx 24rpx;
-    }
-
-    .composer-input {
+    .input-field {
       width: 100%;
-      min-height: 80rpx;
-      font-size: 28rpx;
-      color: #2D2D2D;
-      line-height: 1.5;
-    }
-
-    .ai-entry {
-      position: absolute;
-      top: 16rpx;
-      right: 16rpx;
-      width: 64rpx;
-      height: 64rpx;
-      border-radius: 32rpx;
-      background: rgba(124, 144, 112, 0.16);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      border: 1rpx solid rgba(124, 144, 112, 0.4);
-
-      .ai-entry-text {
-        font-size: 24rpx;
-        font-weight: 600;
-        color: #7C9070;
-      }
-    }
-
-    .composer-actions {
-      display: flex;
-      justify-content: flex-end;
-      margin-top: 16rpx;
-    }
-
-    .send-btn {
-      height: 72rpx;
+      height: 88rpx;
+      background: #F7F6F3;
+      border-radius: 44rpx;
       padding: 0 32rpx;
-      background: #7C9070;
-      border-radius: 20rpx;
       display: flex;
       align-items: center;
-      gap: 12rpx;
 
-      .icon-send {
-        width: 32rpx;
-        height: 32rpx;
-        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23FFFFFF' stroke-width='2'%3E%3Cline x1='22' y1='2' x2='11' y2='13'/%3E%3Cpolygon points='22 2 15 22 11 13 2 9 22 2'/%3E%3C/svg%3E");
-        background-size: contain;
-        background-repeat: no-repeat;
+      .input-textarea {
+        flex: 1;
+        font-size: 28rpx;
+        color: #2D2D2D;
+        line-height: 1.5;
+      }
+    }
+
+    .toolbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+
+      .left-btns,
+      .right-btns {
+        display: flex;
+        gap: 16rpx;
+        align-items: center;
       }
 
-      .send-text {
-        font-size: 28rpx;
-        font-weight: 600;
-        color: #FFFFFF;
+      .tool-btn {
+        width: 80rpx;
+        height: 80rpx;
+        background: #F7F6F3;
+        border-radius: 40rpx;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+
+        &.disabled {
+          opacity: 0.5;
+        }
+
+        &.active {
+          background: rgba(124, 144, 112, 0.12);
+        }
+
+        // 图标样式
+        [class^="icon-"] {
+          width: 40rpx;
+          height: 40rpx;
+          background-size: contain;
+          background-repeat: no-repeat;
+          background-position: center;
+        }
+
+        .icon-plus {
+          background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 24 24' fill='none' stroke='%236B6B6B' stroke-width='2'%3E%3Cline x1='12' y1='5' x2='12' y2='19'/%3E%3Cline x1='5' y1='12' x2='19' y2='12'/%3E%3C/svg%3E");
+        }
+
+        .icon-search {
+          background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 24 24' fill='none' stroke='%236B6B6B' stroke-width='2'%3E%3Ccircle cx='11' cy='11' r='8'/%3E%3Cline x1='21' y1='21' x2='16.65' y2='16.65'/%3E%3C/svg%3E");
+        }
+
+        .icon-branch {
+          background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 24 24' fill='none' stroke='%236B6B6B' stroke-width='2'%3E%3Cline x1='6' y1='3' x2='6' y2='15'/%3E%3Ccircle cx='18' cy='6' r='3'/%3E%3Ccircle cx='6' cy='18' r='3'/%3E%3Cpath d='M18 9a9 9 0 0 1-9 9'/%3E%3C/svg%3E");
+        }
+
+        .icon-sparkles {
+          background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 24 24' fill='none' stroke='%237C9070' stroke-width='2'%3E%3Cpath d='m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z'/%3E%3C/svg%3E");
+        }
+
+        .icon-mic {
+          background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 24 24' fill='none' stroke='%23D4845E' stroke-width='2'%3E%3Cpath d='M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z'/%3E%3Cpath d='M19 10v2a7 7 0 0 1-14 0v-2'/%3E%3Cline x1='12' y1='19' x2='12' y2='22'/%3E%3C/svg%3E");
+        }
+      }
+
+      .send-btn {
+        width: 80rpx;
+        height: 80rpx;
+        background: #7C9070;
+        border-radius: 40rpx;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+
+        .icon-arrow-up {
+          width: 40rpx;
+          height: 40rpx;
+          background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 24 24' fill='none' stroke='%23FFFFFF' stroke-width='2'%3E%3Cline x1='12' y1='19' x2='12' y2='5'/%3E%3Cpolyline points='5 12 12 5 19 12'/%3E%3C/svg%3E");
+          background-size: contain;
+          background-repeat: no-repeat;
+          background-position: center;
+        }
       }
     }
   }
