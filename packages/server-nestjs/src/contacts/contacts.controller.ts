@@ -2,13 +2,13 @@ import { Controller, Get, Post, Patch, Delete, Body, Param, Query, UseGuards, Re
 import { Request } from 'express';
 import { ContactsService } from './contacts.service';
 import { CreateContactDto, UpdateContactDto, ContactFilter } from './dtos/contact.dto';
-import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { AuthGuard } from '../auth/auth.guard';
 
 interface RequestWithUser extends Request {
   user: { id: string };
 }
 
-@UseGuards(JwtAuthGuard)
+@UseGuards(AuthGuard)
 @Controller('contacts')
 export class ContactsController {
   constructor(private readonly contactsService: ContactsService) {}

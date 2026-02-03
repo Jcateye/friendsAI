@@ -7,6 +7,21 @@ import { User } from '../entities/user.entity';
 import { Briefing } from '../entities/briefing.entity';
 import { Conversation } from '../entities/conversation.entity'; // For 'recent' filter
 
+export interface ContactListItemDto {
+  id: string;
+  name: string;
+  initial: string;
+  avatarColor: string;
+  company?: string;
+  role?: string;
+  tags?: string[];
+  lastContactTime?: string;
+  lastContactSummary?: string;
+}
+
+const createInitial = (name?: string) => (name ? name[0] : '#');
+const defaultAvatarColor = '#7C9070';
+
 @Injectable()
 export class ContactsService {
   constructor(
@@ -47,11 +62,12 @@ export class ContactsService {
     return savedContact;
   }
 
-  async findAll(userId: string): Promise<Contact[]> {
-    return this.contactsRepository.find({
+  async findAll(userId: string): Promise<ContactListItemDto[]> {
+    const contacts = await this.contactsRepository.find({
       where: { user: { id: userId } },
       relations: ['briefing'],
     });
+    return contacts.map((contact) => this.toListItem(contact));
   }
 
   async findOne(userId: string, id: string): Promise<Contact> {
@@ -92,11 +108,12 @@ export class ContactsService {
     userId: string,
     filter: ContactFilter = ContactFilter.ALL,
     search?: string,
-  ): Promise<Contact[]> {
+  ): Promise<ContactListItemDto[]> {
     let queryBuilder = this.contactsRepository
       .createQueryBuilder('contact')
       .leftJoinAndSelect('contact.briefing', 'briefing')
-      .where('contact.user.id = :userId', { userId });
+      .leftJoinAndSelect('contact.conversations', 'conversation')
+      .where('contact.userId = :userId', { userId });
 
     if (search) {
       queryBuilder = queryBuilder.andWhere(
@@ -134,6 +151,28 @@ export class ContactsService {
         break;
     }
 
-    return queryBuilder.getMany();
+    const contacts = await queryBuilder.getMany();
+    return contacts.map((contact) => this.toListItem(contact));
+  }
+
+  private toListItem(contact: Contact): ContactListItemDto {
+    const lastConversation = (contact.conversations || []).reduce((latest, current) => {
+      if (!latest) {
+        return current;
+      }
+      return current.createdAt > latest.createdAt ? current : latest;
+    }, undefined as Conversation | undefined);
+    return {
+      id: contact.id,
+      name: contact.name,
+      initial: createInitial(contact.name),
+      avatarColor: defaultAvatarColor,
+      company: contact.company || undefined,
+      role: contact.position || undefined,
+      tags: contact.tags || [],
+      lastContactTime: lastConversation?.createdAt?.toISOString() || contact.updatedAt?.toISOString(),
+      lastContactSummary:
+        lastConversation?.content?.slice(0, 40) || contact.briefing?.lastSummary?.slice(0, 40) || '',
+    };
   }
 }
