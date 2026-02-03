@@ -6,5 +6,9 @@ export default {
     stats: true
   },
   mini: {},
-  h5: {}
+  h5: {
+    devServer: {
+      port: Number(process.env.CLIENT_PORT ?? 10086)
+    }
+  }
 } satisfies UserConfigExport

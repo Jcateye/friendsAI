@@ -1,6 +1,16 @@
 import dotenv from 'dotenv';
+import fs from 'node:fs';
+import path from 'node:path';
 
-dotenv.config();
+const nodeEnv = process.env.NODE_ENV ?? 'development';
+const envFiles = [`.env.${nodeEnv}`, '.env'];
+for (const envFile of envFiles) {
+  const resolved = path.resolve(process.cwd(), envFile);
+  if (fs.existsSync(resolved)) {
+    dotenv.config({ path: resolved });
+    break;
+  }
+}
 
 const required = (key: string, fallback?: string) => {
   const value = process.env[key] ?? fallback;

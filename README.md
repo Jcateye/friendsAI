@@ -187,8 +187,13 @@ npm run build            # 构建前后端
 
 ### 后端开发
 1. 后端代码位于 `packages/server/src`
-2. 复制 `packages/server/.env.example` 为 `.env` 并配置环境变量
-3. 默认端口为 3000
+2. 使用环境文件 `packages/server/.env.development` / `packages/server/.env.production` 配置环境变量
+3. 端口通过 `PORT` 配置（开发默认 3000）
+
+### 前端配置
+1. 前端环境文件位于 `packages/client/.env.development` / `packages/client/.env.production`
+2. H5 端口通过 `CLIENT_PORT` 配置（开发默认 10086）
+3. API 基地址通过 `TARO_APP_API_BASE_URL` 配置
 
 ### Monorepo 结构
 1. 使用 npm workspaces 管理多包

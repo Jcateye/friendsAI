@@ -18,23 +18,94 @@ WORKER_PID_FILE="$ROOT_DIR/.worker.pid"
 DB_PID_FILE="$ROOT_DIR/.db.pid"
 WORKER_LOG="$LOG_DIR/worker.log"
 
-if [[ -f "$ROOT_DIR/yarn.lock" ]]; then
+if [[ -f "$ROOT_DIR/bun.lockb" || -f "$ROOT_DIR/bun.lock" ]]; then
+  PKG_MANAGER="bun"
+elif [[ -f "$ROOT_DIR/yarn.lock" ]]; then
   PKG_MANAGER="yarn"
 else
   PKG_MANAGER="npm"
 fi
 
 load_env() {
-  local env_file="$ROOT_DIR/packages/server/.env"
-  if [[ -f "$env_file" ]]; then
+  local node_env="${NODE_ENV:-development}"
+  local server_env_file="$ROOT_DIR/packages/server/.env.${node_env}"
+  local server_env_fallback="$ROOT_DIR/packages/server/.env"
+  local client_env_file="$ROOT_DIR/packages/client/.env.${node_env}"
+
+  if [[ -f "$server_env_file" ]]; then
     # shellcheck disable=SC1090
     set -a
-    source "$env_file"
+    source "$server_env_file"
+    set +a
+  elif [[ -f "$server_env_fallback" ]]; then
+    # shellcheck disable=SC1090
+    set -a
+    source "$server_env_fallback"
     set +a
   fi
+
+  if [[ -f "$client_env_file" ]]; then
+    # shellcheck disable=SC1090
+    set -a
+    source "$client_env_file"
+    set +a
+  fi
+
   export DATABASE_URL="${DATABASE_URL:-postgres://friendsai:friendsai@localhost:5432/friendsai}"
   export JWT_SECRET="${JWT_SECRET:-dev-smoke-secret}"
   export PORT="${PORT:-3000}"
+  export CLIENT_PORT="${CLIENT_PORT:-10086}"
+}
+
+# 检查服务是否成功启动
+# 参数: $1=服务名称, $2=PID文件, $3=日志文件, $4=监听端口(可选)
+check_service_status() {
+  local service_name="$1"
+  local pid_file="$2"
+  local log_file="$3"
+  local port="${4:-}"
+  local max_attempts=30
+  local attempt=0
+
+  if [[ ! -f "$pid_file" ]]; then
+    echo "❌ $service_name 启动失败：PID文件 ($pid_file) 未生成。"
+    if [[ -f "$log_file" ]]; then
+      echo "📋 最近日志:"
+      tail -n 10 "$log_file"
+    fi
+    return 1
+  fi
+
+  local pid
+  pid="$(cat "$pid_file")"
+
+  if ! kill -0 "$pid" >/dev/null 2>&1; then
+    echo "❌ $service_name 启动失败：进程 (PID: $pid) 不存在或已退出。"
+    if [[ -f "$log_file" ]]; then
+      echo "📋 最近日志:"
+      tail -n 10 "$log_file"
+    fi
+    return 1
+  fi
+
+  if [[ -n "$port" ]]; then
+    echo "🔍 等待 $service_name 监听端口 $port..."
+    while ! lsof -i ":$port" >/dev/null 2>&1; do
+      if (( attempt >= max_attempts )); then
+        echo "❌ $service_name 启动失败：端口 $port 未能在 ${max_attempts} 秒内开始监听。"
+        if [[ -f "$log_file" ]]; then
+          echo "📋 最近日志:"
+          tail -n 10 "$log_file"
+        fi
+        return 1
+      fi
+      sleep 1
+      attempt=$((attempt + 1))
+    done
+    echo "✅ $service_name 端口 $port 已监听。"
+  fi
+
+  return 0
 }
 
 print_usage() {
@@ -116,21 +187,36 @@ run_migrate() {
   $PKG_MANAGER run server:migrate
 }
 
-start_client() {
+start_client_background() {
   if is_client_running; then
     echo "🟢 前端服务已在运行 (PID: $(cat "$CLIENT_PID_FILE"))"
     return 0
   fi
 
+  load_env
   echo "🚀 启动前端 H5 开发服务..."
-  nohup $PKG_MANAGER run client:dev > "$CLIENT_LOG" 2>&1 &
+  nohup "$PKG_MANAGER" run client:dev > "$CLIENT_LOG" 2>&1 &
   echo $! > "$CLIENT_PID_FILE"
-  echo "✅ 前端已启动，PID: $(cat "$CLIENT_PID_FILE")"
-  echo "   日志文件: $CLIENT_LOG"
-  echo "   访问地址：请在日志中查看 devServer URL（常见为 http://localhost:10086）"
 }
 
-start_server() {
+verify_client() {
+  # 检查服务是否成功启动
+  if check_service_status "client" "$CLIENT_PID_FILE" "$CLIENT_LOG" "${CLIENT_PORT:-10086}"; then
+    echo "✅ 前端已启动，PID: $(cat "$CLIENT_PID_FILE")"
+    echo "   日志文件: $CLIENT_LOG"
+    echo "   访问地址：http://localhost:${CLIENT_PORT:-10086}"
+    return 0
+  else
+    return 1
+  fi
+}
+
+start_client() {
+  start_client_background
+  verify_client
+}
+
+start_server_background() {
   if is_server_running; then
     echo "🟢 后端服务已在运行 (PID: $(cat "$SERVER_PID_FILE"))"
     return 0
@@ -138,14 +224,28 @@ start_server() {
 
   load_env
   echo "🚀 启动后端开发服务..."
-  nohup $PKG_MANAGER run server:dev > "$SERVER_LOG" 2>&1 &
+  nohup "$PKG_MANAGER" run server:dev > "$SERVER_LOG" 2>&1 &
   echo $! > "$SERVER_PID_FILE"
-  echo "✅ 后端已启动，PID: $(cat "$SERVER_PID_FILE")"
-  echo "   日志文件: $SERVER_LOG"
-  echo "   API 健康检查：http://localhost:${PORT:-3000}/health"
 }
 
-start_worker() {
+verify_server() {
+  # 检查服务是否成功启动
+  if check_service_status "server" "$SERVER_PID_FILE" "$SERVER_LOG" "${PORT:-3000}"; then
+    echo "✅ 后端已启动，PID: $(cat "$SERVER_PID_FILE")"
+    echo "   日志文件: $SERVER_LOG"
+    echo "   API 健康检查：http://localhost:${PORT:-3000}/health"
+    return 0
+  else
+    return 1
+  fi
+}
+
+start_server() {
+  start_server_background
+  verify_server
+}
+
+start_worker_background() {
   if is_worker_running; then
     echo "🟢 Worker 已在运行 (PID: $(cat "$WORKER_PID_FILE"))"
     return 0
@@ -153,10 +253,40 @@ start_worker() {
 
   load_env
   echo "🧰 启动 Worker..."
-  nohup $PKG_MANAGER run -w @friends-ai/server worker > "$WORKER_LOG" 2>&1 &
+  if [[ "$PKG_MANAGER" == "bun" ]]; then
+    nohup bun run --cwd "$ROOT_DIR/packages/server" worker > "$WORKER_LOG" 2>&1 &
+  else
+    nohup "$PKG_MANAGER" run -w @friends-ai/server worker > "$WORKER_LOG" 2>&1 &
+  fi
   echo $! > "$WORKER_PID_FILE"
-  echo "✅ Worker 已启动，PID: $(cat "$WORKER_PID_FILE")"
-  echo "   日志文件: $WORKER_LOG"
+}
+
+verify_worker() {
+  # 检查服务是否成功启动 (Worker不监听端口，只检查PID)
+  if check_service_status "worker" "$WORKER_PID_FILE" "$WORKER_LOG"; then
+    echo "✅ Worker 已启动，PID: $(cat "$WORKER_PID_FILE")"
+    echo "   日志文件: $WORKER_LOG"
+    return 0
+  else
+    return 1
+  fi
+}
+
+start_worker() {
+  start_worker_background
+  verify_worker
+}
+
+# 强制杀死占用指定端口的进程
+kill_port() {
+  local port="$1"
+  local pids
+  pids=$(lsof -ti ":$port" 2>/dev/null || true)
+  if [[ -n "$pids" ]]; then
+    echo "🔪 杀死占用端口 $port 的进程: $pids"
+    echo "$pids" | xargs kill -9 2>/dev/null || true
+    sleep 1
+  fi
 }
 
 stop_client() {
@@ -165,15 +295,15 @@ stop_client() {
     pid="$(cat "$CLIENT_PID_FILE")"
     echo "⏹️  停止前端服务 (PID: $pid)..."
     kill "$pid" 2>/dev/null || true
-    # 等待进程结束
     sleep 1
-    # 强制结束子进程
     pkill -P "$pid" 2>/dev/null || true
     rm -f "$CLIENT_PID_FILE"
-    echo "✅ 前端已停止"
   else
     echo "⚪ 前端服务未运行"
   fi
+  # 确保端口被释放
+  kill_port "${CLIENT_PORT:-10086}"
+  echo "✅ 前端已停止"
 }
 
 stop_server() {
@@ -185,10 +315,12 @@ stop_server() {
     sleep 1
     pkill -P "$pid" 2>/dev/null || true
     rm -f "$SERVER_PID_FILE"
-    echo "✅ 后端已停止"
   else
     echo "⚪ 后端服务未运行"
   fi
+  # 确保端口被释放
+  kill_port "${PORT:-3000}"
+  echo "✅ 后端已停止"
 }
 
 stop_worker() {
@@ -208,36 +340,125 @@ stop_worker() {
 
 start() {
   local target="${1:-all}"
+  local client_start_status=0
+  local server_start_status=0
+  
   case "$target" in
     client)
-      start_client
+      start_client_background || client_start_status=$?
       ;;
     server)
-      start_server
+      start_server_background || server_start_status=$?
       ;;
     all)
-      start_client
-      start_server
+      start_client_background || client_start_status=$?
+      start_server_background || server_start_status=$?
       ;;
     *)
       echo "未知服务: $target"
       exit 1
       ;;
   esac
+
+  # Perform verification after all services are attempted to start
+  local client_verify_status=0
+  local server_verify_status=0
+
+  case "$target" in
+    client)
+      verify_client || client_verify_status=$?
+      ;;
+    server)
+      verify_server || server_verify_status=$?
+      ;;
+    all)
+      verify_client || client_verify_status=$?
+      verify_server || server_verify_status=$?
+      ;;
+  esac
+  
+  # 汇总报告
+  local has_failure=0
+  if [[ $client_start_status -ne 0 || $client_verify_status -ne 0 ]]; then
+    echo ""
+    echo "❌ 前端服务启动失败"
+    echo "   请查看日志: $CLIENT_LOG"
+    has_failure=1
+  fi
+  if [[ $server_start_status -ne 0 || $server_verify_status -ne 0 ]]; then
+    echo ""
+    echo "❌ 后端服务启动失败"
+    echo "   请查看日志: $SERVER_LOG"
+    has_failure=1
+  fi
+  
+  if [[ $has_failure -eq 1 ]]; then
+    echo ""
+    echo "⚠️ 部分服务启动失败，请检查上述日志文件获取详细信息"
+    return 1
+  fi
+  
+  return 0
 }
 
 start_mvp() {
   load_env
   export DEV_VERIFY_CODE="${DEV_VERIFY_CODE:-123456}"
+  
   start_db
   run_migrate
-  start_server
-  start_worker
-  start_client
+  
+  local server_start_status=0
+  start_server_background || server_start_status=$?
+  
+  local worker_start_status=0
+  start_worker_background || worker_start_status=$?
+  
+  local client_start_status=0
+  start_client_background || client_start_status=$?
+
+  # Perform verification after all services are attempted to start
+  local server_verify_status=0
+  verify_server || server_verify_status=$?
+  
+  local worker_verify_status=0
+  verify_worker || worker_verify_status=$?
+  
+  local client_verify_status=0
+  verify_client || client_verify_status=$?
+  
+  # 汇总报告
+  local has_failure=0
+  if [[ $server_start_status -ne 0 || $server_verify_status -ne 0 ]]; then
+    echo ""
+    echo "❌ 后端服务启动失败"
+    echo "   请查看日志: $SERVER_LOG"
+    has_failure=1
+  fi
+  if [[ $worker_start_status -ne 0 || $worker_verify_status -ne 0 ]]; then
+    echo ""
+    echo "❌ Worker 启动失败"
+    echo "   请查看日志: $WORKER_LOG"
+    has_failure=1
+  fi
+  if [[ $client_start_status -ne 0 || $client_verify_status -ne 0 ]]; then
+    echo ""
+    echo "❌ 前端服务启动失败"
+    echo "   请查看日志: $CLIENT_LOG"
+    has_failure=1
+  fi
+  
+  if [[ $has_failure -eq 1 ]]; then
+    echo ""
+    echo "⚠️ 部分服务启动失败，请检查上述日志文件获取详细信息"
+    return 1
+  fi
+  
   echo "✅ MVP 已启动"
   echo "👉 访问提示："
-  echo "   前端地址：查看 $CLIENT_LOG 内输出的 devServer URL（常见 http://localhost:10086）"
+  echo "   前端地址：http://localhost:${CLIENT_PORT:-10086}"
   echo "   API 地址：http://localhost:${PORT:-3000}/health"
+  return 0
 }
 
 stop() {
@@ -362,10 +583,10 @@ clean_logs() {
 
 case "${1:-}" in
   start)
-    start "${2:-all}"
+    start "${2:-all}" || exit $?
     ;;
   start:mvp)
-    start_mvp
+    start_mvp || exit $?
     ;;
   stop)
     stop "${2:-all}"

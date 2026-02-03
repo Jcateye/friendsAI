@@ -93,4 +93,4 @@ npm run -w @friends-ai/server test:smoke
 npm run client:dev
 ```
 
-默认会用 `TARO_APP_API_BASE_URL`（没配置则走 `http://localhost:3000/v1`）。
+默认会用 `TARO_APP_API_BASE_URL`（没配置则走 `http://localhost:3000/v1`）。H5 端口从 `CLIENT_PORT` 读取（默认 10086）。
