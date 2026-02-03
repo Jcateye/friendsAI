@@ -1,10 +1,35 @@
 import { View, Text, ScrollView } from '@tarojs/components'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useRouter } from '@tarojs/taro'
 import Header from '@/components/Header'
+import CitationHighlight, { CitationRange } from '@/components/CitationHighlight'
 import type { ConversationDetail as ConversationDetailType } from '@/types'
 import { navigateBack, showToast, showLoading, hideLoading } from '@/utils'
 import './index.scss'
+
+interface CitationDefinition {
+  id: string
+  phrase: string
+  targetId: string
+}
+
+const buildCitationRanges = (text: string, definitions: CitationDefinition[]): CitationRange[] => {
+  if (!text) return []
+
+  return definitions
+    .map((definition) => {
+      const start = text.indexOf(definition.phrase)
+      if (start === -1) return null
+
+      return {
+        id: definition.id,
+        start,
+        end: start + definition.phrase.length,
+        targetId: definition.targetId,
+      }
+    })
+    .filter((item): item is CitationRange => Boolean(item))
+}
 
 const ConversationDetailPage: React.FC = () => {
   const router = useRouter()
@@ -12,6 +37,7 @@ const ConversationDetailPage: React.FC = () => {
 
   const [detail, setDetail] = useState<ConversationDetailType | null>(null)
   const [loading, setLoading] = useState(true)
+  const [scrollIntoView, setScrollIntoView] = useState('')
 
   useEffect(() => {
     loadDetail()
@@ -76,6 +102,50 @@ const ConversationDetailPage: React.FC = () => {
     }
   }
 
+  const citationRanges = useMemo(() => {
+    if (!detail?.archiveResult) return []
+
+    const primaryPerson = detail.archiveResult.recognizedPeople[0]
+    const primaryEvent = detail.archiveResult.newEvents[0]
+    const primaryTodo = detail.archiveResult.todoItems[0]
+
+    const definitions: CitationDefinition[] = [
+      {
+        id: 'person-1',
+        phrase: primaryPerson?.name || '张三',
+        targetId: `citation-person-${primaryPerson?.id || '1'}`,
+      },
+      {
+        id: 'event-1',
+        phrase: 'Q2合作方案',
+        targetId: `citation-event-${primaryEvent?.id || '1'}`,
+      },
+      {
+        id: 'fact-1',
+        phrase: '比竞争对手高15%',
+        targetId: 'citation-fact-1',
+      },
+      {
+        id: 'fact-2',
+        phrase: '下个月要带家人去云南旅游',
+        targetId: 'citation-fact-2',
+      },
+      {
+        id: 'todo-1',
+        phrase: '周五前发一版优化后的方案',
+        targetId: `citation-todo-${primaryTodo?.id || '1'}`,
+      },
+    ]
+
+    return buildCitationRanges(detail.originalContent, definitions)
+  }, [detail])
+
+  const handleCitationClick = (citation: CitationRange) => {
+    if (!citation.targetId) return
+    setScrollIntoView('')
+    setTimeout(() => setScrollIntoView(citation.targetId || ''), 30)
+  }
+
   if (loading || !detail) {
     return (
       <View className="detail-page">
@@ -96,12 +166,17 @@ const ConversationDetailPage: React.FC = () => {
         }}
       />
 
-      <ScrollView className="scroll-content" scrollY>
+      <ScrollView className="scroll-content" scrollY scrollIntoView={scrollIntoView}>
         <View className="detail-inner">
           <View className="input-section">
             <Text className="section-label">记录内容</Text>
             <View className="user-bubble">
-              <Text className="user-text">{detail.originalContent}</Text>
+              <CitationHighlight
+                className="user-text"
+                text={detail.originalContent}
+                citations={citationRanges}
+                onCitationClick={handleCitationClick}
+              />
             </View>
           </View>
 
@@ -122,7 +197,7 @@ const ConversationDetailPage: React.FC = () => {
                   </View>
                 </View>
                 {detail.archiveResult.recognizedPeople.map((person) => (
-                  <View key={person.id} className="person-row">
+                  <View key={person.id} className="person-row" id={`citation-person-${person.id}`}>
                     <View className="person-avatar" style={{ backgroundColor: person.avatarColor }}>
                       <Text className="avatar-initial">{person.initial}</Text>
                     </View>
@@ -140,7 +215,7 @@ const ConversationDetailPage: React.FC = () => {
                   <Text className="card-title">新增事件</Text>
                 </View>
                 {detail.archiveResult.newEvents.map((event) => (
-                  <View key={event.id} className="event-row">
+                  <View key={event.id} className="event-row" id={`citation-event-${event.id}`}>
                     <View className="event-icon">
                       <View className="icon-calendar" />
                     </View>
@@ -161,7 +236,7 @@ const ConversationDetailPage: React.FC = () => {
                   </View>
                 </View>
                 {detail.archiveResult.extractedFacts.map((fact) => (
-                  <View key={fact.id} className="fact-row">
+                  <View key={fact.id} className="fact-row" id={`citation-fact-${fact.id}`}>
                     <View className="fact-dot" />
                     <Text className="fact-text">{fact.content}</Text>
                   </View>
@@ -171,7 +246,7 @@ const ConversationDetailPage: React.FC = () => {
               <View className="result-card">
                 <Text className="card-title">待办事项</Text>
                 {detail.archiveResult.todoItems.map((todo) => (
-                  <View key={todo.id} className="todo-row">
+                  <View key={todo.id} className="todo-row" id={`citation-todo-${todo.id}`}>
                     <View className="todo-checkbox" />
                     <View className="todo-info">
                       <Text className="todo-text">{todo.content}</Text>
