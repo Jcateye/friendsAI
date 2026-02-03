@@ -44,19 +44,92 @@
 .contacts-content {
   flex: 1;
   overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.filter-tabs {
+  display: flex;
+  gap: 16rpx;
+  padding: 0 32rpx 24rpx;
+  background-color: $bg-primary;
+}
+
+.filter-tab {
+  padding: 12rpx 24rpx;
+  border-radius: $radius-full;
+  background-color: $bg-secondary;
+  border: 1rpx solid $border;
+}
+
+.filter-tab.active {
+  background-color: $primary-tint;
+  border-color: $primary;
+}
+
+.filter-text {
+  font-size: $font-xs;
+  color: $text-secondary;
+}
+
+.filter-tab.active .filter-text {
+  color: $primary;
+  font-weight: 600;
 }
 
 .loading-state,
 .empty-state {
+  flex: 1;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 120rpx 32rpx;
+  padding: 96rpx 32rpx 64rpx;
 }
 
-.empty-text {
+.empty-state {
+  flex-direction: column;
+  text-align: center;
+  gap: 32rpx;
+}
+
+.empty-icon {
+  width: 128rpx;
+  height: 128rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.empty-title {
+  font-family: $font-display;
+  font-size: 36rpx;
+  font-weight: 600;
+  color: $text-secondary;
+}
+
+.empty-desc {
   font-size: $font-sm;
   color: $text-tertiary;
+  line-height: 1.5;
+  max-width: 520rpx;
+}
+
+.empty-add-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16rpx;
+  height: 88rpx;
+  padding: 0 48rpx;
+  border-radius: 44rpx;
+  background-color: $primary;
+  margin-top: 16rpx;
+}
+
+.empty-add-text {
+  font-size: $font-sm;
+  font-weight: 600;
+  color: #FFFFFF;
 }
 
 .contacts-list {

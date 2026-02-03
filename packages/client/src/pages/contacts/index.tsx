@@ -18,6 +18,11 @@ const ContactsPage: React.FC = () => {
   const [activeFilter, setActiveFilter] = useState<ContactFilter>('all')
   const [loading, setLoading] = useState(true)
   const [drawerOpen, setDrawerOpen] = useState(false)
+  const isFiltered = Boolean(searchKeyword) || activeFilter !== 'all'
+  const emptyTitle = isFiltered ? '未找到匹配的联系人' : '开始建立你的联系人库'
+  const emptyDesc = isFiltered
+    ? '试试调整关键词或筛选条件'
+    : '新增或导入联系人，开始记录每次交流'
 
   const loadContacts = async (filter: ContactFilter, keyword?: string) => {
     setLoading(true)
@@ -73,7 +78,7 @@ const ContactsPage: React.FC = () => {
   }
 
   const handleAddContact = () => {
-    Taro.showToast({ title: '添加联系人', icon: 'none' })
+    Taro.navigateTo({ url: '/pages/contact-form/index' })
   }
 
   return (
@@ -124,9 +129,15 @@ const ContactsPage: React.FC = () => {
           </View>
         ) : contacts.length === 0 ? (
           <View className="empty-state">
-            <Text className="empty-text">
-              {searchKeyword || activeFilter !== 'all' ? '未找到匹配的联系人' : '暂无联系人'}
-            </Text>
+            <View className="empty-icon">
+              <AtIcon value="user" size="32" color="#C9C9C9" />
+            </View>
+            <Text className="empty-title">{emptyTitle}</Text>
+            <Text className="empty-desc">{emptyDesc}</Text>
+            <View className="empty-add-btn" onClick={handleAddContact}>
+              <AtIcon value="add" size="14" color="#FFFFFF" />
+              <Text className="empty-add-text">添加联系人</Text>
+            </View>
           </View>
         ) : (
           <View className="contacts-list">
