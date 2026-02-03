@@ -57,6 +57,19 @@ load_env() {
   export CLIENT_PORT="${CLIENT_PORT:-10086}"
 }
 
+get_lan_ip() {
+  local ip=""
+  if command -v ipconfig >/dev/null 2>&1; then
+    ip="$(ipconfig getifaddr en0 2>/dev/null || true)"
+    if [[ -z "$ip" ]]; then
+      ip="$(ipconfig getifaddr en1 2>/dev/null || true)"
+    fi
+  elif command -v hostname >/dev/null 2>&1; then
+    ip="$(hostname -I 2>/dev/null | awk '{print $1}')"
+  fi
+  echo "$ip"
+}
+
 # 检查服务是否成功启动
 # 参数: $1=服务名称, $2=PID文件, $3=日志文件, $4=监听端口(可选)
 check_service_status() {
@@ -204,7 +217,14 @@ verify_client() {
   if check_service_status "client" "$CLIENT_PID_FILE" "$CLIENT_LOG" "${CLIENT_PORT:-10086}"; then
     echo "✅ 前端已启动，PID: $(cat "$CLIENT_PID_FILE")"
     echo "   日志文件: $CLIENT_LOG"
-    echo "   访问地址：http://localhost:${CLIENT_PORT:-10086}"
+    echo "   本机访问：http://localhost:${CLIENT_PORT:-10086}"
+    local lan_ip
+    lan_ip="$(get_lan_ip)"
+    if [[ -n "$lan_ip" ]]; then
+      echo "   局域网访问：http://${lan_ip}:${CLIENT_PORT:-10086}"
+    else
+      echo "   局域网访问：未检测到本机局域网 IP"
+    fi
     return 0
   else
     return 1
@@ -233,7 +253,14 @@ verify_server() {
   if check_service_status "server" "$SERVER_PID_FILE" "$SERVER_LOG" "${PORT:-3000}"; then
     echo "✅ 后端已启动，PID: $(cat "$SERVER_PID_FILE")"
     echo "   日志文件: $SERVER_LOG"
-    echo "   API 健康检查：http://localhost:${PORT:-3000}/health"
+    echo "   API 健康检查（本机）：http://localhost:${PORT:-3000}/health"
+    local lan_ip
+    lan_ip="$(get_lan_ip)"
+    if [[ -n "$lan_ip" ]]; then
+      echo "   API 健康检查（局域网）：http://${lan_ip}:${PORT:-3000}/health"
+    else
+      echo "   API 健康检查（局域网）：未检测到本机局域网 IP"
+    fi
     return 0
   else
     return 1
@@ -456,8 +483,16 @@ start_mvp() {
   
   echo "✅ MVP 已启动"
   echo "👉 访问提示："
-  echo "   前端地址：http://localhost:${CLIENT_PORT:-10086}"
-  echo "   API 地址：http://localhost:${PORT:-3000}/health"
+  echo "   前端地址（本机）：http://localhost:${CLIENT_PORT:-10086}"
+  echo "   API 地址（本机）：http://localhost:${PORT:-3000}/health"
+  local lan_ip
+  lan_ip="$(get_lan_ip)"
+  if [[ -n "$lan_ip" ]]; then
+    echo "   前端地址（局域网）：http://${lan_ip}:${CLIENT_PORT:-10086}"
+    echo "   API 地址（局域网）：http://${lan_ip}:${PORT:-3000}/health"
+  else
+    echo "   局域网访问：未检测到本机局域网 IP"
+  fi
   return 0
 }
 
