@@ -16,13 +16,13 @@
     "build:h5": "taro build --type h5",
     "build:rn": "taro build --type rn",
     "build:qq": "taro build --type qq",
-    "dev:weapp": "npm run build:weapp -- --watch",
-    "dev:swan": "npm run build:swan -- --watch",
-    "dev:alipay": "npm run build:alipay -- --watch",
-    "dev:tt": "npm run build:tt -- --watch",
-    "dev:h5": "npm run build:h5 -- --watch",
-    "dev:rn": "npm run build:rn -- --watch",
-    "dev:qq": "npm run build:qq -- --watch"
+    "dev:weapp": "bun run build:weapp -- --watch",
+    "dev:swan": "bun run build:swan -- --watch",
+    "dev:alipay": "bun run build:alipay -- --watch",
+    "dev:tt": "bun run build:tt -- --watch",
+    "dev:h5": "bun run build:h5 -- --watch",
+    "dev:rn": "bun run build:rn -- --watch",
+    "dev:qq": "bun run build:qq -- --watch"
   },
   "browserslist": [
     "last 3 versions",
