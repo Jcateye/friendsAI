@@ -861,7 +861,7 @@
       "type": "frame",
       "id": "FfE3T",
       "x": 1701,
-      "y": -18,
+      "y": 0,
       "name": "3. Conversation Detail",
       "clip": true,
       "width": 375,
@@ -1639,7 +1639,7 @@
       "type": "frame",
       "id": "UKcaZ",
       "x": 0,
-      "y": 880,
+      "y": 857,
       "name": "4. Contact List Tab",
       "clip": true,
       "width": 375,
@@ -2323,7 +2323,7 @@
       "type": "frame",
       "id": "zFGu1",
       "x": 420,
-      "y": 880,
+      "y": 857,
       "name": "5. Contact Detail",
       "clip": true,
       "width": 375,
@@ -3169,8 +3169,8 @@
     {
       "type": "frame",
       "id": "wvyOi",
-      "x": 840,
-      "y": 870,
+      "x": 839,
+      "y": 857,
       "name": "6. Action Tab",
       "clip": true,
       "width": 375,
@@ -3929,8 +3929,8 @@
     {
       "type": "frame",
       "id": "iRmcE",
-      "x": 1260,
-      "y": 870,
+      "x": 1277,
+      "y": 857,
       "name": "7. Settings",
       "clip": true,
       "width": 375,
@@ -4578,8 +4578,8 @@
     {
       "type": "frame",
       "id": "6RCao",
-      "x": 1293,
-      "y": -18,
+      "x": 1292,
+      "y": 0,
       "name": "8. Global Drawer",
       "width": 375,
       "height": 812,
@@ -5102,7 +5102,7 @@
       "type": "frame",
       "id": "2qCTH",
       "x": 1701,
-      "y": 860,
+      "y": 857,
       "name": "C1. Settings - Connector",
       "clip": true,
       "width": 375,
@@ -5633,8 +5633,8 @@
     {
       "type": "frame",
       "id": "9Cc5Y",
-      "x": 860,
-      "y": -18,
+      "x": 855,
+      "y": 0,
       "name": "C2. Conversation - Tool Panel (Bottom Sheet)",
       "clip": true,
       "width": 375,
@@ -6438,6 +6438,487 @@
           ]
         }
       ]
+    },
+    {
+      "type": "frame",
+      "id": "OGxkB",
+      "x": -480,
+      "y": 847,
+      "name": "4.1 Contact List - Empty",
+      "clip": true,
+      "width": 375,
+      "height": 812,
+      "fill": "#F7F6F3",
+      "layout": "vertical",
+      "justifyContent": "space_between",
+      "children": [
+        {
+          "type": "frame",
+          "id": "rWWby",
+          "name": "statusBar",
+          "width": "fill_container",
+          "height": 44,
+          "padding": [
+            0,
+            16
+          ],
+          "justifyContent": "space_between",
+          "alignItems": "center",
+          "children": [
+            {
+              "type": "text",
+              "id": "gaIGs",
+              "name": "timeText",
+              "fill": "#2D2D2D",
+              "content": "9:41",
+              "fontFamily": "Plus Jakarta Sans",
+              "fontSize": 15,
+              "fontWeight": "600"
+            },
+            {
+              "type": "frame",
+              "id": "Ry4J2",
+              "name": "statusIcons",
+              "gap": 6,
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "icon_font",
+                  "id": "89wTv",
+                  "name": "signalIcon",
+                  "width": 16,
+                  "height": 16,
+                  "iconFontName": "signal",
+                  "iconFontFamily": "lucide",
+                  "fill": "#2D2D2D"
+                },
+                {
+                  "type": "icon_font",
+                  "id": "o2LGy",
+                  "name": "wifiIcon",
+                  "width": 16,
+                  "height": 16,
+                  "iconFontName": "wifi",
+                  "iconFontFamily": "lucide",
+                  "fill": "#2D2D2D"
+                },
+                {
+                  "type": "icon_font",
+                  "id": "Suw7H",
+                  "name": "batteryIcon",
+                  "width": 22,
+                  "height": 16,
+                  "iconFontName": "battery-full",
+                  "iconFontFamily": "lucide",
+                  "fill": "#2D2D2D"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "gXzj4",
+          "name": "header",
+          "width": "fill_container",
+          "height": 56,
+          "fill": "#FFFFFF",
+          "padding": [
+            0,
+            16
+          ],
+          "justifyContent": "space_between",
+          "alignItems": "center",
+          "children": [
+            {
+              "type": "icon_font",
+              "id": "Cek4C",
+              "name": "menuBtn",
+              "width": 24,
+              "height": 24,
+              "iconFontName": "menu",
+              "iconFontFamily": "lucide",
+              "fill": "#2D2D2D"
+            },
+            {
+              "type": "text",
+              "id": "zwJP7",
+              "name": "headerTitle",
+              "fill": "#2D2D2D",
+              "content": "联系人",
+              "fontFamily": "Fraunces",
+              "fontSize": 20,
+              "fontWeight": "600"
+            },
+            {
+              "type": "frame",
+              "id": "9ItYw",
+              "name": "headerRight",
+              "width": 24,
+              "height": 24
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "8tkSy",
+          "name": "searchSection",
+          "width": "fill_container",
+          "fill": "#FFFFFF",
+          "layout": "vertical",
+          "gap": 12,
+          "padding": [
+            0,
+            16,
+            12,
+            16
+          ],
+          "children": [
+            {
+              "type": "frame",
+              "id": "1dGL7",
+              "name": "searchBar",
+              "width": "fill_container",
+              "height": 44,
+              "fill": "#F7F6F3",
+              "cornerRadius": 12,
+              "gap": 10,
+              "padding": [
+                0,
+                14
+              ],
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "icon_font",
+                  "id": "JtoWO",
+                  "name": "searchIcon",
+                  "width": 18,
+                  "height": 18,
+                  "iconFontName": "search",
+                  "iconFontFamily": "lucide",
+                  "fill": "#8E8E93"
+                },
+                {
+                  "type": "text",
+                  "id": "ntesC",
+                  "name": "searchPlaceholder",
+                  "fill": "#8E8E93",
+                  "content": "搜索联系人或问问题...",
+                  "fontFamily": "Plus Jakarta Sans",
+                  "fontSize": 14,
+                  "fontWeight": "normal"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "olHiV",
+              "name": "filterChips",
+              "width": "fill_container",
+              "gap": 8,
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "1RAZL",
+                  "name": "chip1",
+                  "height": 32,
+                  "fill": "#7C9070",
+                  "cornerRadius": 16,
+                  "padding": [
+                    0,
+                    14
+                  ],
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "Puz7a",
+                      "name": "chip1Text",
+                      "fill": "#FFFFFF",
+                      "content": "最近联系",
+                      "fontFamily": "Plus Jakarta Sans",
+                      "fontSize": 12,
+                      "fontWeight": "500"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "aN7Kd",
+                  "name": "chip2",
+                  "height": 32,
+                  "fill": "#FFFFFF",
+                  "cornerRadius": 16,
+                  "stroke": {
+                    "align": "inside",
+                    "thickness": 1,
+                    "fill": "#F0EFEC"
+                  },
+                  "padding": [
+                    0,
+                    14
+                  ],
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "wVgD4",
+                      "name": "chip2Text",
+                      "fill": "#6B6B6B",
+                      "content": "待跟进",
+                      "fontFamily": "Plus Jakarta Sans",
+                      "fontSize": 12,
+                      "fontWeight": "500"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "EWqYS",
+                  "name": "chip3",
+                  "height": 32,
+                  "fill": "#FFFFFF",
+                  "cornerRadius": 16,
+                  "stroke": {
+                    "align": "inside",
+                    "thickness": 1,
+                    "fill": "#F0EFEC"
+                  },
+                  "padding": [
+                    0,
+                    14
+                  ],
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "vOrkp",
+                      "name": "chip3Text",
+                      "fill": "#6B6B6B",
+                      "content": "重点",
+                      "fontFamily": "Plus Jakarta Sans",
+                      "fontSize": 12,
+                      "fontWeight": "500"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "qBcUD",
+          "name": "emptyContent",
+          "width": "fill_container",
+          "height": "fill_container",
+          "layout": "vertical",
+          "gap": 16,
+          "padding": [
+            0,
+            40
+          ],
+          "justifyContent": "center",
+          "alignItems": "center",
+          "children": [
+            {
+              "type": "icon_font",
+              "id": "qYFn2",
+              "name": "emptyIcon",
+              "width": 64,
+              "height": 64,
+              "iconFontName": "users",
+              "iconFontFamily": "lucide",
+              "fill": "#C9C9C9"
+            },
+            {
+              "type": "text",
+              "id": "8oKNT",
+              "name": "emptyTitle",
+              "fill": "#6B6B6B",
+              "content": "暂无联系人",
+              "fontFamily": "Plus Jakarta Sans",
+              "fontSize": 18,
+              "fontWeight": "600"
+            },
+            {
+              "type": "text",
+              "id": "C9zWa",
+              "name": "emptyDesc",
+              "fill": "#8E8E93",
+              "content": "开始添加联系人来管理你的人脉关系",
+              "textAlign": "center",
+              "fontFamily": "Plus Jakarta Sans",
+              "fontSize": 14,
+              "fontWeight": "normal"
+            },
+            {
+              "type": "frame",
+              "id": "EHTwL",
+              "name": "addButton",
+              "height": 44,
+              "fill": "#7C9070",
+              "cornerRadius": 22,
+              "gap": 8,
+              "padding": [
+                0,
+                24
+              ],
+              "justifyContent": "center",
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "icon_font",
+                  "id": "VFSjB",
+                  "name": "addIcon",
+                  "width": 18,
+                  "height": 18,
+                  "iconFontName": "plus",
+                  "iconFontFamily": "lucide",
+                  "fill": "#FFFFFF"
+                },
+                {
+                  "type": "text",
+                  "id": "K1hkG",
+                  "name": "addText",
+                  "fill": "#FFFFFF",
+                  "content": "添加联系人",
+                  "fontFamily": "Plus Jakarta Sans",
+                  "fontSize": 14,
+                  "fontWeight": "600"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "rqAMJ",
+          "name": "tabBar",
+          "width": "fill_container",
+          "height": 80,
+          "fill": "#FFFFFF",
+          "stroke": {
+            "align": "inside",
+            "thickness": {
+              "top": 1
+            },
+            "fill": "#F0EFEC"
+          },
+          "padding": [
+            12,
+            24,
+            28,
+            24
+          ],
+          "justifyContent": "space_around",
+          "alignItems": "center",
+          "children": [
+            {
+              "type": "frame",
+              "id": "De1z9",
+              "name": "tab1",
+              "layout": "vertical",
+              "gap": 4,
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "icon_font",
+                  "id": "JyJnK",
+                  "name": "tab1Icon",
+                  "width": 24,
+                  "height": 24,
+                  "iconFontName": "message-square",
+                  "iconFontFamily": "lucide",
+                  "fill": "#8E8E93"
+                },
+                {
+                  "type": "text",
+                  "id": "WMV9x",
+                  "name": "tab1Text",
+                  "fill": "#8E8E93",
+                  "content": "对话",
+                  "fontFamily": "Plus Jakarta Sans",
+                  "fontSize": 11,
+                  "fontWeight": "500"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "wX90M",
+              "name": "tab2",
+              "layout": "vertical",
+              "gap": 4,
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "icon_font",
+                  "id": "9t3PP",
+                  "name": "tab2Icon",
+                  "width": 24,
+                  "height": 24,
+                  "iconFontName": "users",
+                  "iconFontFamily": "lucide",
+                  "fill": "#7C9070"
+                },
+                {
+                  "type": "text",
+                  "id": "3ogIi",
+                  "name": "tab2Text",
+                  "fill": "#7C9070",
+                  "content": "联系人",
+                  "fontFamily": "Plus Jakarta Sans",
+                  "fontSize": 11,
+                  "fontWeight": "600"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "PRTpl",
+              "name": "tab3",
+              "layout": "vertical",
+              "gap": 4,
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "icon_font",
+                  "id": "XO5EY",
+                  "name": "tab3Icon",
+                  "width": 24,
+                  "height": 24,
+                  "iconFontName": "zap",
+                  "iconFontFamily": "lucide",
+                  "fill": "#8E8E93"
+                },
+                {
+                  "type": "text",
+                  "id": "9Lijr",
+                  "name": "tab3Text",
+                  "fill": "#8E8E93",
+                  "content": "行动",
+                  "fontFamily": "Plus Jakarta Sans",
+                  "fontSize": 11,
+                  "fontWeight": "500"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "text",
+      "id": "ZsLTM",
+      "x": 80.85044415766856,
+      "y": 847.4952681145046,
+      "fill": "#000000",
+      "content": "./project.sh start\n",
+      "fontFamily": "Inter",
+      "fontSize": 12,
+      "fontWeight": "normal"
     }
   ],
   "variables": {
