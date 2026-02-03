@@ -100,7 +100,13 @@ const ActionPage: React.FC = () => {
   }, [])
 
   const handleActionClick = (action: ActionItem) => {
-    Taro.showToast({ title: action.title, icon: 'none' })
+    if (action.id === 'quick-note') {
+      Taro.switchTab({ url: '/pages/conversation/index' })
+    } else if (action.id === 'send-message') {
+      Taro.navigateTo({ url: '/pages/connector/index' })
+    } else {
+      Taro.showToast({ title: `${action.title}功能开发中`, icon: 'none' })
+    }
   }
 
   return (
