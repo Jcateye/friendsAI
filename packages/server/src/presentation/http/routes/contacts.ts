@@ -16,6 +16,7 @@ import {
   addContactTag,
   deleteContactTag
 } from '@/infrastructure/repositories/contactRepo';
+import { contextRouter } from '@/presentation/http/routes/context';
 
 export const contactsRouter = Router();
 
@@ -115,3 +116,5 @@ contactsRouter.delete('/:id/tags/:tagId', requireAuth, asyncHandler(requireWorks
   const contactTag = await deleteContactTag(req.params.id, req.params.tagId);
   res.json(contactTag);
 }));
+
+contactsRouter.use('/', contextRouter);
