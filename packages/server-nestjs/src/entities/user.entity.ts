@@ -1,6 +1,7 @@
 import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, OneToMany } from 'typeorm';
 import { Contact } from './contact.entity';
 import { Conversation } from './conversation.entity';
+import { ConnectorToken } from './connector-token.entity';
 
 @Entity()
 export class User {
@@ -21,6 +22,9 @@ export class User {
 
   @OneToMany(() => Conversation, conversation => conversation.user)
   conversations: Conversation[];
+
+  @OneToMany(() => ConnectorToken, token => token.user)
+  connectorTokens: ConnectorToken[];
 
   @CreateDateColumn()
   createdAt: Date;

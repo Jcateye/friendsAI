@@ -3,7 +3,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule } from '@nestjs/config'; // Import ConfigModule
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
-import { User, Contact, Conversation, Event } from './entities';
+import { User, Contact, Conversation, Event, ConnectorToken } from './entities';
 import { AuthModule } from './auth/auth.module';
 import { ContactsModule } from './contacts/contacts.module';
 import { ConversationsModule } from './conversations/conversations.module';
@@ -28,7 +28,7 @@ import { ActionPanelModule } from './action-panel/action-panel.module';
       autoLoadEntities: true,
       synchronize: true,
     }),
-    TypeOrmModule.forFeature([User, Contact, Conversation, Event]),
+    TypeOrmModule.forFeature([User, Contact, Conversation, Event, ConnectorToken]),
     AuthModule,
     ContactsModule,
     ConversationsModule,
