@@ -1,4 +1,5 @@
 import { query, queryOne } from '@/infrastructure/db/query';
+import { ensureSerializable } from '@/utils/logger';
 
 export const createChatSession = async (data: { workspaceId: string; userId: string; title?: string | null }) => {
   return queryOne(
@@ -39,7 +40,7 @@ export const createChatMessage = async (data: { sessionId: string; role: string;
     `INSERT INTO chat_message (session_id, role, content, metadata_json)
      VALUES ($1, $2, $3, $4)
      RETURNING *`,
-    [data.sessionId, data.role, data.content, data.metadata ?? {}]
+    [data.sessionId, data.role, data.content, ensureSerializable(data.metadata ?? {})]
   );
 };
 

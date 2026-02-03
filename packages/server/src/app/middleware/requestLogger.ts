@@ -1,5 +1,6 @@
 import { NextFunction, Request, Response } from 'express';
 import crypto from 'crypto';
+import { logger } from '@/utils/logger';
 
 export const requestLogger = (req: Request, res: Response, next: NextFunction) => {
   const startedAt = Date.now();
@@ -9,16 +10,15 @@ export const requestLogger = (req: Request, res: Response, next: NextFunction) =
 
   res.on('finish', () => {
     const durationMs = Date.now() - startedAt;
-    // eslint-disable-next-line no-console
-    console.log(JSON.stringify({
-      level: 'info',
-      msg: 'http_request',
+    const logLevel = res.statusCode >= 500 ? 'error' : res.statusCode >= 400 ? 'warn' : 'info';
+
+    logger[logLevel]('http_request', {
       requestId,
       method: req.method,
       path: req.originalUrl,
       status: res.statusCode,
       durationMs
-    }));
+    });
   });
 
   next();
