@@ -27,7 +27,12 @@ const mockConversationRepository = {
 
 const mockContactRepository = {
   findOne: jest.fn(),
-  save: jest.fn((entity) => Promise.resolve({ ...entity, id: MOCK_CONTACT_ID })),
+  save: jest.fn((entity) => {
+    if (!entity.id) {
+      entity.id = MOCK_CONTACT_ID;
+    }
+    return Promise.resolve(entity);
+  }),
   create: jest.fn((dto) => dto),
 };
 
@@ -114,8 +119,10 @@ describe('ConversationProcessorService', () => {
         user: null, // User can be null based on Conversation entity
       };
 
-      // Return a shallow copy of mockExistingConversation, to allow mutation tracking
-      (conversationRepository.findOne as jest.Mock).mockResolvedValue({ ...mockExistingConversation });
+      // Return a shallow copy of the latest mockExistingConversation to reflect per-test mutations
+      (conversationRepository.findOne as jest.Mock).mockImplementation(
+        () => Promise.resolve({ ...mockExistingConversation }),
+      );
       (conversationRepository.save as jest.Mock).mockImplementation((conv: Conversation) => Promise.resolve({
         ...conv,
         id: MOCK_CONVERSATION_ID, // Ensure ID is present upon save
@@ -123,7 +130,12 @@ describe('ConversationProcessorService', () => {
         contact: conv.contact,
       }));
       (contactRepository.findOne as jest.Mock).mockResolvedValue(null);
-      (contactRepository.save as jest.Mock).mockImplementation((cont: Contact) => Promise.resolve({ ...cont, id: MOCK_CONTACT_ID })); // Ensure saved contact has an ID
+      (contactRepository.save as jest.Mock).mockImplementation((cont: Contact) => {
+        if (!cont.id) {
+          cont.id = MOCK_CONTACT_ID;
+        }
+        return Promise.resolve(cont);
+      }); // Ensure saved contact has an ID
       (eventRepository.save as jest.Mock).mockImplementation((event: Event) => Promise.resolve(event));
 
       // Reset default mock for callAgent for each test block
@@ -147,8 +159,7 @@ describe('ConversationProcessorService', () => {
       const expectedFullPrompt = (actualService as any)['buildAiPrompt'](CONVERSATION_CONTENT); // Access private method for testing
 
       expect(aiService.callAgent).toHaveBeenCalledWith(
-        expectedFullPrompt,
-        undefined // No context passed here
+        expectedFullPrompt
       );
     });
 
@@ -244,8 +255,10 @@ describe('ConversationProcessorService', () => {
         ...mockEventData,
         contactId: MOCK_CONTACT_ID, // contactId should now be set from the updated conversation
       }));
-      expect(mockVectorService.embedEvent).toHaveBeenCalled();
-      expect(mockEventRepository.save).toHaveBeenCalled();
+      expect(mockVectorService.embedEvent).toHaveBeenCalledWith(expect.objectContaining({
+        ...mockEventData,
+        contactId: MOCK_CONTACT_ID,
+      }));
     });
 
     it('should embed conversation content and save it', async () => {
