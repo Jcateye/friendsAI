@@ -1,6 +1,8 @@
 import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, ManyToOne, JoinColumn } from 'typeorm';
 import { User } from './user.entity';
 
+export type ToolConfirmationStatus = 'pending' | 'confirmed' | 'rejected' | 'failed';
+
 @Entity({ name: 'tool_confirmations' })
 export class ToolConfirmation {
   @PrimaryGeneratedColumn('uuid')
@@ -9,14 +11,20 @@ export class ToolConfirmation {
   @Column({ type: 'text' })
   toolName: string;
 
-  @Column({ type: 'jsonb' })
-  toolArgs: Record<string, any>;
-
-  @Column({ default: 'pending' })
-  status: string;
+  @Column({ type: 'jsonb', nullable: true })
+  payload: Record<string, any> | null;
 
   @Column({ type: 'jsonb', nullable: true })
-  context: Record<string, any> | null;
+  result: Record<string, any> | null;
+
+  @Column({ default: 'pending' })
+  status: ToolConfirmationStatus;
+
+  @Column({ type: 'text', nullable: true })
+  error: string | null;
+
+  @Column({ nullable: true })
+  conversationId: string | null;
 
   @ManyToOne(() => User, user => user.toolConfirmations, { nullable: true })
   @JoinColumn({ name: 'userId' })
@@ -26,7 +34,13 @@ export class ToolConfirmation {
   userId: string | null;
 
   @Column({ type: 'timestamp', nullable: true })
-  resolvedAt: Date | null;
+  confirmedAt: Date | null;
+
+  @Column({ type: 'timestamp', nullable: true })
+  rejectedAt: Date | null;
+
+  @Column({ type: 'timestamp', nullable: true })
+  executedAt: Date | null;
 
   @CreateDateColumn()
   createdAt: Date;

@@ -14,6 +14,7 @@ import { ActionPanelModule } from './action-panel/action-panel.module';
 import { AgentModule } from './agent/agent.module';
 import { ConnectorsModule } from './connectors/connectors.module';
 import { ToolsModule } from './tools/tools.module';
+import { ToolConfirmationsModule } from './tool-confirmations/tool-confirmations.module';
 
 @Module({
   imports: [
@@ -42,6 +43,7 @@ import { ToolsModule } from './tools/tools.module';
     AgentModule,
     ConnectorsModule,
     ToolsModule,
+    ToolConfirmationsModule,
   ],
   controllers: [AppController],
   providers: [AppService],
