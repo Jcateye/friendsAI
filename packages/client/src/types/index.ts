@@ -7,6 +7,16 @@ export interface User {
 
 export type RecordStatus = 'pending' | 'archived'
 
+// Tool Trace Status
+export type ToolTraceStatus =
+  | 'pending'
+  | 'running'
+  | 'success'
+  | 'failed'
+  | 'timeout'
+  | 'canceled'
+
+// Conversation Record
 export interface ConversationRecord {
   id: string
   title: string
