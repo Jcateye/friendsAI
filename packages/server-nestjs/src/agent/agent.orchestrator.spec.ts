@@ -1,0 +1,617 @@
+import { Test, TestingModule } from '@nestjs/testing';
+import { AgentOrchestrator } from './agent.orchestrator';
+import { AiService } from '../ai/ai.service';
+import { ContextBuilder } from './context-builder';
+import { ToolExecutionStrategy } from '../ai/tools/tool-execution.strategy';
+import { ToolRegistry } from '../ai/tool-registry';
+import { AgentChatRequest } from './agent.types';
+import type OpenAI from 'openai';
+
+describe('AgentOrchestrator', () => {
+  let orchestrator: AgentOrchestrator;
+  let aiService: jest.Mocked<AiService>;
+  let contextBuilder: jest.Mocked<ContextBuilder>;
+  let toolExecutionStrategy: jest.Mocked<ToolExecutionStrategy>;
+  let toolRegistry: jest.Mocked<ToolRegistry>;
+
+  beforeEach(async () => {
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        AgentOrchestrator,
+        {
+          provide: AiService,
+          useValue: {
+            streamChat: jest.fn(),
+          },
+        },
+        {
+          provide: ContextBuilder,
+          useValue: {
+            buildMessages: jest.fn(),
+            appendAssistantToolCall: jest.fn(),
+            appendToolResult: jest.fn(),
+          },
+        },
+        {
+          provide: ToolExecutionStrategy,
+          useValue: {
+            execute: jest.fn(),
+            resolveConfirmation: jest.fn(),
+          },
+        },
+        {
+          provide: ToolRegistry,
+          useValue: {
+            list: jest.fn(),
+          },
+        },
+      ],
+    }).compile();
+
+    orchestrator = module.get<AgentOrchestrator>(AgentOrchestrator);
+    aiService = module.get(AiService);
+    contextBuilder = module.get(ContextBuilder);
+    toolExecutionStrategy = module.get(ToolExecutionStrategy);
+    toolRegistry = module.get(ToolRegistry);
+  });
+
+  describe('streamChat', () => {
+    it('should stream text response without tool calls', async () => {
+      const request: AgentChatRequest = {
+        prompt: 'Hello, how are you?',
+      };
+
+      const mockMessages = [
+        { role: 'system' as const, content: 'You are helpful' },
+        { role: 'user' as const, content: 'Hello, how are you?' },
+      ];
+
+      contextBuilder.buildMessages.mockReturnValue(mockMessages);
+      toolRegistry.list.mockReturnValue([]);
+
+      // Mock streaming response
+      const mockStream = (async function* () {
+        yield {
+          choices: [
+            {
+              delta: { content: 'Hello' },
+              finish_reason: null,
+            },
+          ],
+        } as OpenAI.Chat.Completions.ChatCompletionChunk;
+        yield {
+          choices: [
+            {
+              delta: { content: '!' },
+              finish_reason: null,
+            },
+          ],
+        } as OpenAI.Chat.Completions.ChatCompletionChunk;
+        yield {
+          choices: [
+            {
+              delta: {},
+              finish_reason: 'stop',
+            },
+          ],
+        } as OpenAI.Chat.Completions.ChatCompletionChunk;
+      })();
+
+      aiService.streamChat.mockResolvedValue(mockStream);
+
+      const events = [];
+      for await (const event of orchestrator.streamChat(request)) {
+        events.push(event);
+      }
+
+      expect(events).toHaveLength(3);
+      expect(events[0]).toEqual({ type: 'token', content: 'Hello' });
+      expect(events[1]).toEqual({ type: 'token', content: '!' });
+      expect(events[2]).toEqual({ type: 'done', reason: 'stop' });
+    });
+
+    it('should handle tool calls and execute them', async () => {
+      const request: AgentChatRequest = {
+        prompt: 'Send an email',
+        userId: 'user123',
+      };
+
+      const mockMessages = [
+        { role: 'system' as const, content: 'You are helpful' },
+        { role: 'user' as const, content: 'Send an email' },
+      ];
+
+      contextBuilder.buildMessages.mockReturnValue(mockMessages);
+      contextBuilder.appendAssistantToolCall.mockImplementation((msgs, toolCalls) => [
+        ...msgs,
+        { role: 'assistant' as const, tool_calls: toolCalls },
+      ]);
+
+      toolRegistry.list.mockReturnValue([
+        {
+          name: 'send_email',
+          description: 'Send an email',
+          parameters: { type: 'object', properties: {} },
+        },
+      ]);
+
+      // First response: tool call
+      const mockStream1 = (async function* () {
+        yield {
+          choices: [
+            {
+              delta: {
+                tool_calls: [
+                  {
+                    index: 0,
+                    id: 'call_123',
+                    function: {
+                      name: 'send_email',
+                      arguments: '{"to":"user',
+                    },
+                  },
+                ],
+              },
+              finish_reason: null,
+            },
+          ],
+        } as any;
+        yield {
+          choices: [
+            {
+              delta: {
+                tool_calls: [
+                  {
+                    index: 0,
+                    function: {
+                      arguments: '@example.com"}',
+                    },
+                  },
+                ],
+              },
+              finish_reason: null,
+            },
+          ],
+        } as any;
+        yield {
+          choices: [
+            {
+              delta: {},
+              finish_reason: 'tool_calls',
+            },
+          ],
+        } as any;
+      })();
+
+      // Second response: after tool execution
+      const mockStream2 = (async function* () {
+        yield {
+          choices: [
+            {
+              delta: { content: 'Email sent successfully!' },
+              finish_reason: null,
+            },
+          ],
+        } as OpenAI.Chat.Completions.ChatCompletionChunk;
+        yield {
+          choices: [
+            {
+              delta: {},
+              finish_reason: 'stop',
+            },
+          ],
+        } as OpenAI.Chat.Completions.ChatCompletionChunk;
+      })();
+
+      aiService.streamChat
+        .mockResolvedValueOnce(mockStream1)
+        .mockResolvedValueOnce(mockStream2);
+
+      toolExecutionStrategy.execute.mockResolvedValue({
+        status: 'success',
+        toolName: 'send_email',
+        callId: 'call_123',
+        result: { messageId: 'msg_456' },
+      });
+
+      const events = [];
+      for await (const event of orchestrator.streamChat(request)) {
+        events.push(event);
+      }
+
+      expect(events.length).toBeGreaterThan(0);
+
+      // Should have tool_call event
+      const toolCallEvent = events.find(e => e.type === 'tool_call');
+      expect(toolCallEvent).toBeDefined();
+      expect(toolCallEvent).toMatchObject({
+        type: 'tool_call',
+        toolName: 'send_email',
+        callId: 'call_123',
+      });
+
+      // Should have tool_result event
+      const toolResultEvent = events.find(e => e.type === 'tool_result');
+      expect(toolResultEvent).toBeDefined();
+
+      // Should have final text response
+      const tokenEvents = events.filter(e => e.type === 'token');
+      expect(tokenEvents.length).toBeGreaterThan(0);
+    });
+
+    it('should handle tool confirmation flow', async () => {
+      const request: AgentChatRequest = {
+        prompt: 'Delete all files',
+        userId: 'user123',
+      };
+
+      const mockMessages = [
+        { role: 'system' as const, content: 'You are helpful' },
+        { role: 'user' as const, content: 'Delete all files' },
+      ];
+
+      contextBuilder.buildMessages.mockReturnValue(mockMessages);
+      contextBuilder.appendAssistantToolCall.mockImplementation((msgs, toolCalls) => [
+        ...msgs,
+        { role: 'assistant' as const, tool_calls: toolCalls },
+      ]);
+
+      toolRegistry.list.mockReturnValue([
+        {
+          name: 'delete_files',
+          description: 'Delete files',
+          parameters: { type: 'object', properties: {} },
+        },
+      ]);
+
+      const mockStream = (async function* () {
+        yield {
+          choices: [
+            {
+              delta: {
+                tool_calls: [
+                  {
+                    index: 0,
+                    id: 'call_delete',
+                    function: {
+                      name: 'delete_files',
+                      arguments: '{}',
+                    },
+                  },
+                ],
+              },
+              finish_reason: null,
+            },
+          ],
+        } as any;
+        yield {
+          choices: [
+            {
+              delta: {},
+              finish_reason: 'tool_calls',
+            },
+          ],
+        } as any;
+      })();
+
+      aiService.streamChat.mockResolvedValue(mockStream);
+
+      toolExecutionStrategy.execute.mockResolvedValue({
+        status: 'requires_confirmation',
+        toolName: 'delete_files',
+        callId: 'call_delete',
+        confirmationId: 'confirm_123',
+      });
+
+      const events = [];
+      for await (const event of orchestrator.streamChat(request)) {
+        events.push(event);
+      }
+
+      // Should have requires_confirmation event
+      const confirmEvent = events.find(e => e.type === 'requires_confirmation');
+      expect(confirmEvent).toBeDefined();
+      expect(confirmEvent).toMatchObject({
+        type: 'requires_confirmation',
+        toolName: 'delete_files',
+        confirmationId: 'confirm_123',
+      });
+
+      // Should end with done event indicating confirmation needed
+      const doneEvent = events.find(e => e.type === 'done');
+      expect(doneEvent).toBeDefined();
+      expect(doneEvent).toEqual({ type: 'done', reason: 'requires_confirmation' });
+    });
+
+    it('should handle tool execution errors gracefully', async () => {
+      const request: AgentChatRequest = {
+        prompt: 'Send email',
+      };
+
+      const mockMessages = [
+        { role: 'system' as const, content: 'You are helpful' },
+        { role: 'user' as const, content: 'Send email' },
+      ];
+
+      contextBuilder.buildMessages.mockReturnValue(mockMessages);
+      contextBuilder.appendAssistantToolCall.mockImplementation((msgs, toolCalls) => [
+        ...msgs,
+        { role: 'assistant' as const, tool_calls: toolCalls },
+      ]);
+
+      toolRegistry.list.mockReturnValue([
+        {
+          name: 'send_email',
+          description: 'Send email',
+          parameters: { type: 'object', properties: {} },
+        },
+      ]);
+
+      // First response: tool call
+      const mockStream1 = (async function* () {
+        yield {
+          choices: [
+            {
+              delta: {
+                tool_calls: [
+                  {
+                    index: 0,
+                    id: 'call_123',
+                    function: {
+                      name: 'send_email',
+                      arguments: '{}',
+                    },
+                  },
+                ],
+              },
+              finish_reason: null,
+            },
+          ],
+        } as any;
+        yield {
+          choices: [
+            {
+              delta: {},
+              finish_reason: 'tool_calls',
+            },
+          ],
+        } as any;
+      })();
+
+      // Second response after error
+      const mockStream2 = (async function* () {
+        yield {
+          choices: [
+            {
+              delta: { content: 'Sorry, there was an error.' },
+              finish_reason: null,
+            },
+          ],
+        } as OpenAI.Chat.Completions.ChatCompletionChunk;
+        yield {
+          choices: [
+            {
+              delta: {},
+              finish_reason: 'stop',
+            },
+          ],
+        } as OpenAI.Chat.Completions.ChatCompletionChunk;
+      })();
+
+      aiService.streamChat
+        .mockResolvedValueOnce(mockStream1)
+        .mockResolvedValueOnce(mockStream2);
+
+      toolExecutionStrategy.execute.mockRejectedValue(new Error('Network error'));
+
+      const events = [];
+      for await (const event of orchestrator.streamChat(request)) {
+        events.push(event);
+      }
+
+      // Should have error event
+      const errorEvent = events.find(e => e.type === 'error');
+      expect(errorEvent).toBeDefined();
+      expect(errorEvent).toMatchObject({
+        type: 'error',
+        message: expect.stringContaining('Network error'),
+      });
+    });
+
+    it('should stop after max tool iterations', async () => {
+      const request: AgentChatRequest = {
+        prompt: 'Do something',
+      };
+
+      const mockMessages = [
+        { role: 'system' as const, content: 'You are helpful' },
+        { role: 'user' as const, content: 'Do something' },
+      ];
+
+      contextBuilder.buildMessages.mockReturnValue(mockMessages);
+      contextBuilder.appendAssistantToolCall.mockImplementation((msgs) => [...msgs]);
+
+      toolRegistry.list.mockReturnValue([
+        {
+          name: 'infinite_tool',
+          description: 'Infinite tool',
+          parameters: { type: 'object', properties: {} },
+        },
+      ]);
+
+      // Always return tool calls
+      const mockStreamFactory = () => (async function* () {
+        yield {
+          choices: [
+            {
+              delta: {
+                tool_calls: [
+                  {
+                    index: 0,
+                    id: 'call_infinite',
+                    function: {
+                      name: 'infinite_tool',
+                      arguments: '{}',
+                    },
+                  },
+                ],
+              },
+              finish_reason: null,
+            },
+          ],
+        } as any;
+        yield {
+          choices: [
+            {
+              delta: {},
+              finish_reason: 'tool_calls',
+            },
+          ],
+        } as any;
+      })();
+
+      aiService.streamChat.mockImplementation(() => Promise.resolve(mockStreamFactory()));
+
+      toolExecutionStrategy.execute.mockResolvedValue({
+        status: 'success',
+        toolName: 'infinite_tool',
+        callId: 'call_infinite',
+        result: {},
+      });
+
+      const events = [];
+      for await (const event of orchestrator.streamChat(request)) {
+        events.push(event);
+      }
+
+      // Should eventually hit max iterations and error
+      const errorEvent = events.find(e => e.type === 'error');
+      expect(errorEvent).toBeDefined();
+      expect(errorEvent).toMatchObject({
+        type: 'error',
+        message: expect.stringContaining('Maximum tool iterations'),
+      });
+    });
+  });
+
+  describe('continueWithConfirmation', () => {
+    it('should continue execution after user approves', async () => {
+      const request: AgentChatRequest = {
+        prompt: 'Original request',
+      };
+
+      const currentMessages = [
+        { role: 'user' as const, content: 'Delete files' },
+        {
+          role: 'assistant' as const,
+          tool_calls: [
+            {
+              id: 'call_123',
+              type: 'function' as const,
+              function: { name: 'delete_files', arguments: '{}' },
+            },
+          ],
+        },
+      ];
+
+      toolExecutionStrategy.resolveConfirmation.mockResolvedValue({
+        status: 'success',
+        toolName: 'delete_files',
+        callId: 'call_123',
+        result: { deleted: 5 },
+      });
+
+      contextBuilder.buildMessages.mockReturnValue([
+        { role: 'system' as const, content: 'System' },
+        ...currentMessages,
+      ]);
+
+      toolRegistry.list.mockReturnValue([]);
+
+      const mockStream = (async function* () {
+        yield {
+          choices: [
+            {
+              delta: { content: 'Files deleted successfully' },
+              finish_reason: null,
+            },
+          ],
+        } as OpenAI.Chat.Completions.ChatCompletionChunk;
+        yield {
+          choices: [
+            {
+              delta: {},
+              finish_reason: 'stop',
+            },
+          ],
+        } as OpenAI.Chat.Completions.ChatCompletionChunk;
+      })();
+
+      aiService.streamChat.mockResolvedValue(mockStream);
+
+      const events = [];
+      for await (const event of orchestrator.continueWithConfirmation(
+        'confirm_123',
+        true,
+        request,
+        currentMessages
+      )) {
+        events.push(event);
+      }
+
+      expect(toolExecutionStrategy.resolveConfirmation).toHaveBeenCalledWith(
+        'confirm_123',
+        true
+      );
+
+      // Should have tool_result event
+      const toolResultEvent = events.find(e => e.type === 'tool_result');
+      expect(toolResultEvent).toBeDefined();
+
+      // Should continue with streaming
+      const tokenEvents = events.filter(e => e.type === 'token');
+      expect(tokenEvents.length).toBeGreaterThan(0);
+    });
+
+    it('should handle user rejection', async () => {
+      const request: AgentChatRequest = {
+        prompt: 'Original request',
+      };
+
+      const currentMessages = [
+        { role: 'user' as const, content: 'Delete files' },
+      ];
+
+      toolExecutionStrategy.resolveConfirmation.mockResolvedValue({
+        status: 'denied',
+        toolName: 'delete_files',
+        callId: 'call_123',
+        error: 'User rejected tool execution.',
+      });
+
+      const events = [];
+      for await (const event of orchestrator.continueWithConfirmation(
+        'confirm_123',
+        false,
+        request,
+        currentMessages
+      )) {
+        events.push(event);
+      }
+
+      expect(toolExecutionStrategy.resolveConfirmation).toHaveBeenCalledWith(
+        'confirm_123',
+        false
+      );
+
+      // Should have tool_result with denied status
+      const toolResultEvent = events.find(e => e.type === 'tool_result');
+      expect(toolResultEvent).toBeDefined();
+
+      // Should end with done event
+      const doneEvent = events.find(e => e.type === 'done');
+      expect(doneEvent).toBeDefined();
+      expect(doneEvent).toEqual({ type: 'done', reason: 'denied' });
+    });
+  });
+});
