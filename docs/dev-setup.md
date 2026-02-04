@@ -14,7 +14,7 @@ docker compose -f docker-compose.dev.yml up -d
 ./project.sh start:mvp
 ```
 
-默认会在本机暴露 `localhost:5432`，数据库名/用户/密码都是 `friendsai`。
+默认会在本机暴露 `localhost:5434`（容器内仍是 5432），数据库名/用户/密码都是 `friendsai`。
 
 ## 2) 配置后端环境变量
 
@@ -26,7 +26,7 @@ cp packages/server/.env.example packages/server/.env
 
 建议最小可用配置：
 
-- `DATABASE_URL=postgres://friendsai:friendsai@localhost:5432/friendsai`
+- `DATABASE_URL=postgres://friendsai:friendsai@localhost:5434/friendsai`
 - `JWT_SECRET=...`（随便一串即可）
 - 可选：`DEV_VERIFY_CODE=123456`（开发阶段万能验证码）
 

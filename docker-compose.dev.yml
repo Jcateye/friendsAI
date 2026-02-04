@@ -9,10 +9,9 @@ services:
       POSTGRES_PASSWORD: friendsai
       POSTGRES_DB: friendsai
     ports:
-      - "5432:5432"
+      - "5434:5432"
     volumes:
       - friendsai_pgdata:/var/lib/postgresql/data
 
 volumes:
   friendsai_pgdata:
-

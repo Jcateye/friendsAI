@@ -51,7 +51,7 @@ load_env() {
     set +a
   fi
 
-  export DATABASE_URL="${DATABASE_URL:-postgres://friendsai:friendsai@localhost:5432/friendsai}"
+  export DATABASE_URL="${DATABASE_URL:-postgres://friendsai:friendsai@localhost:5434/friendsai}"
   export JWT_SECRET="${JWT_SECRET:-dev-smoke-secret}"
   export PORT="${PORT:-3000}"
   export CLIENT_PORT="${CLIENT_PORT:-10086}"
