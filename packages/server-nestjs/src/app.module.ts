@@ -13,6 +13,7 @@ import { BriefingsModule } from './briefings/briefings.module';
 import { ActionPanelModule } from './action-panel/action-panel.module';
 import { AgentModule } from './agent/agent.module';
 import { ConnectorsModule } from './connectors/connectors.module';
+import { ToolsModule } from './tools/tools.module';
 
 @Module({
   imports: [
@@ -40,6 +41,7 @@ import { ConnectorsModule } from './connectors/connectors.module';
     ActionPanelModule,
     AgentModule,
     ConnectorsModule,
+    ToolsModule,
   ],
   controllers: [AppController],
   providers: [AppService],
