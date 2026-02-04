@@ -2,6 +2,7 @@ import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateCol
 import { Contact } from './contact.entity';
 import { Conversation } from './conversation.entity';
 import { ToolConfirmation } from './tool-confirmation.entity';
+import { ConnectorToken } from './connector-token.entity';
 
 @Entity()
 export class User {
@@ -25,6 +26,9 @@ export class User {
 
   @OneToMany(() => ToolConfirmation, toolConfirmation => toolConfirmation.user)
   toolConfirmations: ToolConfirmation[];
+
+  @OneToMany(() => ConnectorToken, token => token.user)
+  connectorTokens: ConnectorToken[];
 
   @CreateDateColumn()
   createdAt: Date;
