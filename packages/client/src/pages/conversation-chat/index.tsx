@@ -3,8 +3,9 @@ import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from '@tarojs/taro'
 import Header from '@/components/Header'
 import BottomSheet from '@/components/BottomSheet'
-import type { ConversationDetail as ConversationDetailType, MessageTemplate } from '@/types'
-import { conversationApi, feishuApi } from '@/services/api'
+import ConfirmBar from '@/components/ConfirmBar'
+import type { ConversationDetail as ConversationDetailType, MessageTemplate, ToolConfirmation } from '@/types'
+import { conversationApi, feishuApi, toolConfirmationApi } from '@/services/api'
 import { getStorage, setStorage, showModal, showToast, navigateTo } from '@/utils'
 import './index.scss'
 
@@ -44,6 +45,10 @@ const ConversationChatPage: React.FC = () => {
   const [receiverName, setReceiverName] = useState('张三')
   const [suggestedContent, setSuggestedContent] = useState('')
   const [scrollTarget, setScrollTarget] = useState('')
+
+  // 工具确认相关状态
+  const [confirmBarVisible, setConfirmBarVisible] = useState(false)
+  const [pendingConfirmation, setPendingConfirmation] = useState<ToolConfirmation | null>(null)
 
   const storageKey = useMemo(() => (id ? `conversation_chat_${id}` : ''), [id])
 
@@ -182,39 +187,94 @@ const ConversationChatPage: React.FC = () => {
 
   const handleSendFeishu = async (templateId: string, content: string) => {
     const template = templates.find((item) => item.id === templateId)
-    const preview = `模板：${template?.name || '未知'}\n接收人：${receiverName}\n内容：${content}`
-    const modal = await showModal('确认发送', preview)
-    if (!modal.confirm) return
 
     setSheetVisible(false)
-    const toolMessageId = generateLocalId()
-    const toolMessage: ChatMessage = {
-      id: toolMessageId,
-      role: 'tool',
-      content: '',
-      createdAt: new Date().toISOString(),
-      toolCall: {
-        type: 'feishu_template',
-        status: 'running',
-        templateName: template?.name || '飞书模板消息',
-        receiverName,
-        content,
-      },
-    }
-    setMessages((prev) => [...prev, toolMessage])
 
     try {
-      const result = await feishuApi.sendTemplateMessage({ templateId, receiverName, content })
-      if (result.status === 'success') {
-        updateToolStatus(toolMessageId, 'success')
-        showToast('已发送', 'success')
-      } else {
-        updateToolStatus(toolMessageId, 'failed', result.response?.message as string)
-        showToast('发送失败')
+      // 创建工具确认请求
+      const confirmation = await toolConfirmationApi.create({
+        toolName: 'feishu_template',
+        payload: {
+          templateId,
+          templateName: template?.name || '飞书模板消息',
+          receiverName,
+          content,
+        },
+        conversationId: id,
+      })
+
+      // 保存待确认的工具调用
+      setPendingConfirmation(confirmation)
+      setConfirmBarVisible(true)
+
+      // 添加工具消息到聊天记录
+      const toolMessageId = generateLocalId()
+      const toolMessage: ChatMessage = {
+        id: toolMessageId,
+        role: 'tool',
+        content: '',
+        createdAt: new Date().toISOString(),
+        toolCall: {
+          type: 'feishu_template',
+          status: 'running',
+          templateName: template?.name || '飞书模板消息',
+          receiverName,
+          content,
+        },
+      }
+      setMessages((prev) => [...prev, toolMessage])
+    } catch (error) {
+      showToast('创建工具确认失败')
+    }
+  }
+
+  const handleConfirmTool = async () => {
+    if (!pendingConfirmation) return
+
+    setConfirmBarVisible(false)
+
+    try {
+      // 确认并执行工具
+      const result = await toolConfirmationApi.confirm(pendingConfirmation.id)
+
+      // 查找对应的工具消息并更新状态
+      const toolMessageId = messages.findLast((msg) => msg.role === 'tool')?.id
+      if (toolMessageId) {
+        if (result.status === 'confirmed') {
+          updateToolStatus(toolMessageId, 'success')
+          showToast('已发送', 'success')
+        } else if (result.status === 'failed') {
+          updateToolStatus(toolMessageId, 'failed', result.error || '执行失败')
+          showToast('发送失败')
+        }
       }
     } catch (error) {
-      updateToolStatus(toolMessageId, 'failed', '网络错误')
-      showToast('发送失败')
+      showToast('确认失败')
+    } finally {
+      setPendingConfirmation(null)
+    }
+  }
+
+  const handleCancelTool = async () => {
+    if (!pendingConfirmation) return
+
+    setConfirmBarVisible(false)
+
+    try {
+      // 拒绝工具执行
+      await toolConfirmationApi.reject(pendingConfirmation.id, '用户取消')
+
+      // 查找对应的工具消息并更新状态
+      const toolMessageId = messages.findLast((msg) => msg.role === 'tool')?.id
+      if (toolMessageId) {
+        updateToolStatus(toolMessageId, 'failed', '已取消')
+      }
+
+      showToast('已取消')
+    } catch (error) {
+      showToast('取消失败')
+    } finally {
+      setPendingConfirmation(null)
     }
   }
 
@@ -336,6 +396,19 @@ const ConversationChatPage: React.FC = () => {
         initialContent={suggestedContent}
         onClose={() => setSheetVisible(false)}
         onSend={handleSendFeishu}
+      />
+
+      <ConfirmBar
+        visible={confirmBarVisible}
+        title="确认发送飞书消息"
+        description={
+          pendingConfirmation
+            ? `模板：${pendingConfirmation.payload?.templateName}\n接收人：${pendingConfirmation.payload?.receiverName}\n内容：${pendingConfirmation.payload?.content}`
+            : ''
+        }
+        hintText="请确认是否执行此工具调用"
+        onConfirm={handleConfirmTool}
+        onCancel={handleCancelTool}
       />
     </View>
   )

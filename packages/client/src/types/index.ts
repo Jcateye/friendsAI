@@ -367,3 +367,36 @@ export type AgentSseEvent =
   | SseEvent<'agent.end', AgentRunEnd>
   | SseEvent<'error', AgentError>
   | SseEvent<'ping', { at: IsoDateString }>
+
+// Tool Confirmation Types
+export type ToolConfirmationStatus = 'pending' | 'confirmed' | 'rejected' | 'failed'
+
+export interface ToolConfirmation {
+  id: string
+  toolName: string
+  payload: Record<string, any> | null
+  result: Record<string, any> | null
+  status: ToolConfirmationStatus
+  error: string | null
+  conversationId: string | null
+  userId: string | null
+  confirmedAt: string | null
+  rejectedAt: string | null
+  executedAt: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export interface CreateToolConfirmationDto {
+  toolName: string
+  payload?: Record<string, any>
+  conversationId?: string
+  userId?: string
+}
+
+export interface Connector {
+  id: string
+  type: string
+  name: string
+  enabled: boolean
+}
