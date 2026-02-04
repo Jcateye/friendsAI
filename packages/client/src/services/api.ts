@@ -15,7 +15,10 @@ import type {
   JournalEntry,
   MessageTemplate,
   ChatSession,
-  ChatMessage
+  ChatMessage,
+  ToolConfirmation,
+  CreateToolConfirmationDto,
+  ToolConfirmationStatus
 } from '@/types'
 import { getAvatarColor, getInitial } from '@/utils'
 import {
@@ -490,6 +493,41 @@ export const chatApi = {
       method: 'PATCH',
       data,
     }).then(mapChatMessage),
+}
+
+export const toolConfirmationApi = {
+  create: (data: CreateToolConfirmationDto) =>
+    request<ToolConfirmation>({
+      url: '/tool-confirmations',
+      method: 'POST',
+      data,
+    }),
+
+  list: (status?: ToolConfirmationStatus, userId?: string) =>
+    request<{ items: ToolConfirmation[] }>({
+      url: `/tool-confirmations${status ? `?status=${status}` : ''}${userId ? `${status ? '&' : '?'}userId=${userId}` : ''}`,
+      method: 'GET',
+    }),
+
+  getOne: (id: string) =>
+    request<ToolConfirmation>({
+      url: `/tool-confirmations/${id}`,
+      method: 'GET',
+    }),
+
+  confirm: (id: string, payload?: Record<string, any>) =>
+    request<ToolConfirmation>({
+      url: `/tool-confirmations/${id}/confirm`,
+      method: 'POST',
+      data: { payload },
+    }),
+
+  reject: (id: string, reason?: string) =>
+    request<ToolConfirmation>({
+      url: `/tool-confirmations/${id}/reject`,
+      method: 'POST',
+      data: { reason },
+    }),
 }
 
 export const api = {
