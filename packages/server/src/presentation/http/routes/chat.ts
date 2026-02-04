@@ -20,14 +20,14 @@ const createMessageSchema = z.object({
   body: z.object({
     role: z.enum(['user', 'assistant', 'tool']).optional(),
     content: z.string().default(''),
-    metadata: z.record(z.unknown()).optional()
+    metadata: z.record(z.string(), z.unknown()).optional()
   })
 });
 
 const updateMessageSchema = z.object({
   body: z.object({
     content: z.string().optional(),
-    metadata: z.record(z.unknown()).optional()
+    metadata: z.record(z.string(), z.unknown()).optional()
   })
 });
 

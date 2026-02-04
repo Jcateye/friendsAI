@@ -36,7 +36,7 @@ const confirmSchema = z.object({
   body: z.object({
     itemId: z.string(),
     action: z.enum(['confirm', 'reject', 'edit']),
-    payloadJson: z.record(z.unknown()).optional(),
+    payloadJson: z.record(z.string(), z.unknown()).optional(),
     contactId: z.string().optional()
   })
 });

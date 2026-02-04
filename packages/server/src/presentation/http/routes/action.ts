@@ -21,7 +21,7 @@ const createSchema = z.object({
     toolTask: z
       .object({
         type: z.string(),
-        payloadJson: z.record(z.unknown()),
+        payloadJson: z.record(z.string(), z.unknown()),
         executeAt: z.string().optional()
       })
       .optional()
@@ -38,7 +38,7 @@ const updateSchema = z.object({
 const executeSchema = z.object({
   body: z.object({
     type: z.string(),
-    payloadJson: z.record(z.unknown()),
+    payloadJson: z.record(z.string(), z.unknown()),
     executeAt: z.string().optional()
   })
 });

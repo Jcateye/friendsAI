@@ -17,7 +17,7 @@ const pushSchema = z.object({
       z.object({
         entity: z.string(),
         op: z.enum(['upsert', 'delete']),
-        data: z.record(z.unknown()),
+        data: z.record(z.string(), z.unknown()),
         clientChangeId: z.string().optional()
       })
     )

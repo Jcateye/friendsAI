@@ -6,7 +6,7 @@ import { AiProvider, ContactContext, ExtractedItem } from './provider';
 
 const ExtractedItemSchema = z.object({
   type: z.enum(['event', 'fact', 'action']),
-  payload: z.record(z.unknown())
+  payload: z.record(z.string(), z.unknown())
 });
 
 const ExtractResponseSchema = z.object({
@@ -134,6 +134,6 @@ export class OpenAICompatibleProvider implements AiProvider {
       })
     );
 
-    return result.text.trim();
+    return (result as { text: string }).text.trim();
   }
 }
