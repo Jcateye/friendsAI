@@ -1,3 +1,5 @@
+@import '../../styles/tokens.scss';
+
 .confirm-bar-root {
   position: fixed;
   top: 0;
@@ -17,8 +19,8 @@
 
   .confirm-bar {
     position: relative;
-    background: #FFFFFF;
-    border-top: 1rpx solid #F0EFEC;
+    background: $bg-card;
+    border-top: 1rpx solid $border;
     padding: 24rpx 32rpx 56rpx;
     box-shadow: 0 -8rpx 32rpx rgba(0, 0, 0, 0.08);
     display: flex;
@@ -35,7 +37,7 @@
   .confirm-icon {
     width: 64rpx;
     height: 64rpx;
-    background: rgba(212, 132, 94, 0.12);
+    background: rgba($warning, 0.12);
     border-radius: 20rpx;
     display: flex;
     align-items: center;
@@ -58,24 +60,24 @@
   }
 
   .confirm-title {
-    font-family: 'Fraunces', serif;
+    font-family: $font-display;
     font-size: 30rpx;
     font-weight: 600;
-    color: #2D2D2D;
+    color: $text-primary;
   }
 
   .confirm-desc {
     font-size: 24rpx;
-    color: #6B6B6B;
+    color: $text-secondary;
   }
 
   .confirm-hint {
     margin-top: 8rpx;
     padding: 12rpx 16rpx;
-    background: rgba(212, 132, 94, 0.08);
+    background: $warning-tint;
     border-radius: 12rpx;
     font-size: 22rpx;
-    color: #D4845E;
+    color: $warning;
   }
 
   .confirm-actions {
@@ -95,30 +97,30 @@
   }
 
   .cancel-btn {
-    background: #FFFFFF;
-    border: 1rpx solid #F0EFEC;
+    background: $bg-card;
+    border: 1rpx solid $border;
 
     .cancel-text {
       font-size: 28rpx;
       font-weight: 500;
-      color: #6B6B6B;
+      color: $text-secondary;
     }
   }
 
   .confirm-btn {
-    background: #D4845E;
+    background: $warning;
 
     .confirm-text {
       font-size: 28rpx;
       font-weight: 600;
-      color: #FFFFFF;
+      color: $bg-card;
     }
 
     &.disabled {
-      background: #D8D8D8;
+      background: $border-disabled;
 
       .confirm-text {
-        color: #FFFFFF;
+        color: $bg-card;
       }
     }
   }

@@ -1,24 +1,27 @@
 @import '../../styles/tokens.scss';
 
-.template-picker {
-  .template-picker-label {
+.draft-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 16rpx;
+
+  .draft-preview-label {
     font-size: 24rpx;
     font-weight: 500;
     color: $text-secondary;
-    margin-bottom: 16rpx;
     margin-top: 24rpx;
     display: block;
   }
 
-  .template-picker-list {
+  .draft-preview-list {
     display: flex;
     flex-direction: column;
     gap: 16rpx;
   }
 
-  .template-picker-item {
+  .draft-preview-item {
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     gap: 20rpx;
     padding: 28rpx;
     background: $bg-card;
@@ -31,7 +34,7 @@
     }
   }
 
-  .template-picker-radio {
+  .draft-preview-radio {
     width: 36rpx;
     height: 36rpx;
     border-radius: 18rpx;
@@ -39,38 +42,71 @@
     display: flex;
     align-items: center;
     justify-content: center;
+    margin-top: 4rpx;
 
     &.checked {
       border-color: $primary;
     }
   }
 
-  .template-picker-radio-dot {
+  .draft-preview-radio-dot {
     width: 16rpx;
     height: 16rpx;
     background: $primary;
     border-radius: 8rpx;
   }
 
-  .template-picker-info {
+  .draft-preview-info {
     flex: 1;
     display: flex;
     flex-direction: column;
-    gap: 4rpx;
+    gap: 8rpx;
   }
 
-  .template-picker-name {
+  .draft-preview-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12rpx;
+  }
+
+  .draft-preview-title {
     font-size: 28rpx;
-    font-weight: 500;
+    font-weight: 600;
     color: $text-primary;
   }
 
-  .template-picker-desc {
-    font-size: 24rpx;
-    color: $text-secondary;
+  .draft-preview-badge {
+    height: 36rpx;
+    padding: 4rpx 12rpx;
+    background: $primary-tint;
+    border-radius: 8rpx;
+    display: flex;
+    align-items: center;
   }
 
-  .template-picker-empty {
+  .draft-preview-badge-text {
+    font-size: 20rpx;
+    font-weight: 500;
+    color: $primary;
+  }
+
+  .draft-preview-content {
+    font-size: 24rpx;
+    color: $text-secondary;
+    line-height: 1.6;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  .draft-preview-meta {
+    font-size: 22rpx;
+    color: $text-muted;
+  }
+
+  .draft-preview-empty {
     padding: 32rpx;
     background: $bg-page;
     border-radius: 20rpx;
@@ -80,7 +116,7 @@
     justify-content: center;
   }
 
-  .template-picker-empty-text {
+  .draft-preview-empty-text {
     font-size: 24rpx;
     color: $text-muted;
   }

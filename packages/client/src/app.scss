@@ -1,39 +1,8 @@
 @import "~taro-ui/dist/style/index.scss";
-
-// Design System Variables
-$primary: #7C9070;
-$primary-tint: rgba(124, 144, 112, 0.08);
-$warning: #D4845E;
-$warning-tint: rgba(212, 132, 94, 0.08);
-$info: #5B9BD5;
-$info-tint: rgba(91, 155, 213, 0.08);
-$purple: #9B8AA8;
-$purple-tint: rgba(155, 138, 168, 0.08);
-
-$bg-page: #F7F6F3;
-$bg-card: #FFFFFF;
-$bg-surface: #FAFAF8;
-$border: #F0EFEC;
+@import "./styles/tokens.scss";
 
 $bg-primary: $bg-page;
 $bg-secondary: $bg-card;
-
-$text-primary: #2D2D2D;
-$text-secondary: #6B6B6B;
-$text-muted: #8E8E93;
-$text-tertiary: $text-muted;
-
-$font-display: 'Fraunces', serif;
-$font-primary: 'Plus Jakarta Sans', -apple-system, sans-serif;
-$font-xs: 24rpx;
-$font-sm: 26rpx;
-$font-md: 28rpx;
-$font-xl: 40rpx;
-
-$radius-sm: 8px;
-$radius-md: 12px;
-$radius-lg: 16px;
-$radius-full: 999rpx;
 
 // Global Styles
 page {

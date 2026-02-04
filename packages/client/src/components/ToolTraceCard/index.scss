@@ -1,10 +1,12 @@
+@import '../../styles/tokens.scss';
+
 .tool-trace-card {
   width: 100%;
-  background: #FFFFFF;
+  background: $bg-card;
   border-radius: 24rpx;
   padding: 28rpx 32rpx;
   box-sizing: border-box;
-  border: 1rpx solid #F0EFEC;
+  border: 1rpx solid $border;
   display: flex;
   flex-direction: column;
   gap: 20rpx;
@@ -22,7 +24,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    background: rgba(142, 142, 147, 0.12);
+    background: rgba($text-muted, 0.12);
 
     .icon {
       width: 28rpx;
@@ -41,12 +43,12 @@
     .tool-title {
       font-size: 28rpx;
       font-weight: 600;
-      color: #2D2D2D;
+      color: $text-primary;
     }
 
     .tool-subtitle {
       font-size: 24rpx;
-      color: #6B6B6B;
+      color: $text-secondary;
     }
   }
 
@@ -54,21 +56,21 @@
     height: 40rpx;
     padding: 4rpx 16rpx;
     border-radius: 10rpx;
-    background: rgba(142, 142, 147, 0.12);
+    background: rgba($text-muted, 0.12);
     display: flex;
     align-items: center;
 
     .status-text {
       font-size: 22rpx;
       font-weight: 500;
-      color: #8E8E93;
+      color: $text-muted;
     }
   }
 
   .card-body {
     .detail-text {
       font-size: 26rpx;
-      color: #2D2D2D;
+      color: $text-primary;
       line-height: 1.6;
     }
   }
@@ -81,7 +83,7 @@
     .progress-track {
       flex: 1;
       height: 10rpx;
-      background: #F0EFEC;
+      background: $border;
       border-radius: 999rpx;
       overflow: hidden;
     }
@@ -90,28 +92,28 @@
       height: 100%;
       width: 0;
       border-radius: 999rpx;
-      background: #8E8E93;
+      background: $text-muted;
       transition: width 0.3s ease;
     }
 
     .progress-text {
       font-size: 22rpx;
-      color: #8E8E93;
+      color: $text-muted;
     }
   }
 
   .card-footer {
     .meta-text {
       font-size: 22rpx;
-      color: #8E8E93;
+      color: $text-muted;
     }
   }
 
   &.status-pending {
-    border-left: 6rpx solid #8E8E93;
+    border-left: 6rpx solid $text-muted;
 
     .status-icon {
-      background: rgba(142, 142, 147, 0.12);
+      background: rgba($text-muted, 0.12);
 
       .icon {
         background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%238E8E93' stroke-width='2'%3E%3Ccircle cx='12' cy='12' r='6'/%3E%3C/svg%3E");
@@ -120,13 +122,13 @@
   }
 
   &.status-running {
-    border-left: 6rpx solid #5B9BD5;
+    border-left: 6rpx solid $info;
 
     .status-icon {
-      background: rgba(91, 155, 213, 0.12);
+      background: rgba($info, 0.12);
 
       .icon {
-        border: 3rpx solid #5B9BD5;
+        border: 3rpx solid $info;
         border-top-color: transparent;
         border-radius: 50%;
         animation: tool-trace-spin 0.8s linear infinite;
@@ -135,24 +137,24 @@
     }
 
     .status-badge {
-      background: rgba(91, 155, 213, 0.12);
-      .status-text { color: #5B9BD5; }
+      background: rgba($info, 0.12);
+      .status-text { color: $info; }
     }
 
     .progress-bar {
-      background: #5B9BD5;
+      background: $info;
     }
 
     .progress-text {
-      color: #5B9BD5;
+      color: $info;
     }
   }
 
   &.status-success {
-    border-left: 6rpx solid #7C9070;
+    border-left: 6rpx solid $primary;
 
     .status-icon {
-      background: rgba(124, 144, 112, 0.12);
+      background: rgba($primary, 0.12);
 
       .icon {
         background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%237C9070' stroke-width='2'%3E%3Cpolyline points='20 6 9 17 4 12'/%3E%3C/svg%3E");
@@ -160,24 +162,24 @@
     }
 
     .status-badge {
-      background: rgba(124, 144, 112, 0.12);
-      .status-text { color: #7C9070; }
+      background: rgba($primary, 0.12);
+      .status-text { color: $primary; }
     }
 
     .progress-bar {
-      background: #7C9070;
+      background: $primary;
     }
 
     .progress-text {
-      color: #7C9070;
+      color: $primary;
     }
   }
 
   &.status-failed {
-    border-left: 6rpx solid #D4845E;
+    border-left: 6rpx solid $warning;
 
     .status-icon {
-      background: rgba(212, 132, 94, 0.12);
+      background: rgba($warning, 0.12);
 
       .icon {
         background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%23D4845E' stroke-width='2'%3E%3Cline x1='18' y1='6' x2='6' y2='18'/%3E%3Cline x1='6' y1='6' x2='18' y2='18'/%3E%3C/svg%3E");
@@ -185,24 +187,24 @@
     }
 
     .status-badge {
-      background: rgba(212, 132, 94, 0.12);
-      .status-text { color: #D4845E; }
+      background: rgba($warning, 0.12);
+      .status-text { color: $warning; }
     }
 
     .progress-bar {
-      background: #D4845E;
+      background: $warning;
     }
 
     .progress-text {
-      color: #D4845E;
+      color: $warning;
     }
   }
 
   &.status-timeout {
-    border-left: 6rpx solid #9B8AA8;
+    border-left: 6rpx solid $purple;
 
     .status-icon {
-      background: rgba(155, 138, 168, 0.12);
+      background: rgba($purple, 0.12);
 
       .icon {
         background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%239B8AA8' stroke-width='2'%3E%3Ccircle cx='12' cy='12' r='9'/%3E%3Cpath d='M12 7v5l3 3'/%3E%3C/svg%3E");
@@ -210,24 +212,24 @@
     }
 
     .status-badge {
-      background: rgba(155, 138, 168, 0.12);
-      .status-text { color: #9B8AA8; }
+      background: rgba($purple, 0.12);
+      .status-text { color: $purple; }
     }
 
     .progress-bar {
-      background: #9B8AA8;
+      background: $purple;
     }
 
     .progress-text {
-      color: #9B8AA8;
+      color: $purple;
     }
   }
 
   &.status-canceled {
-    border-left: 6rpx solid #8E8E93;
+    border-left: 6rpx solid $text-muted;
 
     .status-icon {
-      background: rgba(142, 142, 147, 0.12);
+      background: rgba($text-muted, 0.12);
 
       .icon {
         background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%238E8E93' stroke-width='2'%3E%3Ccircle cx='12' cy='12' r='9'/%3E%3Cline x1='8' y1='12' x2='16' y2='12'/%3E%3C/svg%3E");
