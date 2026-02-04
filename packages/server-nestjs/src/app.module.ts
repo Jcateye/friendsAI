@@ -11,6 +11,7 @@ import { EventsModule } from './events/events.module';
 import { AiModule } from './ai/ai.module';
 import { BriefingsModule } from './briefings/briefings.module';
 import { ActionPanelModule } from './action-panel/action-panel.module';
+import { AgentModule } from './agent/agent.module';
 
 @Module({
   imports: [
@@ -36,6 +37,7 @@ import { ActionPanelModule } from './action-panel/action-panel.module';
     AiModule,
     BriefingsModule,
     ActionPanelModule,
+    AgentModule,
   ],
   controllers: [AppController],
   providers: [AppService],

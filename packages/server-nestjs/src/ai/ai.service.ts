@@ -55,4 +55,23 @@ export class AiService {
       throw new InternalServerErrorException('Failed to call AI agent.');
     }
   }
+
+  async streamChat(
+    messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[],
+    options?: { model?: string; temperature?: number; maxTokens?: number; signal?: AbortSignal }
+  ): Promise<AsyncIterable<OpenAI.Chat.Completions.ChatCompletionChunk>> {
+    try {
+      return await this.openai.chat.completions.create({
+        model: options?.model ?? this.model,
+        messages,
+        temperature: options?.temperature ?? 0.7,
+        max_tokens: options?.maxTokens ?? 500,
+        stream: true,
+        signal: options?.signal,
+      });
+    } catch (error) {
+      console.error('Error streaming AI agent:', error);
+      throw new InternalServerErrorException('Failed to stream AI agent.');
+    }
+  }
 }
