@@ -42,6 +42,18 @@ const BASE_URL = resolveBaseUrl()
 
 const getWorkspaceId = () => Taro.getStorageSync('workspaceId')
 
+const toQueryString = (params: Record<string, string | undefined>) => {
+  const entries = Object.entries(params).filter(([, value]) => value)
+  if (entries.length === 0) {
+    return ''
+  }
+  const query = entries
+    .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value as string)}`)
+    .join('&')
+  return `?${query}`
+}
+
+// Request wrapper
 const request = async <T,>(options: Taro.request.Option): Promise<T> => {
   try {
     const token = Taro.getStorageSync('token')
@@ -406,6 +418,39 @@ export const feishuApi = {
       url: '/feishu/messages',
       method: 'POST',
       data,
+    }),
+
+  feishuOAuthAuthorize: (params?: { redirectUri?: string; state?: string; scope?: string }) =>
+    request<{ configured: boolean; authorizeUrl: string | null; missing?: string[] }>({
+      url: `/connectors/feishu/oauth/authorize${toQueryString({
+        redirect_uri: params?.redirectUri,
+        state: params?.state,
+        scope: params?.scope,
+      })}`,
+      method: 'GET',
+    }),
+
+  feishuOAuthCallback: (code: string, state?: string) =>
+    request<{ success: boolean; code: string | null; state: string | null }>({
+      url: `/connectors/feishu/oauth/callback${toQueryString({
+        code,
+        state,
+      })}`,
+      method: 'GET',
+    }),
+
+  feishuOAuthToken: (code: string) =>
+    request<{ success: boolean; message?: string; code: string | null }>({
+      url: '/connectors/feishu/oauth/token',
+      method: 'POST',
+      data: { code },
+    }),
+
+  feishuOAuthRefresh: (refreshToken: string) =>
+    request<{ success: boolean; message?: string; refreshToken: string | null }>({
+      url: '/connectors/feishu/oauth/refresh',
+      method: 'POST',
+      data: { refreshToken },
     }),
 }
 
