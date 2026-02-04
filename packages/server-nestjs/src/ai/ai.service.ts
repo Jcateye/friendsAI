@@ -58,7 +58,13 @@ export class AiService {
 
   async streamChat(
     messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[],
-    options?: { model?: string; temperature?: number; maxTokens?: number; signal?: AbortSignal }
+    options?: {
+      model?: string;
+      temperature?: number;
+      maxTokens?: number;
+      signal?: AbortSignal;
+      tools?: OpenAI.Chat.Completions.ChatCompletionTool[];
+    }
   ): Promise<AsyncIterable<OpenAI.Chat.Completions.ChatCompletionChunk>> {
     try {
       return await this.openai.chat.completions.create({
@@ -68,6 +74,8 @@ export class AiService {
         max_tokens: options?.maxTokens ?? 500,
         stream: true,
         signal: options?.signal,
+        tools: options?.tools,
+        tool_choice: options?.tools && options.tools.length > 0 ? 'auto' : undefined,
       });
     } catch (error) {
       console.error('Error streaming AI agent:', error);
