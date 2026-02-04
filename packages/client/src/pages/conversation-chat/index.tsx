@@ -3,67 +3,115 @@ import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from '@tarojs/taro'
 import Header from '@/components/Header'
 import BottomSheet from '@/components/BottomSheet'
-import type { ConversationDetail as ConversationDetailType, MessageTemplate } from '@/types'
-import { conversationApi, feishuApi } from '@/services/api'
-import { getStorage, setStorage, showModal, showToast, navigateTo } from '@/utils'
+import ConfirmBar from '@/components/ConfirmBar'
+import ToolTraceCard from '@/components/ToolTraceCard'
+import A2UIRenderer, { type A2UIRegistry, type A2UIPayloadForRegistry } from '@/components/A2UIRenderer'
+import ArchiveReviewCard from '@/components/ArchiveReviewCard'
+import TemplatePicker from '@/components/TemplatePicker'
+import { useAgentChat } from '@/hooks/useAgentChat'
+import type { MessageTemplate, ToolState, ToolStatus } from '@/types'
+import { feishuApi } from '@/services/api'
+import { showModal, showToast, navigateTo } from '@/utils'
 import './index.scss'
 
-type MessageRole = 'user' | 'assistant' | 'tool'
-
-type ToolCallStatus = 'running' | 'success' | 'failed'
-
-interface ToolCallInfo {
-  type: 'feishu_template'
-  status: ToolCallStatus
-  templateName: string
-  receiverName: string
-  content: string
-  error?: string
+// A2UI Component Registry
+const a2uiRegistry: A2UIRegistry = {
+  ArchiveReviewCard,
+  TemplatePicker,
+  // Add more components as needed
 }
 
-interface ChatMessage {
-  id: string
-  role: MessageRole
-  content: string
-  createdAt: string
-  toolCall?: ToolCallInfo
-}
+type A2UIPayload = A2UIPayloadForRegistry<typeof a2uiRegistry>
 
-const defaultSuggestedContent = 'Q2合作方案报价优化版本已准备好，方便时可以约个电话沟通细节。'
+const mapToolStatusToTraceStatus = (status: ToolStatus) => {
+  switch (status) {
+    case 'idle':
+    case 'queued':
+      return 'pending'
+    case 'running':
+    case 'awaiting_input':
+      return 'running'
+    case 'succeeded':
+      return 'success'
+    case 'failed':
+      return 'failed'
+    case 'cancelled':
+      return 'canceled'
+    default:
+      return 'pending'
+  }
+}
 
 const ConversationChatPage: React.FC = () => {
   const router = useRouter()
-  const { id } = router.params
+  const { id: conversationId } = router.params
 
-  const [detail, setDetail] = useState<ConversationDetailType | null>(null)
-  const [messages, setMessages] = useState<ChatMessage[]>([])
+  const [sessionId, setSessionId] = useState<string | null>(null)
   const [inputText, setInputText] = useState('')
   const [templates, setTemplates] = useState<MessageTemplate[]>([])
   const [templatesLoading, setTemplatesLoading] = useState(false)
   const [sheetVisible, setSheetVisible] = useState(false)
-  const [receiverName, setReceiverName] = useState('张三')
-  const [suggestedContent, setSuggestedContent] = useState('')
   const [scrollTarget, setScrollTarget] = useState('')
 
-  const storageKey = useMemo(() => (id ? `conversation_chat_${id}` : ''), [id])
+  // Tool confirmation state
+  const [pendingToolId, setPendingToolId] = useState<string | null>(null)
+  const [confirmBarVisible, setConfirmBarVisible] = useState(false)
 
-  useEffect(() => {
-    if (!id) return
-    loadDetail(id)
-  }, [id])
+  // Use Agent Chat Hook
+  const {
+    messages,
+    toolStates,
+    isConnected,
+    isStreaming,
+    error,
+    sendMessage,
+    confirmTool,
+    cancelTool,
+  } = useAgentChat({
+    sessionId: sessionId || undefined,
+    onError: (err) => {
+      console.error('Agent chat error:', err)
+      showToast('连接失败')
+    },
+    onConnectionChange: (connected) => {
+      console.log('Connection status:', connected)
+    },
+  })
 
+  // Initialize session
   useEffect(() => {
-    if (!storageKey) return
-    setStorage(storageKey, messages)
+    if (!conversationId) return
+
+    // For now, use conversationId as sessionId
+    // In production, you might need to create a session first
+    setSessionId(conversationId)
+  }, [conversationId])
+
+  // Auto-scroll to latest message
+  useEffect(() => {
     if (messages.length > 0) {
-      setScrollTarget(`msg-${messages[messages.length - 1].id}`)
+      const lastMessage = messages[messages.length - 1]
+      setScrollTarget(`msg-${lastMessage.id}`)
     }
-  }, [messages, storageKey])
+  }, [messages])
 
+  // Load templates when sheet opens
   useEffect(() => {
     if (!sheetVisible || templates.length > 0 || templatesLoading) return
     fetchTemplates()
   }, [sheetVisible, templates.length, templatesLoading])
+
+  // Check for tools awaiting confirmation
+  useEffect(() => {
+    const awaitingTools = Object.values(toolStates).filter(
+      (tool) => tool.status === 'awaiting_input'
+    )
+
+    if (awaitingTools.length > 0 && !confirmBarVisible) {
+      setPendingToolId(awaitingTools[0].id)
+      setConfirmBarVisible(true)
+    }
+  }, [toolStates, confirmBarVisible])
 
   const fetchTemplates = async () => {
     try {
@@ -77,183 +125,121 @@ const ConversationChatPage: React.FC = () => {
     }
   }
 
-  const loadDetail = async (conversationId: string) => {
-    try {
-      const detailData = await conversationApi.getDetail(conversationId)
-      setDetail(detailData)
-      initMessages(detailData)
-    } catch (error) {
-      showToast('加载失败')
-    }
-  }
-
-  const initMessages = (detailData: ConversationDetailType) => {
-    if (!storageKey) return
-    const stored = getStorage<ChatMessage[]>(storageKey)
-    if (stored && stored.length > 0) {
-      setMessages(stored)
-      return
-    }
-    const initialMessage: ChatMessage = {
-      id: generateLocalId(),
-      role: 'user',
-      content: detailData.originalContent,
-      createdAt: detailData.createdAt,
-    }
-    setMessages([initialMessage])
-    triggerAssistantReply(detailData.originalContent)
-  }
-
-  const generateLocalId = () => `msg_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
-
-  const handleSend = () => {
+  const handleSend = async () => {
     const content = inputText.trim()
     if (!content) {
       showToast('请输入内容')
       return
     }
-    const message: ChatMessage = {
-      id: generateLocalId(),
-      role: 'user',
-      content,
-      createdAt: new Date().toISOString(),
+
+    try {
+      setInputText('')
+      await sendMessage(content)
+    } catch (error) {
+      showToast('发送失败')
+      console.error('Send message error:', error)
     }
-    setMessages((prev) => [...prev, message])
-    setInputText('')
-    triggerAssistantReply(content)
   }
 
   const handleOpenAnalysis = () => {
-    if (!id) {
+    if (!conversationId) {
       showToast('对话不存在')
       return
     }
-    navigateTo(`/pages/conversation-detail/index?id=${id}`)
-  }
-
-  const triggerAssistantReply = (content: string) => {
-    const shouldTriggerFeishu = /飞书|模板|发送/.test(content)
-    const resolvedReceiver = extractReceiverName(content) || '张三'
-    const replyText = shouldTriggerFeishu
-      ? `好的，我来帮你消息给${resolvedReceiver}。请选择模板并填写内容：`
-      : '好的，我记下了。需要我帮你整理重点吗？'
-
-    setTimeout(() => {
-      const aiMessage: ChatMessage = {
-        id: generateLocalId(),
-        role: 'assistant',
-        content: replyText,
-        createdAt: new Date().toISOString(),
-      }
-      setMessages((prev) => [...prev, aiMessage])
-      if (shouldTriggerFeishu) {
-        setReceiverName(resolvedReceiver)
-        setSuggestedContent(defaultSuggestedContent)
-        setSheetVisible(true)
-      }
-    }, 350)
-  }
-
-  const extractReceiverName = (content: string) => {
-    const match = content.match(/给([^，。\s]{1,8})/)
-    if (!match?.[1]) return undefined
-    const raw = match[1]
-    return raw.includes('发') ? raw.split('发')[0] : raw
-  }
-
-  const updateToolStatus = (messageId: string, status: ToolCallStatus, error?: string) => {
-    setMessages((prev) =>
-      prev.map((msg) =>
-        msg.id === messageId
-          ? {
-              ...msg,
-              toolCall: msg.toolCall
-                ? {
-                    ...msg.toolCall,
-                    status,
-                    error,
-                  }
-                : msg.toolCall,
-            }
-          : msg
-      )
-    )
+    navigateTo(`/pages/conversation-detail/index?id=${conversationId}`)
   }
 
   const handleSendFeishu = async (templateId: string, content: string) => {
     const template = templates.find((item) => item.id === templateId)
-    const preview = `模板：${template?.name || '未知'}\n接收人：${receiverName}\n内容：${content}`
+    const preview = `模板：${template?.name || '未知'}\n内容：${content}`
     const modal = await showModal('确认发送', preview)
     if (!modal.confirm) return
 
     setSheetVisible(false)
-    const toolMessageId = generateLocalId()
-    const toolMessage: ChatMessage = {
-      id: toolMessageId,
-      role: 'tool',
-      content: '',
-      createdAt: new Date().toISOString(),
-      toolCall: {
-        type: 'feishu_template',
-        status: 'running',
-        templateName: template?.name || '飞书模板消息',
-        receiverName,
-        content,
-      },
-    }
-    setMessages((prev) => [...prev, toolMessage])
 
     try {
-      const result = await feishuApi.sendTemplateMessage({ templateId, receiverName, content })
+      const result = await feishuApi.sendTemplateMessage({
+        templateId,
+        receiverName: '联系人',
+        content,
+      })
+
       if (result.status === 'success') {
-        updateToolStatus(toolMessageId, 'success')
         showToast('已发送', 'success')
       } else {
-        updateToolStatus(toolMessageId, 'failed', result.response?.message as string)
         showToast('发送失败')
       }
     } catch (error) {
-      updateToolStatus(toolMessageId, 'failed', '网络错误')
       showToast('发送失败')
     }
   }
 
-  const renderToolCard = (message: ChatMessage) => {
-    if (!message.toolCall) return null
-    const statusText =
-      message.toolCall.status === 'running'
-        ? '调用中'
-        : message.toolCall.status === 'success'
-          ? '已发送'
-          : '失败'
+  const handleConfirmTool = async () => {
+    if (!pendingToolId) return
 
+    try {
+      await confirmTool(pendingToolId)
+      setConfirmBarVisible(false)
+      setPendingToolId(null)
+      showToast('已确认执行', 'success')
+    } catch (error) {
+      showToast('确认失败')
+      console.error('Confirm tool error:', error)
+    }
+  }
+
+  const handleCancelTool = async () => {
+    if (!pendingToolId) return
+
+    try {
+      await cancelTool(pendingToolId)
+      setConfirmBarVisible(false)
+      setPendingToolId(null)
+      showToast('已取消')
+    } catch (error) {
+      showToast('取消失败')
+      console.error('Cancel tool error:', error)
+    }
+  }
+
+  const renderA2UIComponent = (payload: A2UIPayload) => {
     return (
-      <View className={`tool-card status-${message.toolCall.status}`}>
-        <View className="tool-header">
-          <Text className="tool-title">飞书模板消息</Text>
-          <View className={`tool-status ${message.toolCall.status}`}>
-            <Text className="tool-status-text">{statusText}</Text>
-          </View>
-        </View>
-        <View className="tool-body">
-          <Text className="tool-line">模板：{message.toolCall.templateName}</Text>
-          <Text className="tool-line">接收人：{message.toolCall.receiverName}</Text>
-          <Text className="tool-line">内容：{message.toolCall.content}</Text>
-          {message.toolCall.error && (
-            <Text className="tool-error">错误：{message.toolCall.error}</Text>
-          )}
-        </View>
-        {message.toolCall.status === 'running' && (
-          <View className="tool-loading">
-            <View className="loading-dot" />
-            <Text className="loading-text">正在调用飞书接口...</Text>
-          </View>
-        )}
-      </View>
+      <A2UIRenderer
+        payload={payload}
+        registry={a2uiRegistry}
+        onError={(error, payload) => {
+          console.error('A2UI render error:', error, payload)
+        }}
+        onUnknownType={(payload) => {
+          console.warn('Unknown A2UI type:', payload.type)
+        }}
+      />
     )
   }
 
-  if (!detail) {
+  const renderToolCard = (toolState: ToolState) => {
+    const status = mapToolStatusToTraceStatus(toolState.status)
+
+    return (
+      <ToolTraceCard
+        key={toolState.id}
+        title={toolState.name}
+        status={status}
+        detail={
+          toolState.error
+            ? `错误：${toolState.error.message}`
+            : toolState.output
+              ? `输出：${JSON.stringify(toolState.output)}`
+              : undefined
+        }
+        meta={toolState.startedAt ? `开始时间：${new Date(toolState.startedAt).toLocaleTimeString()}` : undefined}
+      />
+    )
+  }
+
+  const pendingTool = pendingToolId ? toolStates[pendingToolId] : null
+
+  if (!sessionId) {
     return (
       <View className="chat-page">
         <Header title="对话" showBack />
@@ -266,34 +252,86 @@ const ConversationChatPage: React.FC = () => {
 
   return (
     <View className="chat-page">
-      <Header title="对话" showBack />
+      <Header
+        title="AI 对话"
+        showBack
+        statusBadge={
+          isConnected
+            ? { text: '已连接', type: 'archived' }
+            : { text: '离线', type: 'pending' }
+        }
+      />
 
       <ScrollView
         className="message-list"
         scrollY
         scrollIntoView={scrollTarget}
       >
-        {messages.map((message) => (
-          <View
-            key={message.id}
-            id={`msg-${message.id}`}
-            className={`message-row ${message.role === 'user' ? 'user' : 'assistant'}`}
-          >
-            {message.role !== 'user' && (
-              <View className="assistant-label">
-                <View className="icon-ai" />
-                <Text className="assistant-text">AI 助手</Text>
+        {messages.map((message) => {
+          const isUser = message.role === 'user'
+          const isTool = message.role === 'tool'
+
+          return (
+            <View
+              key={message.id}
+              id={`msg-${message.id}`}
+              className={`message-row ${isUser ? 'user' : 'assistant'}`}
+            >
+              {!isUser && (
+                <View className="assistant-label">
+                  <View className="icon-ai" />
+                  <Text className="assistant-text">AI 助手</Text>
+                  {message.isStreaming && (
+                    <View className="streaming-indicator">
+                      <View className="dot" />
+                      <View className="dot" />
+                      <View className="dot" />
+                    </View>
+                  )}
+                </View>
+              )}
+
+              {isTool && message.toolCallId ? (
+                <View className="tool-message">
+                  {toolStates[message.toolCallId] && renderToolCard(toolStates[message.toolCallId])}
+                </View>
+              ) : message.metadata?.a2ui ? (
+                <View className="a2ui-message">
+                  {renderA2UIComponent(message.metadata.a2ui as A2UIPayload)}
+                </View>
+              ) : (
+                <View className={`bubble ${message.role}`}>
+                  <Text className="bubble-text">{message.content}</Text>
+                  {message.isStreaming && (
+                    <View className="cursor-blink" />
+                  )}
+                </View>
+              )}
+            </View>
+          )
+        })}
+
+        {isStreaming && messages.length === 0 && (
+          <View className="message-row assistant">
+            <View className="assistant-label">
+              <View className="icon-ai" />
+              <Text className="assistant-text">AI 助手</Text>
+              <View className="streaming-indicator">
+                <View className="dot" />
+                <View className="dot" />
+                <View className="dot" />
               </View>
-            )}
-            {message.role === 'tool' ? (
-              renderToolCard(message)
-            ) : (
-              <View className={`bubble ${message.role}`}>
-                <Text className="bubble-text">{message.content}</Text>
-              </View>
-            )}
+            </View>
           </View>
-        ))}
+        )}
+
+        {error && (
+          <View className="error-message">
+            <Text className="error-text">
+              {'code' in error ? `错误：${error.message}` : error.message}
+            </Text>
+          </View>
+        )}
       </ScrollView>
 
       <View className="input-card">
@@ -305,6 +343,7 @@ const ConversationChatPage: React.FC = () => {
             onInput={(e) => setInputText(e.detail.value)}
             maxlength={500}
             autoHeight
+            disabled={isStreaming}
           />
         </View>
         <View className="toolbar">
@@ -320,7 +359,10 @@ const ConversationChatPage: React.FC = () => {
             <View className="tool-btn mic-btn">
               <View className="icon-mic" />
             </View>
-            <View className="send-btn" onClick={handleSend}>
+            <View
+              className={`send-btn ${isStreaming || !inputText.trim() ? 'disabled' : ''}`}
+              onClick={handleSend}
+            >
               <View className="icon-arrow-up" />
             </View>
           </View>
@@ -330,12 +372,27 @@ const ConversationChatPage: React.FC = () => {
       <BottomSheet
         visible={sheetVisible}
         title="发送飞书消息"
-        subtitle={`使用模板发送给${receiverName}`}
+        subtitle="使用模板发送消息"
         templates={templates}
         loading={templatesLoading}
-        initialContent={suggestedContent}
+        initialContent=""
         onClose={() => setSheetVisible(false)}
         onSend={handleSendFeishu}
+      />
+
+      <ConfirmBar
+        visible={confirmBarVisible}
+        title={pendingTool ? `确认执行：${pendingTool.name}` : '确认执行工具'}
+        description={
+          pendingTool?.input
+            ? `输入参数：${JSON.stringify(pendingTool.input, null, 2)}`
+            : '该工具需要您的确认才能执行'
+        }
+        hintText="请仔细检查参数是否正确"
+        confirmText="确认执行"
+        cancelText="取消"
+        onConfirm={handleConfirmTool}
+        onCancel={handleCancelTool}
       />
     </View>
   )
