@@ -95,18 +95,16 @@ export class AgentOrchestrator {
         messages = this.contextBuilder.appendAssistantToolCall(messages, toolCalls);
 
         // 执行所有工具调用
-        const toolExecutionComplete = await this.executeToolCalls(
-          toolCalls,
-          request,
-          messages,
-          (event) => {
-            // 通过回调向客户端发送事件
-            return event;
+        let allToolsExecuted = true;
+        for await (const event of this.executeToolCalls(toolCalls, request, messages)) {
+          yield event;
+          if (event.type === 'requires_confirmation') {
+            allToolsExecuted = false;
           }
-        );
+        }
 
         // 如果有工具需要确认，暂停执行
-        if (!toolExecutionComplete) {
+        if (!allToolsExecuted) {
           yield { type: 'done', reason: 'requires_confirmation' };
           break;
         }
@@ -128,25 +126,22 @@ export class AgentOrchestrator {
     }
   }
 
-  private async executeToolCalls(
+  private async *executeToolCalls(
     toolCalls: OpenAI.Chat.Completions.ChatCompletionMessageToolCall[],
     request: AgentChatRequest,
-    messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[],
-    emitEvent: (event: AgentStreamEvent) => AgentStreamEvent
-  ): Promise<boolean> {
-    let allToolsExecuted = true;
-
+    messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[]
+  ): AsyncGenerator<AgentStreamEvent> {
     for (const toolCall of toolCalls) {
       const toolName = toolCall.function.name;
       const callId = toolCall.id;
 
       // 发送工具调用事件
-      emitEvent({
+      yield {
         type: 'tool_call',
         toolName,
         callId,
         arguments: toolCall.function.arguments,
-      });
+      };
 
       try {
         // 执行工具
@@ -163,21 +158,20 @@ export class AgentOrchestrator {
         );
 
         // 发送工具执行结果事件
-        emitEvent({
+        yield {
           type: 'tool_result',
           result: executionResult,
-        });
+        };
 
         // 如果需要确认
         if (executionResult.status === 'requires_confirmation') {
-          emitEvent({
+          yield {
             type: 'requires_confirmation',
             toolName: executionResult.toolName,
             confirmationId: executionResult.confirmationId!,
             callId: executionResult.callId,
             arguments: toolCall.function.arguments,
-          });
-          allToolsExecuted = false;
+          };
           continue;
         }
 
@@ -195,10 +189,10 @@ export class AgentOrchestrator {
       } catch (error) {
         this.logger.error(`Tool execution failed: ${toolName}`, error);
 
-        emitEvent({
+        yield {
           type: 'error',
           message: `Tool execution failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
-        });
+        };
 
         // 添加错误结果到消息历史
         messages.push({
@@ -208,8 +202,6 @@ export class AgentOrchestrator {
         } as OpenAI.Chat.Completions.ChatCompletionToolMessageParam);
       }
     }
-
-    return allToolsExecuted;
   }
 
   private getToolsForOpenAI(): OpenAI.Chat.Completions.ChatCompletionTool[] {
