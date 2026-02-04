@@ -1,0 +1,18 @@
+.citation-highlight {
+  background: rgba(124, 144, 112, 0.16);
+  color: #2D2D2D;
+  padding: 2rpx 6rpx;
+  border-radius: 8rpx;
+  margin: 0 2rpx;
+  font-weight: 500;
+}
+
+.citation-highlight.is-clickable {
+  background: rgba(124, 144, 112, 0.22);
+  color: #2D2D2D;
+  border-bottom: 2rpx solid rgba(124, 144, 112, 0.6);
+}
+
+.citation-highlight.is-clickable:active {
+  background: rgba(124, 144, 112, 0.3);
+}

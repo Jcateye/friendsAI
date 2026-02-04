@@ -1,11 +1,36 @@
 import { View, Text, ScrollView } from '@tarojs/components'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useRouter } from '@tarojs/taro'
 import Header from '@/components/Header'
 import ArchiveReviewCard from '@/components/ArchiveReviewCard'
+import CitationHighlight, { CitationRange } from '@/components/CitationHighlight'
 import type { ConversationDetail as ConversationDetailType } from '@/types'
 import { navigateBack, showToast, showLoading, hideLoading } from '@/utils'
 import './index.scss'
+
+interface CitationDefinition {
+  id: string
+  phrase: string
+  targetId: string
+}
+
+const buildCitationRanges = (text: string, definitions: CitationDefinition[]): CitationRange[] => {
+  if (!text) return []
+
+  return definitions
+    .map((definition) => {
+      const start = text.indexOf(definition.phrase)
+      if (start === -1) return null
+
+      return {
+        id: definition.id,
+        start,
+        end: start + definition.phrase.length,
+        targetId: definition.targetId,
+      }
+    })
+    .filter((item): item is CitationRange => Boolean(item))
+}
 
 const ConversationDetailPage: React.FC = () => {
   const router = useRouter()
@@ -13,6 +38,7 @@ const ConversationDetailPage: React.FC = () => {
 
   const [detail, setDetail] = useState<ConversationDetailType | null>(null)
   const [loading, setLoading] = useState(true)
+  const [scrollIntoView, setScrollIntoView] = useState('')
 
   useEffect(() => {
     loadDetail()
@@ -81,6 +107,50 @@ const ConversationDetailPage: React.FC = () => {
     showToast('进入编辑')
   }
 
+  const citationRanges = useMemo(() => {
+    if (!detail?.archiveResult) return []
+
+    const primaryPerson = detail.archiveResult.recognizedPeople[0]
+    const primaryEvent = detail.archiveResult.newEvents[0]
+    const primaryTodo = detail.archiveResult.todoItems[0]
+
+    const definitions: CitationDefinition[] = [
+      {
+        id: 'person-1',
+        phrase: primaryPerson?.name || '张三',
+        targetId: `citation-person-${primaryPerson?.id || '1'}`,
+      },
+      {
+        id: 'event-1',
+        phrase: 'Q2合作方案',
+        targetId: `citation-event-${primaryEvent?.id || '1'}`,
+      },
+      {
+        id: 'fact-1',
+        phrase: '比竞争对手高15%',
+        targetId: 'citation-fact-1',
+      },
+      {
+        id: 'fact-2',
+        phrase: '下个月要带家人去云南旅游',
+        targetId: 'citation-fact-2',
+      },
+      {
+        id: 'todo-1',
+        phrase: '周五前发一版优化后的方案',
+        targetId: `citation-todo-${primaryTodo?.id || '1'}`,
+      },
+    ]
+
+    return buildCitationRanges(detail.originalContent, definitions)
+  }, [detail])
+
+  const handleCitationClick = (citation: CitationRange) => {
+    if (!citation.targetId) return
+    setScrollIntoView('')
+    setTimeout(() => setScrollIntoView(citation.targetId || ''), 30)
+  }
+
   if (loading || !detail) {
     return (
       <View className="detail-page">
@@ -101,12 +171,17 @@ const ConversationDetailPage: React.FC = () => {
         }}
       />
 
-      <ScrollView className="scroll-content" scrollY>
+      <ScrollView className="scroll-content" scrollY scrollIntoView={scrollIntoView}>
         <View className="detail-inner">
           <View className="input-section">
             <Text className="section-label">记录内容</Text>
             <View className="user-bubble">
-              <Text className="user-text">{detail.originalContent}</Text>
+              <CitationHighlight
+                className="user-text"
+                text={detail.originalContent}
+                citations={citationRanges}
+                onCitationClick={handleCitationClick}
+              />
             </View>
           </View>
 
