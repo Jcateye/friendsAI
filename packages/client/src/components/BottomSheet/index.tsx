@@ -1,6 +1,7 @@
 import { View, Text, Textarea, ScrollView } from '@tarojs/components'
 import { useEffect, useState } from 'react'
 import type { MessageTemplate } from '@/types'
+import TemplatePicker from '@/components/TemplatePicker'
 import './index.scss'
 
 interface BottomSheetProps {
@@ -27,11 +28,19 @@ const BottomSheet: React.FC<BottomSheetProps> = ({
   const [selectedTemplate, setSelectedTemplate] = useState(templates[0]?.id || '')
   const [content, setContent] = useState(initialContent)
 
+  // Reset template selection when templates change
   useEffect(() => {
-    if (!visible) return
-    setSelectedTemplate(templates[0]?.id || '')
-  }, [templates, visible])
+    if (templates.length === 0) {
+      if (selectedTemplate) setSelectedTemplate('')
+      return
+    }
+    const exists = templates.some((template) => template.id === selectedTemplate)
+    if (!selectedTemplate || !exists) {
+      setSelectedTemplate(templates[0].id)
+    }
+  }, [selectedTemplate, templates])
 
+  // Reset content when initialContent or visibility changes
   useEffect(() => {
     if (!visible) return
     setContent(initialContent)
@@ -68,38 +77,11 @@ const BottomSheet: React.FC<BottomSheetProps> = ({
         </View>
 
         <ScrollView className="sheet-content" scrollY>
-          <View className="template-section">
-            <Text className="section-label">选择模板</Text>
-            <View className="template-list">
-              {loading ? (
-                <View className="template-item">
-                  <View className="template-info">
-                    <Text className="template-desc">加载中...</Text>
-                  </View>
-                </View>
-              ) : templates.length === 0 ? (
-                <View className="template-item">
-                  <View className="template-info">
-                    <Text className="template-desc">暂无可用模板</Text>
-                  </View>
-                </View>
-              ) : templates.map((template) => (
-                  <View
-                    key={template.id}
-                    className={`template-item ${selectedTemplate === template.id ? 'selected' : ''}`}
-                    onClick={() => setSelectedTemplate(template.id)}
-                  >
-                    <View className={`radio ${selectedTemplate === template.id ? 'checked' : ''}`}>
-                      {selectedTemplate === template.id && <View className="radio-dot" />}
-                    </View>
-                    <View className="template-info">
-                      <Text className="template-name">{template.name}</Text>
-                      <Text className="template-desc">{template.description}</Text>
-                    </View>
-                  </View>
-                ))}
-            </View>
-          </View>
+          <TemplatePicker
+            templates={templates}
+            value={selectedTemplate}
+            onChange={setSelectedTemplate}
+          />
 
           <View className="variable-section">
             <Text className="section-label">填写内容</Text>
