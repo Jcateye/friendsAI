@@ -1,54 +1,43 @@
 schema: spec-driven
 
 context: |
-  Product: FriendsAI（AI 原生人脉/关系情报管理，Conversation-first + 会后记录归档）
+  Product: FriendsAI（AI 原生人脉/关系情报管理；Conversation-first；聊天内完成归档/简报/工具执行）
+
   Monorepo: Bun workspaces
-    - packages/client：Taro 前端主线
-    - packages/server：Express 后端主线（当前前端对接对象）
-    - packages/server-nestjs：并行试验线（Agent SSE/A2UI/工具确认等，未接入主线）
+    - packages/client：Taro 前端（当前主要运行 H5）
+    - packages/server-nestjs：NestJS 后端主线（新主线，直接切换）
+    - packages/server：Express 旧主线（仅保留用于回滚对照；默认不再新增功能）
 
   Tech stack (client): Taro 3.6 + React 18 + TypeScript
   UI (client): taro-ui + 自定义组件（SCSS）
-  Tech stack (server mainline): Express 4 + TypeScript（Node.js >= 18）
-  Storage: PostgreSQL + pgvector（dev 端口 5434；见 docker-compose*.yml）
+  Tech stack (server mainline): NestJS 11 + TypeORM + TypeScript（Node.js >= 18）
+  Storage (new mainline): PostgreSQL + pgvector（dev 端口 5434；使用全新 DB；旧 DB 保留）
 
-  Runtime conventions:
-    - Server API prefix: /v1（packages/server/src/app/app.ts）
-    - Client BASE_URL: 默认 http://localhost:3000/v1（packages/client/src/services/api.ts）
-    - Auth: JWT accessToken/refreshToken 存在 Taro storage（key: token / refreshToken）
-    - 常用环境变量（project.sh 默认值）：
-      - DATABASE_URL=postgres://friendsai:friendsai@localhost:5434/friendsai
-      - PORT=3000（server）
-      - CLIENT_PORT=10086（client）
+  Runtime conventions (target):
+    - API prefix: /v1（NestJS 设置 global prefix；所有 HTTP/SSE 端点均在 /v1 下）
+    - H5-first: 优先保证 H5 可用；流式优先 SSE（EventSource 有 GET/无自定义 header 限制；fetch stream/WS 也可，但需在 design 明确）
+    - Auth: JWT accessToken/refreshToken；前端使用 Taro storage（建议 key: token / refreshToken）
+    - Data scoping: 默认按 userId 隔离数据（不引入 workspace/multi-tenant，除非需求明确）
+    - DB: 新主线使用全新数据库（例如 friendsai_v2）；旧库保留用于回滚/对照（不要在新主线写入旧库）
+
+  High-level contract (target, per designs/tech_design.md):
+    - Conversation-first：会话(conversation)+多消息(message) 是第一公民
+    - SSE：流式聊天/工具 trace（message events + tool trace + A2UI + citations）
+    - Archive：会话归档提取 → 用户确认 → 写入 contacts/events/facts/todos
+    - Tool confirmation：写/发类工具必须 requires_confirmation
 
   Repo layout (main paths):
     - packages/client/src/pages/...
     - packages/client/src/components/...
     - packages/client/src/services/...
     - packages/client/src/hooks/...
-    - packages/server/src/presentation/http/routes/...
-    - packages/server/src/application|infrastructure|models/...
-
-  Key endpoints (Express mainline):
-    - /v1/auth/*（登录/注册/refresh）
-    - /v1/contacts/*（含 context/brief）
-    - /v1/journal-entries（create/list） + /:id/extract + /:id/confirm（MVP 主闭环）
-    - /v1/chat/*（目前 assistant reply 偏 mock/hardcode，后续会增强）
-    - /v1/actions /v1/tool-tasks + worker（packages/server/src/worker.ts）
-
-  Quality gates / common commands:
-    - dev（client+server）: bun run dev
-    - start:mvp（含 DB+迁移+worker+前端）: ./project.sh start:mvp
-    - build: bun run build
-    - server lint: bun run --cwd packages/server lint
-    - server build: bun run server:build
-    - user-stories verify: bun run user-stories:verify
+    - packages/server-nestjs/src/(agent|ai|auth|contacts|conversations|tool-confirmations|connectors|entities)/...
 
   Constraints:
     - 不引入新的跨端框架（继续使用 Taro）
-    - 默认以 Express 主线（packages/server）为准；除非明确，否则不要同时大改 Express + NestJS 两套契约
-    - 保持 /v1 路由前缀与前端 BASE_URL 契约（除非 proposal 明确）
-    - 以端到端可跑通为第一优先（会后记录 → AI 提取 → 用户确认归档）
+    - 新主线以 packages/server-nestjs 为准；除非明确，不要在 packages/server(Express) 上继续扩展
+    - 允许前后端契约重写（激进模式）；但每次变更必须给出可跑通的验收路径/命令
+    - 使用全新 DB；不做旧数据迁移（旧库仅保留回滚用）
 
 rules:
   global: |

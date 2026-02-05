@@ -1,31 +1,54 @@
 # Project Context
 
 ## Purpose
-[Describe your project's purpose and goals]
+FriendsAI 是一个 **AI 原生的人脉/关系情报管理** 应用：以“对话”承载工作流，把会话中的信息沉淀为联系人画像、时间轴事件、事实要点与待办，并支持会前一键简报与连接器工具（如飞书）协作。
 
 ## Tech Stack
-- [List your primary technologies]
-- [e.g., TypeScript, React, Node.js]
+- Monorepo: Bun workspaces
+- Client: Taro 3.6 + React 18 + TypeScript（当前主要运行 H5）
+- Server (mainline): NestJS 11 + TypeScript + TypeORM
+- DB: PostgreSQL + pgvector
+- AI: OpenAI-compatible（模型/供应商可替换；以接口/适配器隔离）
+- Optional: Redis（限流/短期状态/缓存）
 
 ## Project Conventions
 
 ### Code Style
-[Describe your code style preferences, formatting rules, and naming conventions]
+- TypeScript 优先：类型清晰、避免 any 扩散；边界层使用 DTO/schema 校验。
+- 目录与命名：按模块分层（controller/service/repository），命名与业务一致（conversation/message/archive/tool_confirmation 等）。
+- 文档与规范：正文中文；保留英文技术标识（API 路径、字段名、错误码、Requirement IDs、命令、文件路径）。
 
 ### Architecture Patterns
-[Document your architectural decisions and patterns]
+- Conversation-first：conversation + message 是第一公民（像 ChatGPT 多轮多消息）。
+- Agent Orchestrator：负责上下文构建 + LLM 调用 + tool_calls 编排；业务写入走 Domain services。
+- 强确认：写/发/改状态类工具必须 requires_confirmation → 用户确认后执行。
+- 可追溯：所有 AI 提取/归档结果尽量带 citations（来源 message span 或引用 ID）。
+- API 统一前缀：/v1；流式输出使用 SSE（或明确替代方案）。
 
 ### Testing Strategy
-[Explain your testing approach and requirements]
+- Server: Jest（单元测试优先覆盖 orchestrator、tool 策略、归档提取/应用）
+- Client: 以 H5 为主；关键 hook/解析逻辑可用单测（已有 vitest 示例）。
+- 每个变更必须给出可验证的 Acceptance（命令或可观察检查点）。
 
 ### Git Workflow
-[Describe your branching strategy and commit conventions]
+- 小步提交、PR-sized、单目标（与 Requirement ID 对齐）。
+- 允许激进重构，但每个阶段必须保持可运行（至少 H5 + 核心闭环 smoke）。
 
 ## Domain Context
-[Add domain-specific knowledge that AI assistants need to understand]
+核心领域对象（目标形态，详见 `designs/tech_design.md`）：
+- Conversations/Messages：对话与消息流（含 tool_trace、tool_result、a2ui、error 等 contentType）
+- Contacts：联系人（画像/标签/热度/lastInteractionAt）
+- Archive：会话归档提取（events/facts/todos/contactLinks）→ 用户审核确认 → 应用到联系人侧
+- Brief：会前简报（聚合联系人信息 + 最近交互 + 待办 → 生成简报）
+- Tools/Connectors：工具调用与连接器（飞书）；执行过程在聊天中可见，写操作强确认
 
 ## Important Constraints
-[List any technical, business, or regulatory constraints]
+- H5-first：优先保证 H5 可用；SSE 设计需考虑 EventSource 限制（GET/无自定义 header），若采用 fetch stream/WS 必须在 design/proposal 里明确。
+- 允许前后端契约重写（激进模式），但必须持续可验收（端到端闭环优先）。
+- 使用全新数据库（例如 friendsai_v2），旧库保留用于回滚对照；不做旧数据迁移。
+- 不引入新的跨端框架（继续使用 Taro）。
 
 ## External Dependencies
-[Document key external services, APIs, or systems]
+- PostgreSQL + pgvector（本地 dev 端口通常为 5434，具体以 docker-compose 配置为准）
+- LLM Provider（OpenAI-compatible）：OPENAI_API_KEY 等配置（具体变量以 server 主线实现为准）
+- Feishu Open Platform（OAuth + 消息/通讯录等 API；写操作需强确认与审计）
