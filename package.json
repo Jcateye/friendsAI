@@ -29,6 +29,7 @@
   },
   "dependencies": {
     "openclaw": "^2026.1.30",
-    "openspec": "^0.0.0"
+    "openspec": "^0.0.0",
+    "pg": "^8.18.0"
   }
 }
