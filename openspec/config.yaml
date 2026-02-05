@@ -1,5 +1,80 @@
 schema: spec-driven
 
+context: |
+  Product: FriendsAI（AI 原生人脉/关系情报管理，Conversation-first + 会后记录归档）
+  Monorepo: Bun workspaces
+    - packages/client：Taro 前端主线
+    - packages/server：Express 后端主线（当前前端对接对象）
+    - packages/server-nestjs：并行试验线（Agent SSE/A2UI/工具确认等，未接入主线）
+
+  Tech stack (client): Taro 3.6 + React 18 + TypeScript
+  UI (client): taro-ui + 自定义组件（SCSS）
+  Tech stack (server mainline): Express 4 + TypeScript（Node.js >= 18）
+  Storage: PostgreSQL + pgvector（dev 端口 5434；见 docker-compose*.yml）
+
+  Runtime conventions:
+    - Server API prefix: /v1（packages/server/src/app/app.ts）
+    - Client BASE_URL: 默认 http://localhost:3000/v1（packages/client/src/services/api.ts）
+    - Auth: JWT accessToken/refreshToken 存在 Taro storage（key: token / refreshToken）
+    - 常用环境变量（project.sh 默认值）：
+      - DATABASE_URL=postgres://friendsai:friendsai@localhost:5434/friendsai
+      - PORT=3000（server）
+      - CLIENT_PORT=10086（client）
+
+  Repo layout (main paths):
+    - packages/client/src/pages/...
+    - packages/client/src/components/...
+    - packages/client/src/services/...
+    - packages/client/src/hooks/...
+    - packages/server/src/presentation/http/routes/...
+    - packages/server/src/application|infrastructure|models/...
+
+  Key endpoints (Express mainline):
+    - /v1/auth/*（登录/注册/refresh）
+    - /v1/contacts/*（含 context/brief）
+    - /v1/journal-entries（create/list） + /:id/extract + /:id/confirm（MVP 主闭环）
+    - /v1/chat/*（目前 assistant reply 偏 mock/hardcode，后续会增强）
+    - /v1/actions /v1/tool-tasks + worker（packages/server/src/worker.ts）
+
+  Quality gates / common commands:
+    - dev（client+server）: bun run dev
+    - start:mvp（含 DB+迁移+worker+前端）: ./project.sh start:mvp
+    - build: bun run build
+    - server lint: bun run --cwd packages/server lint
+    - server build: bun run server:build
+    - user-stories verify: bun run user-stories:verify
+
+  Constraints:
+    - 不引入新的跨端框架（继续使用 Taro）
+    - 默认以 Express 主线（packages/server）为准；除非明确，否则不要同时大改 Express + NestJS 两套契约
+    - 保持 /v1 路由前缀与前端 BASE_URL 契约（除非 proposal 明确）
+    - 以端到端可跑通为第一优先（会后记录 → AI 提取 → 用户确认归档）
+
+rules:
+  global: |
+    - 正文中文；保留英文技术标识：API/字段/错误码/路径/命令/Requirement IDs。
+    - 所有输出以“可验收”为第一优先，避免空话。
+
+  proposal: |
+    - 必须包含：Intent / Scope / Non-Goals / Risks / Rollback / Acceptance。
+    - Acceptance 必须可验证（命令或可观察检查点）。
+
+  specs: |
+    - Delta 必须用 ADDED/MODIFIED/REMOVED（英文关键字）。
+    - 每条 Requirement 必须有稳定 ID（如 AUTH-010）+ 至少 1 个 Given/When/Then（英文关键字）。
+    - 只写行为合同，不写实现细节。
+    - 先引用现有模式，再发明新模式
+
+  design: |
+    - 必须覆盖：Contracts（API/数据结构）/ Edge Cases / Security / Rollout-Rollback。
+    - 写清兼容策略（保持不变/变化点/避免破坏方式）。
+
+  tasks: |
+    - 每条任务映射 Requirement ID；每条任务都有 Done When（可验证）。
+    - 任务必须 PR-sized + 单目标；优先先契约后实现以降低冲突。
+
+
+
 # Project context (optional)
 # This is shown to AI when creating artifacts.
 # Add your tech stack, conventions, style guides, domain knowledge, etc.
@@ -18,3 +93,32 @@ schema: spec-driven
 #       - Always include a "Non-goals" section
 #     tasks:
 #       - Break tasks into chunks of max 2 hours
+
+# rules:
+#   proposal: |
+#     ## Language & format
+#     - 正文使用中文（解释、意图、取舍、风险、备注）。
+#     - 必须保留英文技术标识：API 路径、参数名、字段名、错误码、Requirement IDs（如 AUTH-010）、文件路径、命令行。
+#     - 必须包含章节：Intent、Scope、Non-Goals、Risks、Rollback、Acceptance。
+#     - Acceptance 必须可验证：给出可执行命令或可观察的检查点（例如响应字段、状态码、日志字段）。
+
+#   specs: |
+#     ## Language & format
+#     - 需求描述可用中文，但必须保留结构关键字为英文：ADDED / MODIFIED / REMOVED / RENAMED。
+#     - 每条 Requirement 必须有稳定 ID（如 AUTH-010），并保持英文 ID 不翻译。
+#     - 每条 Requirement 至少 1 个 Scenario，且必须用 Given / When / Then（这三个词必须是英文）。
+#     - Scenario 行允许中文叙述，但其中的 API 路径、字段名、错误码必须是英文原样。
+#     - 只写“行为合同”，不要写实现细节（例如具体类名、具体函数分解）。
+
+#   design: |
+#     ## Language & format
+#     - 正文使用中文，但保留英文技术标识（接口/字段/错误码/文件路径/命令）。
+#     - 必须包含：Architecture、Data Model/Contracts、Edge Cases、Security、Rollout/Rollback。
+#     - 必须说明兼容策略：哪些行为保持不变、哪些会变、如何避免破坏旧接口/旧数据。
+
+#   tasks: |
+#     ## Language & format
+#     - 任务说明可以中文，但必须保留英文：Requirement IDs、命令、路径、错误码。
+#     - 每条任务必须映射至少一个 Requirement ID（如 [AUTH-010]）。
+#     - 每条任务必须包含 Done When（可验证）：命令/测试用例/可观察结果。
+#     - 任务必须 PR-sized（可独立合并），且单目标（动词 + 对象）。
