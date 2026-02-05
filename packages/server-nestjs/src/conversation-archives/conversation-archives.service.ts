@@ -163,7 +163,7 @@ export class ConversationArchivesService {
     const todos = Array.isArray(parsed.todos) ? parsed.todos.map(todo => this.withCitations(todo, citation)) : [];
 
     if (contacts.length === 0) {
-      const fallbackContact = conversation.contact
+      const fallbackContact: ArchiveContact = conversation.contact
         ? {
             name: conversation.contact.name,
             email: conversation.contact.email ?? undefined,
@@ -172,14 +172,14 @@ export class ConversationArchivesService {
             position: conversation.contact.position ?? undefined,
           }
         : { name: 'Conversation Contact' };
-      contacts.push(this.withCitations(fallbackContact, citation));
+      contacts.push(this.withCitations<ArchiveContact>(fallbackContact, citation));
     }
 
     const defaultContactRef = this.contactRefFromContact(contacts[0]);
 
     if (events.length === 0) {
       events.push(
-        this.withCitations(
+        this.withCitations<ArchiveEvent>(
           {
             title: 'Conversation summary',
             description: summary,
@@ -199,7 +199,7 @@ export class ConversationArchivesService {
 
     if (facts.length === 0) {
       facts.push(
-        this.withCitations(
+        this.withCitations<ArchiveFact>(
           {
             key: 'summary',
             value: summary,
@@ -218,7 +218,7 @@ export class ConversationArchivesService {
 
     if (todos.length === 0) {
       todos.push(
-        this.withCitations(
+        this.withCitations<ArchiveTodo>(
           {
             description: 'Follow up on the conversation',
             dueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
@@ -365,7 +365,7 @@ export class ConversationArchivesService {
       const created = this.eventRepository.create({
         title: event.title,
         description: event.description ?? null,
-        eventDate: eventDate ?? null,
+        eventDate: eventDate ?? undefined,
         contactId,
         details,
       });

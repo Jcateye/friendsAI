@@ -8,7 +8,7 @@ import type {
   AgentRunStart,
   AgentSseEvent,
   ToolStateUpdate,
-} from '../../../client/src/types';
+} from './client-types';
 
 export type AgentChatMessage = OpenAI.Chat.Completions.ChatCompletionMessageParam;
 

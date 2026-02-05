@@ -4,7 +4,7 @@ import type {
   AgentMessage,
   AgentMessageRole,
   JsonValue,
-} from '../../../client/src/types';
+} from './client-types';
 
 interface MessageInput {
   id?: string;

@@ -31,14 +31,18 @@ export class AiService {
     const fileConfig = useEnvFile ? this.loadLocalEnv() : {};
 
     const apiKey =
-      fileConfig.OPENAI_API_KEY ?? this.configService.get<string>('OPENAI_API_KEY');
+      fileConfig.OPENAI_API_KEY ??
+      this.configService.get<string>('OPENAI_API_KEY') ??
+      process.env.OPENAI_API_KEY;
     const model =
       fileConfig.OPENAI_MODEL ??
       this.configService.get<string>('OPENAI_MODEL') ??
+      process.env.OPENAI_MODEL ??
       'gpt-5.1-mini';
     const embeddingModel =
       fileConfig.OPENAI_EMBEDDING_MODEL ??
       this.configService.get<string>('OPENAI_EMBEDDING_MODEL') ??
+      process.env.OPENAI_EMBEDDING_MODEL ??
       'text-embedding-ada-002';
 
     return { apiKey, model, embeddingModel };

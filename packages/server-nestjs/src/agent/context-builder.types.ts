@@ -4,15 +4,6 @@
  * 定义三层上下文构建器的类型系统
  */
 
-import type {
-  AgentContextLayers,
-  AgentGlobalContext,
-  AgentSessionContext,
-  AgentRequestContext,
-  Contact,
-  AgentMessage,
-} from '../../../client/src/types';
-
 /**
  * 上下文构建配置
  */

@@ -3,7 +3,7 @@ import type { Request, Response } from 'express';
 import { AgentOrchestrator } from './agent.orchestrator';
 import { AgentMessageStore } from './agent-message.store';
 import type { AgentChatRequest, AgentStreamEvent } from './agent.types';
-import type { AgentError, AgentRunEnd, AgentSseEvent } from '../../../client/src/types';
+import type { AgentError, AgentRunEnd, AgentSseEvent } from './client-types';
 
 @Controller('agent')
 export class AgentController {

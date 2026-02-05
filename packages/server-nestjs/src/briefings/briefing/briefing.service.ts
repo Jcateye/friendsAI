@@ -5,7 +5,7 @@ import { createHash, randomUUID } from 'crypto';
 import { AiService } from '../../ai/ai.service';
 import { Contact } from '../../entities';
 
-interface BriefSnapshot {
+export interface BriefSnapshot {
   id: string;
   contact_id: string;
   content: string;

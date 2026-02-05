@@ -8,7 +8,7 @@ import type {
   AgentRequestContext,
   Contact as ClientContact,
   AgentMessage,
-} from '../../../client/src/types';
+} from './client-types';
 import { User, Contact, Conversation, ConnectorToken } from '../entities';
 import { VectorService } from '../ai/vector/vector.service';
 import {

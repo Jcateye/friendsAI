@@ -13,9 +13,10 @@ import type {
   AgentMessageDelta,
   AgentRunEnd,
   AgentRunStart,
+  JsonValue,
   ToolStateUpdate,
   ToolStatus,
-} from '../../../client/src/types';
+} from './client-types';
 
 @Injectable()
 export class AgentOrchestrator {
@@ -453,10 +454,31 @@ export class AgentOrchestrator {
       previousStatus: params.previousStatus,
       at: new Date().toISOString(),
       message: params.message,
-      input: params.input,
-      output: params.output,
+      input: this.coerceJsonValue(params.input),
+      output: this.coerceJsonValue(params.output),
       error: params.error,
     };
+  }
+
+  private coerceJsonValue(value: unknown): JsonValue | undefined {
+    if (value === undefined) {
+      return undefined;
+    }
+    if (value === null || typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+      return value;
+    }
+    if (Array.isArray(value)) {
+      return value.map(entry => this.coerceJsonValue(entry) ?? null);
+    }
+    if (typeof value === 'object') {
+      const record: Record<string, JsonValue> = {};
+      for (const [key, entry] of Object.entries(value as Record<string, unknown>)) {
+        const coerced = this.coerceJsonValue(entry);
+        record[key] = coerced === undefined ? null : coerced;
+      }
+      return record;
+    }
+    return String(value);
   }
 
   private safeParseToolInput(input: unknown): unknown {

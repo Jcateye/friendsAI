@@ -33,6 +33,11 @@ load_env() {
   local server_env_file="$ROOT_DIR/packages/server/.env.${node_env}"
   local server_env_fallback="$ROOT_DIR/packages/server/.env"
   local client_env_file="$ROOT_DIR/packages/client/.env.${node_env}"
+  local existing_port="${PORT-}"
+  local existing_client_port="${CLIENT_PORT-}"
+  local existing_database_url="${DATABASE_URL-}"
+  local existing_jwt_secret="${JWT_SECRET-}"
+  local existing_openai_api_key="${OPENAI_API_KEY-}"
 
   if [[ -f "$nest_env_file" ]]; then
     # shellcheck disable=SC1090
@@ -61,6 +66,22 @@ load_env() {
     set -a
     source "$client_env_file"
     set +a
+  fi
+
+  if [[ -n "$existing_port" ]]; then
+    export PORT="$existing_port"
+  fi
+  if [[ -n "$existing_client_port" ]]; then
+    export CLIENT_PORT="$existing_client_port"
+  fi
+  if [[ -n "$existing_database_url" ]]; then
+    export DATABASE_URL="$existing_database_url"
+  fi
+  if [[ -n "$existing_jwt_secret" ]]; then
+    export JWT_SECRET="$existing_jwt_secret"
+  fi
+  if [[ -n "$existing_openai_api_key" ]]; then
+    export OPENAI_API_KEY="$existing_openai_api_key"
   fi
 
   export DATABASE_URL="${DATABASE_URL:-postgres://friendsai:friendsai@localhost:5434/friendsai_v2}"
@@ -115,9 +136,36 @@ check_service_status() {
 
   if [[ -n "$port" ]]; then
     echo "🔍 等待 $service_name 监听端口 $port..."
-    while ! lsof -i ":$port" >/dev/null 2>&1; do
+    local warned_port_in_use=0
+    while true; do
+      local port_pids
+      port_pids=$(lsof -ti ":$port" 2>/dev/null || true)
+      if [[ -n "$port_pids" ]]; then
+        if echo "$port_pids" | tr ' ' '\n' | grep -qx "$pid"; then
+          break
+        fi
+        local child_match=0
+        for port_pid in $port_pids; do
+          local ppid
+          ppid="$(ps -o ppid= -p "$port_pid" 2>/dev/null | tr -d ' ')"
+          if [[ "$ppid" == "$pid" ]]; then
+            child_match=1
+            break
+          fi
+        done
+        if [[ $child_match -eq 1 ]]; then
+          break
+        fi
+        if [[ $warned_port_in_use -eq 0 ]]; then
+          echo "⚠️ 端口 $port 已被其他进程占用: $port_pids"
+          warned_port_in_use=1
+        fi
+      fi
       if (( attempt >= max_attempts )); then
         echo "❌ $service_name 启动失败：端口 $port 未能在 ${max_attempts} 秒内开始监听。"
+        if [[ -n "${port_pids:-}" ]]; then
+          echo "   端口 $port 已被占用: $port_pids"
+        fi
         if [[ -f "$log_file" ]]; then
           echo "📋 最近日志:"
           tail -n 10 "$log_file"
@@ -209,7 +257,7 @@ start_db() {
 
 run_migrate() {
   echo "🧱 运行数据库迁移..."
-  $PKG_MANAGER run server:migrate
+  $PKG_MANAGER run --cwd "$ROOT_DIR/packages/server-nestjs" migrate
 }
 
 start_client_background() {
@@ -316,16 +364,36 @@ start_worker() {
   verify_worker
 }
 
-# 强制杀死占用指定端口的进程
+# 杀死指定 PID 及其子进程占用端口的进程
+# 参数: $1=端口, $2=PID文件路径(可选)
+# 只杀死与 PID 文件相关的进程，避免误杀其他应用
 kill_port() {
   local port="$1"
-  local pids
-  pids=$(lsof -ti ":$port" 2>/dev/null || true)
-  if [[ -n "$pids" ]]; then
-    echo "🔪 杀死占用端口 $port 的进程: $pids"
-    echo "$pids" | xargs kill -9 2>/dev/null || true
-    sleep 1
+  local pid_file="${2:-}"
+  local our_pid=""
+
+  if [[ -n "$pid_file" && -f "$pid_file" ]]; then
+    our_pid="$(cat "$pid_file" 2>/dev/null || true)"
   fi
+
+  local port_pids
+  port_pids=$(lsof -ti ":$port" 2>/dev/null || true)
+
+  if [[ -z "$port_pids" ]]; then
+    return 0
+  fi
+
+  # 如果有 PID 文件，只杀死与我们进程相关的
+  if [[ -n "$our_pid" ]]; then
+    for pid in $port_pids; do
+      # 检查是否是我们的进程或其子进程
+      if [[ "$pid" == "$our_pid" ]] || pgrep -P "$our_pid" 2>/dev/null | grep -qx "$pid"; then
+        echo "🔪 杀死端口 $port 的进程: $pid (属于 PID $our_pid)"
+        kill -9 "$pid" 2>/dev/null || true
+      fi
+    done
+  fi
+  sleep 1
 }
 
 stop_client() {
@@ -340,8 +408,8 @@ stop_client() {
   else
     echo "⚪ 前端服务未运行"
   fi
-  # 确保端口被释放
-  kill_port "${CLIENT_PORT:-10086}"
+  # 确保端口被释放（只杀死我们启动的进程）
+  kill_port "${CLIENT_PORT:-10086}" "$CLIENT_PID_FILE"
   echo "✅ 前端已停止"
 }
 
@@ -357,8 +425,8 @@ stop_server() {
   else
     echo "⚪ 后端服务未运行"
   fi
-  # 确保端口被释放
-  kill_port "${PORT:-3000}"
+  # 确保端口被释放（只杀死我们启动的进程）
+  kill_port "${PORT:-3000}" "$SERVER_PID_FILE"
   echo "✅ 后端已停止"
 }
 
