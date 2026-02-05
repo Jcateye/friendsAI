@@ -36,7 +36,7 @@
 
 ## WS-20 Server / Auth (JWT)
 
-- [ ] WS-20 Auth 模块补齐：register/login/refresh/logout + JWT Guard [AUTH-010] [AUTH-020] [AUTH-030] [AUTH-040] [AUTH-050] Done When:
+- [x] WS-20 Auth 模块补齐：register/login/refresh/logout + JWT Guard [AUTH-010] [AUTH-020] [AUTH-030] [AUTH-040] [AUTH-050] Done When:
   - `POST /v1/auth/register` 返回 `{ accessToken, refreshToken, user }`，重复注册返回 `409`。
   - `POST /v1/auth/login` 错误密码返回 `401`，成功返回 tokens。
   - `POST /v1/auth/refresh` 可换新 `accessToken`；logout 后 refresh 返回 `401`。
@@ -45,7 +45,7 @@
 
 ## WS-30 Server / Conversations & Messages API
 
-- [ ] WS-30 Conversations/Messages API：create/list + message history + pagination [CHAT-010] [CHAT-020] Done When:
+- [x] WS-30 Conversations/Messages API：create/list + message history + pagination [CHAT-010] [CHAT-020] Done When:
   - `POST /v1/conversations` 可创建；`GET /v1/conversations` 按 `updatedAt` 倒序返回。
   - `GET /v1/conversations/:conversationId/messages` 按 `createdAt` 升序返回，并支持最小分页参数（`limit`/`before` 等）。
   - Touches：`packages/server-nestjs/src/conversations/**`（尽量不改实体/迁移）。
@@ -60,7 +60,7 @@
 
 ## WS-50 Server / Tool Confirmations
 
-- [ ] WS-50 工具强确认：tool_confirmations CRUD + confirm/reject + 最小可执行工具（mock 飞书发送） [TOOL-010] [TOOL-020] [TOOL-030] [TOOL-040] [TOOL-050] Done When:
+- [x] WS-50 工具强确认：tool_confirmations CRUD + confirm/reject + 最小可执行工具（mock 飞书发送） [TOOL-010] [TOOL-020] [TOOL-030] [TOOL-040] [TOOL-050] Done When:
   - `GET /v1/tool-confirmations?status=pending` 可用且排序正确；`GET /v1/tool-confirmations/:id` 可回读。
   - `POST /v1/tool-confirmations/:id/confirm|reject` 更新状态与时间戳，并可回读 `result/error`。
   - Agent 触发写/发类工具时：创建 `tool_confirmation(status=pending)` 且 SSE 推送 `tool.state(status=awaiting_input, confirmationId=...)`。
@@ -91,7 +91,7 @@
 
 ## WS-90 Verification & Docs（公共部分）
 
-- [ ] WS-90 测试/验收脚本/文档：最小覆盖 + smoke 闭环 + README 更新 [AUTH-020] [CHAT-030] [ARCH-030] Done When:
+- [x] WS-90 测试/验收脚本/文档：最小覆盖 + smoke 闭环 + README 更新 [AUTH-020] [CHAT-030] [ARCH-030] Done When:
   - server-nestjs Jest 最小测试通过（auth、tool confirmation 状态机、SSE 事件顺序）。
   - 一套 smoke 命令可验证“登录→聊天→归档→联系人简报”的闭环（对齐 proposal Acceptance）。
   - README 明确：NestJS 为主线、Express 为回滚对照，并说明新 DB `friendsai_v2` 与回滚方式。

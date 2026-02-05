@@ -10,24 +10,30 @@ export class ConversationsService {
     private conversationRepository: Repository<Conversation>,
   ) {}
 
-  async create(content: string, userId: string, contactId?: string): Promise<Conversation> {
+  async create(
+    input: { content?: string; title?: string },
+    userId: string,
+    contactId?: string,
+  ): Promise<Conversation> {
     const conversation = this.conversationRepository.create({
-      content,
+      title: input.title ?? null,
+      content: input.content ?? input.title ?? '',
       userId,
       contactId,
     });
     return this.conversationRepository.save(conversation);
   }
 
-  async findAll(): Promise<Conversation[]> {
+  async findAll(userId?: string): Promise<Conversation[]> {
     return this.conversationRepository.find({
-      order: { createdAt: 'DESC' },
+      where: userId ? { userId } : undefined,
+      order: { updatedAt: 'DESC' },
     });
   }
 
-  async findOne(id: string): Promise<Conversation | null> {
+  async findOne(id: string, userId?: string): Promise<Conversation | null> {
     return this.conversationRepository.findOne({
-      where: { id },
+      where: userId ? { id, userId } : { id },
     });
   }
 }

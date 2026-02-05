@@ -7,6 +7,7 @@ import { ToolRegistry } from '../ai/tool-registry';
 import { AgentMessageStore } from './agent-message.store';
 import { AgentChatRequest, AgentStreamEvent } from './agent.types';
 import { ContextBuilder } from './context-builder';
+import { MessagesService } from '../conversations/messages.service';
 import type {
   AgentError,
   AgentMessage,
@@ -29,6 +30,7 @@ export class AgentOrchestrator {
     private readonly toolExecutionStrategy: ToolExecutionStrategy,
     private readonly toolRegistry: ToolRegistry,
     private readonly messageStore: AgentMessageStore,
+    private readonly messagesService: MessagesService,
   ) {}
 
   async *streamChat(
@@ -45,13 +47,29 @@ export class AgentOrchestrator {
     };
     yield { event: 'agent.start', data: startEvent };
 
+    const conversationId = request.conversationId ?? request.sessionId;
     const storeKey = this.messageStore.buildKey(
       request.userId,
-      request.conversationId ?? request.sessionId,
+      conversationId,
     );
     const userMessage = this.buildUserMessage(request);
     if (userMessage) {
-      this.messageStore.appendMessage(storeKey, userMessage);
+      let storedMessage = userMessage;
+      if (conversationId) {
+        const persisted = await this.messagesService.appendMessage(conversationId, {
+          role: userMessage.role,
+          content: userMessage.content,
+          metadata: userMessage.metadata as Record<string, any> | undefined,
+          createdAt: userMessage.createdAt,
+          userId: request.userId,
+        });
+        storedMessage = {
+          ...userMessage,
+          id: persisted.id,
+          createdAt: persisted.createdAt.toISOString(),
+        };
+      }
+      this.messageStore.appendMessage(storeKey, storedMessage);
     }
 
     while (iterationCount < this.maxToolIterations) {
@@ -124,10 +142,23 @@ export class AgentOrchestrator {
 
       // 如果没有工具调用，返回完成事件
       if (!toolCalls.length || finishReason === 'stop') {
+        let persistedMessageId: string | undefined;
+        let persistedCreatedAt: string | undefined;
+        if (conversationId) {
+          const persisted = await this.messagesService.appendMessage(conversationId, {
+            role: 'assistant',
+            content: assistantMessage,
+            userId: request.userId,
+          });
+          persistedMessageId = persisted.id;
+          persistedCreatedAt = persisted.createdAt.toISOString();
+        }
+
         const finalMessage = this.messageStore.createMessage({
-          id: assistantMessageId,
+          id: persistedMessageId ?? assistantMessageId,
           role: 'assistant',
           content: assistantMessage,
+          createdAt: persistedCreatedAt,
         });
         yield { event: 'agent.message', data: finalMessage };
         this.messageStore.appendMessage(storeKey, finalMessage);
@@ -251,7 +282,7 @@ export class AgentOrchestrator {
           },
           {
             userId: request.userId,
-            conversationId: request.conversationId,
+            conversationId: request.conversationId ?? request.sessionId,
           }
         );
 
@@ -264,6 +295,7 @@ export class AgentOrchestrator {
             previousStatus,
             input: this.safeParseToolInput(toolInput),
             message: 'Tool execution requires confirmation.',
+            confirmationId: executionResult.confirmationId,
           });
           yield { event: 'tool.state', data: awaitingEvent };
           continue;
@@ -446,6 +478,7 @@ export class AgentOrchestrator {
     input?: unknown;
     output?: unknown;
     error?: AgentError;
+    confirmationId?: string;
   }): ToolStateUpdate {
     return {
       toolId: params.toolId,
@@ -457,6 +490,7 @@ export class AgentOrchestrator {
       input: this.coerceJsonValue(params.input),
       output: this.coerceJsonValue(params.output),
       error: params.error,
+      confirmationId: params.confirmationId,
     };
   }
 

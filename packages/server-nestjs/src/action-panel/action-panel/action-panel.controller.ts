@@ -9,8 +9,8 @@ export class ActionPanelController {
   @Get('dashboard')
   // @UseGuards(AuthGuard)
   async getDashboard(@Request() req: any) {
-    const userId = req.user?.id || 'mock-user-id';
-    
+    const userId = req.user?.id;
+
     const followUps = await this.actionPanelService.getFollowUps(userId);
     const recommendedContacts = await this.actionPanelService.getRecommendedContacts(userId);
 

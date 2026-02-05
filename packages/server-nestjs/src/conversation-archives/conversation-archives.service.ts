@@ -78,6 +78,9 @@ export class ConversationArchivesService {
     if (!conversation) {
       throw new NotFoundException(`Conversation ${conversationId} not found`);
     }
+    if (userId && conversation.userId !== userId) {
+      throw new NotFoundException(`Conversation ${conversationId} not found`);
+    }
 
     const summary = this.buildSummary(conversation.content);
     const citation = this.buildCitation(conversation, summary);

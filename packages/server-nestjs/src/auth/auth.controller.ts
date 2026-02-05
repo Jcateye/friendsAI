@@ -3,13 +3,14 @@ import { AuthService, AuthResponse } from './auth.service';
 import { Public } from './public.decorator';
 
 interface RegisterDto {
-  email: string;
+  email?: string;
+  phone?: string;
   password: string;
   name?: string;
 }
 
 interface LoginDto {
-  email: string;
+  emailOrPhone: string;
   password: string;
 }
 
@@ -21,15 +22,17 @@ interface LogoutDto {
   refreshToken: string;
 }
 
-@Controller('v1/auth')
+@Controller('auth')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
   @Public()
   @Post('register')
+  @HttpCode(HttpStatus.OK)
   async register(@Body() registerDto: RegisterDto): Promise<AuthResponse> {
     return this.authService.register(
       registerDto.email,
+      registerDto.phone,
       registerDto.password,
       registerDto.name,
     );
@@ -39,7 +42,7 @@ export class AuthController {
   @Post('login')
   @HttpCode(HttpStatus.OK)
   async login(@Body() loginDto: LoginDto): Promise<AuthResponse> {
-    return this.authService.login(loginDto.email, loginDto.password);
+    return this.authService.login(loginDto.emailOrPhone, loginDto.password);
   }
 
   @Public()

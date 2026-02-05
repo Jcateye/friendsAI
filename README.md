@@ -11,6 +11,12 @@ AI-powered relationship management app - 智能社交关系管理应用
 *   **智能辅助**：会前一键生成简报，会后自动整理纪要。
 *   **主动推荐**：基于关系深度和时间维度的"行动面板"，通过 AI 建议"今天该联系谁"。
 
+## 主线说明（NestJS v2）
+
+- 默认后端主线：`packages/server-nestjs`（NestJS，API 前缀 `/v1`）
+- 新数据库：`friendsai_v2`（通过 `DATABASE_URL` 指向）
+- `packages/server` 为旧版 Express，仅用于回滚/对照
+
 ## 2. 项目结构
 
 ```
@@ -20,7 +26,7 @@ friendsAI/
 │   │   ├── src/
 │   │   └── ...
 │   │
-│   ├── server-nestjs/       # [NEW] AI 原生后端服务 (NestJS)
+│   ├── server-nestjs/       # [MAIN] AI 原生后端服务 (NestJS, /v1)
 │   │   ├── src/
 │   │   │   ├── action-panel/ # 行动面板模块
 │   │   │   ├── ai/           # AI 核心与向量服务
@@ -33,7 +39,7 @@ friendsAI/
 │   │   ├── Dockerfile
 │   │   └── ...
 │   │
-│   └── server/              # [DEPRECATED] 旧版后端 (Express)
+│   └── server/              # [LEGACY/ROLLBACK] 旧版后端 (Express)
 │
 ├── designs/                 # 设计文件 (.pen)
 ├── docs/                    # 项目文档
@@ -66,7 +72,7 @@ friendsAI/
 
 ### 🛡️ 认证与用户模块 (Auth & Users)
 *   **功能**：处理用户注册、登录、登出。
-*   **机制**：基于 Session 的认证，密码采用 bcrypt 哈希存储。
+*   **机制**：JWT access/refresh（refresh 持久化），密码采用 bcrypt 哈希存储。
 
 ### 👥 联系人管理 (Contacts)
 *   **功能**：联系人全生命周期管理。
@@ -112,23 +118,50 @@ friendsAI/
     *   启动 PostgreSQL (端口 5434) 和 PGVector。
 
 2.  **配置后端环境**
-    进入 `packages/server-nestjs` 并创建 `.env` 文件：
+    进入 `packages/server-nestjs` 并创建 `.env` 文件（主线数据库为 `friendsai_v2`）：
     ```env
+    DATABASE_URL=postgres://friendsai:friendsai@localhost:5434/friendsai_v2
+    JWT_SECRET=dev-smoke-secret
     OPENAI_API_KEY=your-openai-api-key
     ```
 
-3.  **安装并启动后端**
+3.  **安装依赖并运行 migrations**
     ```bash
     cd packages/server-nestjs
     npm install
+    npm run migrate
+    ```
+
+4.  **启动后端**
+    ```bash
     npm run start:dev
     ```
-    服务将运行在 `http://localhost:3000`。
+    服务将运行在 `http://localhost:3000`，健康检查：`http://localhost:3000/v1/health`。
 
-4.  **运行测试**
+5.  **运行最小 e2e 测试**
     ```bash
-    npm run test
+    npm run test:e2e
     ```
+
+### Smoke 测试（NestJS 主线）
+
+```bash
+node scripts/smoke-v2.js
+```
+
+可选环境变量：
+`SMOKE_BASE_URL`（默认 `http://localhost:3000/v1`）、`SMOKE_EMAIL`、`SMOKE_PASSWORD`。
+
+> 注意：聊天与简报依赖 `OPENAI_API_KEY`。
+
+### 主线与回滚说明
+
+- **主线后端**：`packages/server-nestjs`（默认 `/v1`）
+- **主线数据库**：`friendsai_v2`
+- **回滚方式**：
+  1. 将默认启动脚本指回 `packages/server`（Express）
+  2. 前端切回旧 API BASE_URL
+  3. 继续使用旧数据库（不回迁 `friendsai_v2` 数据）
 
 ### MVP 一键启动（旧版）
 
@@ -136,7 +169,7 @@ friendsAI/
 ./project.sh start:mvp
 ```
 
-### 使用 bun 脚本（旧版）
+### 使用 bun 脚本（主线）
 
 ```bash
 bun run dev              # 同时启动前后端

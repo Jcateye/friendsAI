@@ -12,7 +12,7 @@ export class BriefingsController {
     @Request() req: any,
     @Param('contactId') contactId: string
   ): Promise<BriefSnapshot | null> {
-    const userId = req.user?.id || 'mock-user-id';
+    const userId = req.user?.id;
     return this.briefingService.getBriefing(contactId, userId);
   }
 
@@ -22,7 +22,7 @@ export class BriefingsController {
     @Request() req: any,
     @Param('contactId') contactId: string
   ): Promise<BriefSnapshot> {
-    const userId = req.user?.id || 'mock-user-id';
+    const userId = req.user?.id;
     return this.briefingService.refreshBriefing(contactId, userId);
   }
 
@@ -32,7 +32,7 @@ export class BriefingsController {
     @Request() req: any,
     @Param('contactId') contactId: string
   ): Promise<BriefSnapshot> {
-    const userId = req.user?.id || 'mock-user-id';
+    const userId = req.user?.id;
     return this.briefingService.refreshBriefing(contactId, userId);
   }
 }

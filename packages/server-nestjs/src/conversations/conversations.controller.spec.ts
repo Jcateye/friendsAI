@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { TypeOrmModule, getRepositoryToken } from '@nestjs/typeorm';
 import { ConversationsController } from './conversations.controller';
 import { ConversationsService } from './conversations.service';
+import { MessagesService } from './messages.service';
 import { Conversation, User, Contact, Event } from '../entities';
 import { Request } from '@nestjs/common';
 import { v4 as uuidv4 } from 'uuid';
@@ -50,7 +51,15 @@ describe('ConversationsController', () => {
         TypeOrmModule.forFeature([Conversation, User, Contact]),
       ],
       controllers: [ConversationsController],
-      providers: [ConversationsService],
+      providers: [
+        ConversationsService,
+        {
+          provide: MessagesService,
+          useValue: {
+            listMessages: jest.fn(),
+          },
+        },
+      ],
     }).compile();
 
     controller = module.get<ConversationsController>(ConversationsController);
@@ -111,7 +120,7 @@ describe('ConversationsController', () => {
       await controller.create(mockRequest, { content: 'Conv 1' });
       await controller.create(mockRequest, { content: 'Conv 2' });
 
-      const result = await controller.findAll();
+      const result = await controller.findAll(mockRequest);
       expect(result.length).toBeGreaterThanOrEqual(2);
       expect(result[0]).toHaveProperty('content');
     });

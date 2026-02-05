@@ -1,10 +1,10 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Contact } from '../entities';
 
 interface CreateContactDto {
-  name: string;
+  name?: string;
   email?: string;
   phone?: string;
   company?: string;
@@ -30,13 +30,24 @@ export class ContactsService {
     private contactRepository: Repository<Contact>,
   ) {}
 
-  async create(createContactDto: CreateContactDto): Promise<Contact> {
-    const contact = this.contactRepository.create(createContactDto);
+  async create(createContactDto: CreateContactDto, userId?: string): Promise<Contact> {
+    if (!createContactDto.name) {
+      throw new BadRequestException('displayName is required');
+    }
+    const contact = this.contactRepository.create({
+      ...createContactDto,
+      userId: userId ?? null,
+    });
     return this.contactRepository.save(contact);
   }
 
-  async findAll(page: number = 1, limit: number = 10): Promise<{ items: Contact[]; total: number }> {
+  async findAll(
+    userId?: string,
+    page: number = 1,
+    limit: number = 10,
+  ): Promise<{ items: Contact[]; total: number }> {
     const [items, total] = await this.contactRepository.findAndCount({
+      where: userId ? { userId } : undefined,
       skip: (page - 1) * limit,
       take: limit,
       order: { createdAt: 'DESC' },
@@ -44,9 +55,9 @@ export class ContactsService {
     return { items, total };
   }
 
-  async findOne(id: string): Promise<Contact> {
+  async findOne(id: string, userId?: string): Promise<Contact> {
     const contact = await this.contactRepository.findOne({
-      where: { id },
+      where: userId ? { id, userId } : { id },
       relations: ['events', 'conversations'],
     });
     if (!contact) {
@@ -55,23 +66,23 @@ export class ContactsService {
     return contact;
   }
 
-  async update(id: string, updateContactDto: UpdateContactDto): Promise<Contact> {
-    const contact = await this.findOne(id);
+  async update(id: string, updateContactDto: UpdateContactDto, userId?: string): Promise<Contact> {
+    const contact = await this.findOne(id, userId);
     Object.assign(contact, updateContactDto);
     return this.contactRepository.save(contact);
   }
 
-  async getContactContext(id: string): Promise<{
+  async getContactContext(id: string, userId?: string): Promise<{
     events: Contact['events'];
-    facts: Array<{ key: string; value: string; conversationId?: string; createdAt?: Date }>;
-    todos: Array<{ description: string; dueDate?: string; conversationId?: string; createdAt?: Date }>;
+    facts: Array<{ id: string; content: string; conversationId?: string | null; createdAt?: Date }>;
+    todos: Array<{ id: string; content: string; dueDate?: string | null; conversationId?: string | null; createdAt?: Date }>;
     recentEvents: Array<{ id: string; summary: string; occurredAt: Date; occurred_at: Date; title: string | null }>;
-    stableFacts: Array<{ key: string; value: string }>;
+    stableFacts: Array<{ content: string }>;
     openActions: Array<{ id: string; suggestion_reason: string; due_at?: string | null }>;
   }> {
     const contact = await this.contactRepository.findOne({
-      where: { id },
-      relations: ['events', 'conversations'],
+      where: userId ? { id, userId } : { id },
+      relations: ['events', 'conversations', 'facts', 'todos'],
     });
     if (!contact) {
       throw new NotFoundException('Contact not found');
@@ -83,22 +94,20 @@ export class ContactsService {
       return bTime - aTime;
     });
 
-    const facts: Array<{ key: string; value: string; conversationId?: string; createdAt?: Date }> = [];
-    const todos: Array<{ description: string; dueDate?: string; conversationId?: string; createdAt?: Date }> = [];
+    const facts = (contact.facts ?? []).map((fact) => ({
+      id: fact.id,
+      content: fact.content,
+      conversationId: fact.sourceConversationId,
+      createdAt: fact.createdAt,
+    }));
 
-    (contact.conversations ?? []).forEach(conversation => {
-      const parsedData = conversation.parsedData ?? {};
-      const conversationId = conversation.id;
-      const createdAt = conversation.createdAt;
-
-      (parsedData.facts ?? []).forEach((fact: { key: string; value: string }) => {
-        facts.push({ ...fact, conversationId, createdAt });
-      });
-
-      (parsedData.todos ?? []).forEach((todo: { description: string; dueDate?: string }) => {
-        todos.push({ ...todo, conversationId, createdAt });
-      });
-    });
+    const todos = (contact.todos ?? []).map((todo) => ({
+      id: todo.id,
+      content: todo.content,
+      dueDate: todo.dueAt ? todo.dueAt.toISOString() : null,
+      conversationId: todo.sourceConversationId,
+      createdAt: todo.createdAt,
+    }));
 
     const recentEvents = events.map(event => {
       const occurredAt = event.eventDate ?? event.createdAt;
@@ -111,10 +120,10 @@ export class ContactsService {
       };
     });
 
-    const stableFacts = facts.map(fact => ({ key: fact.key, value: fact.value }));
-    const openActions = todos.map((todo, index) => ({
-      id: `${todo.conversationId ?? 'todo'}-${index}`,
-      suggestion_reason: todo.description,
+    const stableFacts = facts.map((fact) => ({ content: fact.content }));
+    const openActions = todos.map((todo) => ({
+      id: todo.id,
+      suggestion_reason: todo.content,
       due_at: todo.dueDate ?? null,
     }));
 
@@ -128,8 +137,8 @@ export class ContactsService {
     };
   }
 
-  async remove(id: string): Promise<void> {
-    const contact = await this.findOne(id);
+  async remove(id: string, userId?: string): Promise<void> {
+    const contact = await this.findOne(id, userId);
     await this.contactRepository.remove(contact);
   }
 }

@@ -1,5 +1,6 @@
 import {
   Injectable,
+  BadRequestException,
   ConflictException,
   UnauthorizedException,
 } from '@nestjs/common';
@@ -21,7 +22,8 @@ export interface AuthTokens {
 export interface AuthResponse extends AuthTokens {
   user: {
     id: string;
-    email: string;
+    email: string | null;
+    phone: string | null;
     name: string | null;
   };
 }
@@ -44,20 +46,29 @@ export class AuthService {
   }
 
   async register(
-    email: string,
+    email: string | undefined,
+    phone: string | undefined,
     password: string,
     name?: string,
   ): Promise<AuthResponse> {
+    if (!email && !phone) {
+      throw new BadRequestException('Either email or phone is required');
+    }
+
     const existingUser = await this.userRepository.findOne({
-      where: { email },
+      where: [
+        ...(email ? [{ email }] : []),
+        ...(phone ? [{ phone }] : []),
+      ],
     });
     if (existingUser) {
-      throw new ConflictException('Email already exists');
+      throw new ConflictException('Email or phone already exists');
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
     const user = this.userRepository.create({
-      email,
+      email: email ?? null,
+      phone: phone ?? null,
       password: hashedPassword,
       name,
     });
@@ -66,8 +77,17 @@ export class AuthService {
     return this.generateTokens(savedUser);
   }
 
-  async login(email: string, password: string): Promise<AuthResponse> {
-    const user = await this.userRepository.findOne({ where: { email } });
+  async login(emailOrPhone: string, password: string): Promise<AuthResponse> {
+    if (!emailOrPhone) {
+      throw new BadRequestException('emailOrPhone is required');
+    }
+
+    const user = await this.userRepository.findOne({
+      where: [
+        { email: emailOrPhone },
+        { phone: emailOrPhone },
+      ],
+    });
     if (!user) {
       throw new UnauthorizedException('Invalid credentials');
     }
@@ -154,6 +174,7 @@ export class AuthService {
       user: {
         id: user.id,
         email: user.email,
+        phone: user.phone,
         name: user.name,
       },
     };

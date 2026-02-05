@@ -2,7 +2,8 @@
   "moduleFileExtensions": ["js", "json", "ts"],
   "rootDir": ".",
   "testEnvironment": "node",
-  "testRegex": ".e2e-spec.ts$",
+  "testRegex": "(api|chat-sse|tool-confirmations)\\.e2e-spec\\.ts$",
+  "setupFiles": ["<rootDir>/setup-e2e.ts"],
   "transform": {
     "^.+\\.(t|j)s$": "ts-jest"
   }

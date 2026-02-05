@@ -18,6 +18,9 @@ export class ToolConfirmationsService {
   ) {}
 
   async create(input: CreateToolConfirmationInput): Promise<ToolConfirmation> {
+    if (!input.toolName) {
+      throw new BadRequestException('toolName is required');
+    }
     const confirmation = this.toolConfirmationRepository.create({
       toolName: input.toolName,
       payload: input.payload ?? null,
@@ -29,10 +32,15 @@ export class ToolConfirmationsService {
     return this.toolConfirmationRepository.save(confirmation);
   }
 
-  async findAll(status?: ToolConfirmationStatus, userId?: string): Promise<ToolConfirmation[]> {
+  async findAll(
+    status?: ToolConfirmationStatus,
+    userId?: string,
+    conversationId?: string,
+  ): Promise<ToolConfirmation[]> {
     const where: Record<string, any> = {};
     if (status) where.status = status;
     if (userId) where.userId = userId;
+    if (conversationId) where.conversationId = conversationId;
 
     return this.toolConfirmationRepository.find({
       where,
