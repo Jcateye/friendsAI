@@ -3,12 +3,13 @@ const { Client } = require('pg');
 
 async function checkDatabase() {
     const client = new Client({
-        user: 'postgres',
+        user: 'friendsai',
         host: 'localhost',
         database: 'friendsai_v2', // Expected database name
         password: 'friendsai', // Assuming no password for local testing, or get from env
         port: 5434,
     });
+
 
     try {
         await client.connect();
