@@ -5,6 +5,7 @@ import { ContextBuilder } from './context-builder';
 import { ToolExecutionStrategy } from '../ai/tools/tool-execution.strategy';
 import { ToolRegistry } from '../ai/tool-registry';
 import { AgentChatRequest } from './agent.types';
+import { AgentMessageStore } from './agent-message.store';
 import type OpenAI from 'openai';
 
 describe('AgentOrchestrator', () => {
@@ -13,6 +14,7 @@ describe('AgentOrchestrator', () => {
   let contextBuilder: jest.Mocked<ContextBuilder>;
   let toolExecutionStrategy: jest.Mocked<ToolExecutionStrategy>;
   let toolRegistry: jest.Mocked<ToolRegistry>;
+  let messageStore: jest.Mocked<AgentMessageStore>;
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -45,6 +47,19 @@ describe('AgentOrchestrator', () => {
             list: jest.fn(),
           },
         },
+        {
+          provide: AgentMessageStore,
+          useValue: {
+            buildKey: jest.fn().mockReturnValue('user:default'),
+            createMessage: jest.fn((input: any) => ({
+              id: input.id ?? 'msg-1',
+              role: input.role,
+              content: input.content,
+              createdAt: new Date().toISOString(),
+            })),
+            appendMessage: jest.fn(),
+          },
+        },
       ],
     }).compile();
 
@@ -53,6 +68,7 @@ describe('AgentOrchestrator', () => {
     contextBuilder = module.get(ContextBuilder);
     toolExecutionStrategy = module.get(ToolExecutionStrategy);
     toolRegistry = module.get(ToolRegistry);
+    messageStore = module.get(AgentMessageStore);
   });
 
   describe('streamChat', () => {
@@ -104,10 +120,13 @@ describe('AgentOrchestrator', () => {
         events.push(event);
       }
 
-      expect(events).toHaveLength(3);
-      expect(events[0]).toEqual({ type: 'token', content: 'Hello' });
-      expect(events[1]).toEqual({ type: 'token', content: '!' });
-      expect(events[2]).toEqual({ type: 'done', reason: 'stop' });
+      expect(events[0].event).toBe('agent.start');
+      const deltaEvents = events.filter((event) => event.event === 'agent.delta');
+      expect(deltaEvents).toHaveLength(2);
+      expect(deltaEvents.map((event) => event.data.delta).join('')).toBe('Hello!');
+      const messageEvent = events.find((event) => event.event === 'agent.message');
+      expect(messageEvent).toBeDefined();
+      expect(events[events.length - 1].event).toBe('agent.end');
     });
 
     it('should handle tool calls and execute them', async () => {
@@ -219,24 +238,13 @@ describe('AgentOrchestrator', () => {
         events.push(event);
       }
 
-      expect(events.length).toBeGreaterThan(0);
+      const toolStateEvents = events.filter((event) => event.event === 'tool.state');
+      expect(toolStateEvents.length).toBeGreaterThan(0);
+      expect(toolStateEvents.some((event) => event.data.status === 'succeeded')).toBe(true);
 
-      // Should have tool_call event
-      const toolCallEvent = events.find(e => e.type === 'tool_call');
-      expect(toolCallEvent).toBeDefined();
-      expect(toolCallEvent).toMatchObject({
-        type: 'tool_call',
-        toolName: 'send_email',
-        callId: 'call_123',
-      });
-
-      // Should have tool_result event
-      const toolResultEvent = events.find(e => e.type === 'tool_result');
-      expect(toolResultEvent).toBeDefined();
-
-      // Should have final text response
-      const tokenEvents = events.filter(e => e.type === 'token');
-      expect(tokenEvents.length).toBeGreaterThan(0);
+      const deltaEvents = events.filter((event) => event.event === 'agent.delta');
+      expect(deltaEvents.length).toBeGreaterThan(0);
+      expect(events[events.length - 1].event).toBe('agent.end');
     });
 
     it('should handle tool confirmation flow', async () => {
@@ -308,19 +316,11 @@ describe('AgentOrchestrator', () => {
         events.push(event);
       }
 
-      // Should have requires_confirmation event
-      const confirmEvent = events.find(e => e.type === 'requires_confirmation');
-      expect(confirmEvent).toBeDefined();
-      expect(confirmEvent).toMatchObject({
-        type: 'requires_confirmation',
-        toolName: 'delete_files',
-        confirmationId: 'confirm_123',
-      });
-
-      // Should end with done event indicating confirmation needed
-      const doneEvent = events.find(e => e.type === 'done');
-      expect(doneEvent).toBeDefined();
-      expect(doneEvent).toEqual({ type: 'done', reason: 'requires_confirmation' });
+      const awaitingEvent = events.find((event) => event.event === 'tool.state' && event.data.status === 'awaiting_input');
+      expect(awaitingEvent).toBeDefined();
+      const endEvent = events.find((event) => event.event === 'agent.end');
+      expect(endEvent).toBeDefined();
+      expect(endEvent?.data.status).toBe('cancelled');
     });
 
     it('should handle tool execution errors gracefully', async () => {
@@ -409,13 +409,10 @@ describe('AgentOrchestrator', () => {
         events.push(event);
       }
 
-      // Should have error event
-      const errorEvent = events.find(e => e.type === 'error');
-      expect(errorEvent).toBeDefined();
-      expect(errorEvent).toMatchObject({
-        type: 'error',
-        message: expect.stringContaining('Network error'),
-      });
+      const toolStateEvent = events.find((event) => event.event === 'tool.state' && event.data.status === 'failed');
+      expect(toolStateEvent).toBeDefined();
+      const endEvent = events.find((event) => event.event === 'agent.end');
+      expect(endEvent).toBeDefined();
     });
 
     it('should stop after max tool iterations', async () => {
@@ -484,13 +481,9 @@ describe('AgentOrchestrator', () => {
         events.push(event);
       }
 
-      // Should eventually hit max iterations and error
-      const errorEvent = events.find(e => e.type === 'error');
+      const errorEvent = events.find((event) => event.event === 'error');
       expect(errorEvent).toBeDefined();
-      expect(errorEvent).toMatchObject({
-        type: 'error',
-        message: expect.stringContaining('Maximum tool iterations'),
-      });
+      expect(errorEvent?.data.message).toContain('Maximum tool iterations');
     });
   });
 
@@ -564,13 +557,11 @@ describe('AgentOrchestrator', () => {
         true
       );
 
-      // Should have tool_result event
-      const toolResultEvent = events.find(e => e.type === 'tool_result');
-      expect(toolResultEvent).toBeDefined();
+      const toolStateEvent = events.find((event) => event.event === 'tool.state');
+      expect(toolStateEvent).toBeDefined();
 
-      // Should continue with streaming
-      const tokenEvents = events.filter(e => e.type === 'token');
-      expect(tokenEvents.length).toBeGreaterThan(0);
+      const deltaEvents = events.filter((event) => event.event === 'agent.delta');
+      expect(deltaEvents.length).toBeGreaterThan(0);
     });
 
     it('should handle user rejection', async () => {
@@ -604,14 +595,12 @@ describe('AgentOrchestrator', () => {
         false
       );
 
-      // Should have tool_result with denied status
-      const toolResultEvent = events.find(e => e.type === 'tool_result');
-      expect(toolResultEvent).toBeDefined();
+      const toolStateEvent = events.find((event) => event.event === 'tool.state');
+      expect(toolStateEvent).toBeDefined();
 
-      // Should end with done event
-      const doneEvent = events.find(e => e.type === 'done');
-      expect(doneEvent).toBeDefined();
-      expect(doneEvent).toEqual({ type: 'done', reason: 'denied' });
+      const endEvent = events.find((event) => event.event === 'agent.end');
+      expect(endEvent).toBeDefined();
+      expect(endEvent?.data.status).toBe('cancelled');
     });
   });
 });

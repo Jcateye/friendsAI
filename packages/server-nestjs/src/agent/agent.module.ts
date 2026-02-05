@@ -5,8 +5,9 @@ import { User, Contact, Conversation, ConnectorToken } from '../entities';
 import { ToolExecutionStrategy } from '../ai/tools/tool-execution.strategy';
 import { AgentController } from './agent.controller';
 import { AgentOrchestrator } from './agent.orchestrator';
-import { ContextBuilderService } from './context-builder.service';
+import { AgentMessageStore } from './agent-message.store';
 import { ContextBuilder } from './context-builder';
+import { ContextBuilderService } from './context-builder.service';
 
 @Module({
   imports: [
@@ -16,10 +17,11 @@ import { ContextBuilder } from './context-builder';
   controllers: [AgentController],
   providers: [
     AgentOrchestrator,
+    AgentMessageStore,
     ContextBuilder,
     ContextBuilderService,
     ToolExecutionStrategy,
   ],
-  exports: [AgentOrchestrator, ContextBuilderService, ContextBuilder],
+  exports: [AgentOrchestrator, AgentMessageStore, ContextBuilder, ContextBuilderService],
 })
 export class AgentModule {}
