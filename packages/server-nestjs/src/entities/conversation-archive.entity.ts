@@ -1,4 +1,5 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, ManyToOne, JoinColumn } from 'typeorm';
+import { Conversation } from './conversation.entity';
 
 export type ConversationArchiveStatus = 'ready_for_review' | 'applied' | 'discarded';
 
@@ -7,11 +8,12 @@ export class ConversationArchive {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
+  @ManyToOne(() => Conversation, { nullable: false })
+  @JoinColumn({ name: 'conversationId' })
+  conversation: Conversation;
+
   @Column()
   conversationId: string;
-
-  @Column({ default: 'ready_for_review' })
-  status: ConversationArchiveStatus;
 
   @Column({ type: 'text', nullable: true })
   summary: string | null;
@@ -21,6 +23,8 @@ export class ConversationArchive {
 
   @Column({ type: 'jsonb', nullable: true })
   citations: Record<string, any> | null;
+  @Column({ type: 'text', default: 'ready_for_review' })
+  status: ConversationArchiveStatus;
 
   @Column({ type: 'timestamp', nullable: true })
   appliedAt: Date | null;

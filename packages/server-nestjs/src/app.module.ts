@@ -28,6 +28,7 @@ import { AgentModule } from './agent/agent.module';
 import { ConnectorsModule } from './connectors/connectors.module';
 import { ToolsModule } from './tools/tools.module';
 import { ToolConfirmationsModule } from './tool-confirmations/tool-confirmations.module';
+import { ConversationArchivesModule } from './conversation-archives/conversation-archives.module';
 
 @Module({
   imports: [
@@ -78,6 +79,7 @@ import { ToolConfirmationsModule } from './tool-confirmations/tool-confirmations
     ConnectorsModule,
     ToolsModule,
     ToolConfirmationsModule,
+    ConversationArchivesModule,
   ],
   controllers: [AppController],
   providers: [AppService],

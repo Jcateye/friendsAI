@@ -68,7 +68,7 @@
 
 ## WS-60 Server / Conversation Archive
 
-- [ ] WS-60 会话归档：extract → review → apply/discard（含 citations + 幂等） [ARCH-010] [ARCH-020] [ARCH-030] [ARCH-040] [ARCH-050] Done When:
+- [x] WS-60 会话归档：extract → review → apply/discard（含 citations + 幂等） [ARCH-010] [ARCH-020] [ARCH-030] [ARCH-040] [ARCH-050] Done When:
   - `POST /v1/conversations/:conversationId/archive` 返回 `{ id, status, summary, payload }`，payload 至少一条包含 citations（`messageId + span`）。
   - `POST /v1/conversation-archives/:archiveId/apply|discard` 可用；apply 后状态为 `applied`，discard 后为 `discarded`。
   - apply 写入 contacts/events/facts/todos 并保证幂等（重复 apply 不重复写入）。
