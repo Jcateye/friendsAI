@@ -52,7 +52,7 @@
 
 ## WS-40 Server / Agent SSE Chat
 
-- [ ] WS-40 Agent SSE Chat：SSE 契约 + `/v1/agent/chat` 流式 + ping + tool.state 占位 [CHAT-030] [CHAT-040] [CHAT-050] [CHAT-060] Done When:
+- [x] WS-40 Agent SSE Chat：SSE 契约 + `/v1/agent/chat` 流式 + ping + tool.state 占位 [CHAT-030] [CHAT-040] [CHAT-050] [CHAT-060] Done When:
   - `POST /v1/agent/chat` 以 SSE 输出 `agent.start → agent.delta* → agent.message → agent.end`，`data:` 为 JSON `{ event, data }`。
   - user/assistant messages 被持久化：一次 run 后 `GET /v1/conversations/:id/messages` 可见新增消息。
   - 长连接期间可观测到周期性的 `ping`；工具状态至少可通过 `tool.state` 事件输出 mock 状态流转。
