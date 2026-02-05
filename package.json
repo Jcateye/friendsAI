@@ -11,9 +11,9 @@
     "client:dev:weapp": "bun run --cwd packages/client dev:weapp",
     "client:build": "bun run --cwd packages/client build:h5",
     "client:build:weapp": "bun run --cwd packages/client build:weapp",
-    "server:dev": "bun run --cwd packages/server dev",
-    "server:build": "bun run --cwd packages/server build",
-    "server:start": "bun run --cwd packages/server start",
+    "server:dev": "bun run --cwd packages/server-nestjs start:dev",
+    "server:build": "bun run --cwd packages/server-nestjs build",
+    "server:start": "bun run --cwd packages/server-nestjs start:prod",
     "server:migrate": "bun run --cwd packages/server migrate",
     "dev": "concurrently \"bun run client:dev\" \"bun run server:dev\"",
     "build": "bun run client:build && bun run server:build",
@@ -29,6 +29,7 @@
   },
   "dependencies": {
     "openclaw": "^2026.1.30",
-    "openspec": "^0.0.0"
+    "openspec": "^0.0.0",
+    "pg": "^8.18.0"
   }
 }

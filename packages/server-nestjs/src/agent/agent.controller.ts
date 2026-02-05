@@ -3,7 +3,7 @@ import type { Request, Response } from 'express';
 import { AgentOrchestrator } from './agent.orchestrator';
 import type { AgentChatRequest, AgentStreamEvent } from './agent.types';
 
-@Controller('v1/agent')
+@Controller('agent')
 export class AgentController {
   constructor(private readonly agentOrchestrator: AgentOrchestrator) {}
 

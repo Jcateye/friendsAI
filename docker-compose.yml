@@ -2,18 +2,18 @@ version: '3.8'
 
 services:
   postgres:
-    image: ankane/pgvector:latest
+    image: pgvector/pgvector:pg16
     container_name: friendsai-postgres
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: friends_ai_db
+      POSTGRES_USER: friendsai
+      POSTGRES_PASSWORD: friendsai
+      POSTGRES_DB: friendsai_v2
     ports:
       - "5434:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      test: ["CMD-SHELL", "pg_isready -U friendsai"]
       interval: 5s
       timeout: 5s
       retries: 5
