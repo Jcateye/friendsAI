@@ -51,36 +51,6 @@
         "webpack": "^5.78.0",
       },
     },
-    "packages/server": {
-      "name": "@friends-ai/server",
-      "version": "1.0.0",
-      "dependencies": {
-        "@ai-sdk/openai-compatible": "^2.0.25",
-        "ai": "^6.0.66",
-        "bcryptjs": "^2.4.3",
-        "cors": "^2.8.5",
-        "dotenv": "^16.3.1",
-        "express": "^4.18.2",
-        "jsonwebtoken": "^9.0.2",
-        "module-alias": "^2.2.3",
-        "pg": "^8.11.5",
-        "zod": "^3.23.8",
-      },
-      "devDependencies": {
-        "@types/bcryptjs": "2.4.6",
-        "@types/cors": "^2.8.17",
-        "@types/express": "^4.17.21",
-        "@types/jsonwebtoken": "^9.0.10",
-        "@types/node": "^20.10.0",
-        "@types/pg": "^8.16.0",
-        "@typescript-eslint/eslint-plugin": "^6.0.0",
-        "@typescript-eslint/parser": "^6.0.0",
-        "eslint": "^8.36.0",
-        "ts-node-dev": "^2.0.0",
-        "tsconfig-paths": "^4.2.0",
-        "typescript": "^5.0.0",
-      },
-    },
     "packages/server-nestjs": {
       "name": "server-nestjs",
       "version": "0.0.1",
@@ -596,8 +566,6 @@
     "@eslint/plugin-kit": ["@eslint/plugin-kit@0.4.1", "", { "dependencies": { "@eslint/core": "^0.17.0", "levn": "^0.4.1" } }, "sha512-43/qtrDUokr7LJqoF2c3+RInu/t4zfrpYdoSDfYyhg52rwLV6TnOvdG4fXm7IkSB3wErkcmJS9iEhjVtOSEjjA=="],
 
     "@friends-ai/client": ["@friends-ai/client@workspace:packages/client"],
-
-    "@friends-ai/server": ["@friends-ai/server@workspace:packages/server"],
 
     "@google/genai": ["@google/genai@1.34.0", "", { "dependencies": { "google-auth-library": "^10.3.0", "ws": "^8.18.0" }, "peerDependencies": { "@modelcontextprotocol/sdk": "^1.24.0" }, "optionalPeers": ["@modelcontextprotocol/sdk"] }, "sha512-vu53UMPvjmb7PGzlYu6Tzxso8Dfhn+a7eQFaS2uNemVtDZKwzSpJ5+ikqBbXplF7RGB1STcVDqCkPvquiwb2sw=="],
 

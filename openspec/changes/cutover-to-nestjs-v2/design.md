@@ -1,8 +1,7 @@
 ## Context
 
-当前仓库同时存在两套后端：
-- `packages/server`（Express）：当前 H5 前端默认对接的主线（JWT + /v1 + journal-entries 等）
-- `packages/server-nestjs`（NestJS）：并行试验线，具备部分 Agent SSE / tool confirmation / A2UI schema 雏形，但与前端契约、鉴权、数据模型不一致，且 DB 配置硬编码 + `synchronize: true` 存在高风险
+当前仓库主线后端为：
+- `packages/server-nestjs`（NestJS）：Conversation-first + SSE + tool confirmation + A2UI schema；作为唯一主线
 
 本变更选择 **激进切换**：后端主线切到 NestJS，前端按 Conversation-first 重写；并使用全新 DB（例如 `friendsai_v2`）以避免与旧表冲突，旧库保留用于回滚对照。
 
@@ -20,7 +19,7 @@
 - 会话归档提取与确认应用（archive → applied）
 - 联系人侧沉淀与简报（contacts/context/brief）
 - 工具强确认统一到 `tool_confirmations`（requires_confirmation → confirm/reject → execute）
-- 默认开发/启动链路直接跑 NestJS（Express 仅保留回滚）
+- 默认开发/启动链路直接跑 NestJS（Express 已移除）
 
 **Non-Goals:**
 - 旧数据迁移（旧库仅回滚对照）

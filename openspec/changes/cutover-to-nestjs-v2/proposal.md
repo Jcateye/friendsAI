@@ -18,7 +18,7 @@
   - conversation archives（归档提取结果待审/应用）
 - Agent SSE：提供流式输出（文本 delta、tool trace、A2UI、citations），前端 H5 接入
 - 工具强确认：写/发类工具必须 `requires_confirmation`，用户确认后才执行
-- 调整根目录启动脚本与环境配置，使默认开发/启动链路指向 NestJS（Express 保留但不再作为默认入口）
+- 调整根目录启动脚本与环境配置，使默认开发/启动链路指向 NestJS（Express 已移除）
 
 ## Non-Goals
 
@@ -36,10 +36,7 @@
 
 ## Rollback
 
-- 保留 `packages/server`（Express）与旧数据库不变
-- 回滚方式：
-  - 将默认启动脚本/端口切回 Express（例如恢复 `bun run dev` 的指向）
-  - 前端切回旧 API BASE_URL/旧页面（若本次变更导致不可用）
+- Express 旧后端已移除，回滚需回退到删除前的 git commit/tag
 - 因为新主线使用独立 DB（`friendsai_v2`），回滚不涉及数据回迁
 
 ## Acceptance

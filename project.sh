@@ -14,9 +14,7 @@ CLIENT_LOG="$LOG_DIR/client.log"
 SERVER_LOG="$LOG_DIR/server.log"
 CLIENT_PID_FILE="$ROOT_DIR/.client.pid"
 SERVER_PID_FILE="$ROOT_DIR/.server.pid"
-WORKER_PID_FILE="$ROOT_DIR/.worker.pid"
 DB_PID_FILE="$ROOT_DIR/.db.pid"
-WORKER_LOG="$LOG_DIR/worker.log"
 
 if [[ -f "$ROOT_DIR/bun.lockb" || -f "$ROOT_DIR/bun.lock" ]]; then
   PKG_MANAGER="bun"
@@ -30,8 +28,6 @@ load_env() {
   local node_env="${NODE_ENV:-development}"
   local nest_env_file="$ROOT_DIR/packages/server-nestjs/.env.${node_env}"
   local nest_env_fallback="$ROOT_DIR/packages/server-nestjs/.env"
-  local server_env_file="$ROOT_DIR/packages/server/.env.${node_env}"
-  local server_env_fallback="$ROOT_DIR/packages/server/.env"
   local client_env_file="$ROOT_DIR/packages/client/.env.${node_env}"
   local existing_port="${PORT-}"
   local existing_client_port="${CLIENT_PORT-}"
@@ -48,16 +44,6 @@ load_env() {
     # shellcheck disable=SC1090
     set -a
     source "$nest_env_fallback"
-    set +a
-  elif [[ -f "$server_env_file" ]]; then
-    # shellcheck disable=SC1090
-    set -a
-    source "$server_env_file"
-    set +a
-  elif [[ -f "$server_env_fallback" ]]; then
-    # shellcheck disable=SC1090
-    set -a
-    source "$server_env_fallback"
     set +a
   fi
 
@@ -190,12 +176,12 @@ FriendsAI 项目管理脚本
 
 命令:
   start [client|server|all]   启动服务 (默认 all)
-  start:mvp                   启动 MVP：DB + 迁移 + API + Worker + 前端
+  start:mvp                   启动 MVP：DB + 迁移 + API + 前端
   stop [client|server|all]    停止服务 (默认 all)
-  stop:mvp                    停止 MVP：API + Worker + 前端（不关闭 DB）
+  stop:mvp                    停止 MVP：API + 前端（不关闭 DB）
   restart [client|server|all] 重启服务 (默认 all)
   build [client|server|all]   构建项目 (默认 all)
-  logs [client|server|worker] 查看日志 (默认 client)
+  logs [client|server] 查看日志 (默认 client)
   status                      查看服务状态
   clean-logs                  清理日志文件
 
@@ -205,7 +191,7 @@ FriendsAI 项目管理脚本
   ./project.sh stop server     # 停止后端
   ./project.sh logs server     # 查看后端日志
   ./project.sh build client    # 构建前端 H5
-  ./project.sh start:mvp       # 启动 MVP 全量（含 DB+迁移+worker）
+  ./project.sh start:mvp       # 启动 MVP 全量（含 DB+迁移+前后端）
 EOF
 }
 
@@ -224,17 +210,6 @@ is_server_running() {
   if [[ -f "$SERVER_PID_FILE" ]]; then
     local pid
     pid="$(cat "$SERVER_PID_FILE")"
-    if [[ -n "$pid" ]] && kill -0 "$pid" >/dev/null 2>&1; then
-      return 0
-    fi
-  fi
-  return 1
-}
-
-is_worker_running() {
-  if [[ -f "$WORKER_PID_FILE" ]]; then
-    local pid
-    pid="$(cat "$WORKER_PID_FILE")"
     if [[ -n "$pid" ]] && kill -0 "$pid" >/dev/null 2>&1; then
       return 0
     fi
@@ -332,38 +307,6 @@ start_server() {
   verify_server
 }
 
-start_worker_background() {
-  if is_worker_running; then
-    echo "🟢 Worker 已在运行 (PID: $(cat "$WORKER_PID_FILE"))"
-    return 0
-  fi
-
-  load_env
-  echo "🧰 启动 Worker..."
-  if [[ "$PKG_MANAGER" == "bun" ]]; then
-    nohup bun run --cwd "$ROOT_DIR/packages/server" worker > "$WORKER_LOG" 2>&1 &
-  else
-    nohup "$PKG_MANAGER" run -w @friends-ai/server worker > "$WORKER_LOG" 2>&1 &
-  fi
-  echo $! > "$WORKER_PID_FILE"
-}
-
-verify_worker() {
-  # 检查服务是否成功启动 (Worker不监听端口，只检查PID)
-  if check_service_status "worker" "$WORKER_PID_FILE" "$WORKER_LOG"; then
-    echo "✅ Worker 已启动，PID: $(cat "$WORKER_PID_FILE")"
-    echo "   日志文件: $WORKER_LOG"
-    return 0
-  else
-    return 1
-  fi
-}
-
-start_worker() {
-  start_worker_background
-  verify_worker
-}
-
 # 杀死指定 PID 及其子进程占用端口的进程
 # 参数: $1=端口, $2=PID文件路径(可选)
 # 只杀死与 PID 文件相关的进程，避免误杀其他应用
@@ -428,21 +371,6 @@ stop_server() {
   # 确保端口被释放（只杀死我们启动的进程）
   kill_port "${PORT:-3000}" "$SERVER_PID_FILE"
   echo "✅ 后端已停止"
-}
-
-stop_worker() {
-  if is_worker_running; then
-    local pid
-    pid="$(cat "$WORKER_PID_FILE")"
-    echo "⏹️  停止 Worker (PID: $pid)..."
-    kill "$pid" 2>/dev/null || true
-    sleep 1
-    pkill -P "$pid" 2>/dev/null || true
-    rm -f "$WORKER_PID_FILE"
-    echo "✅ Worker 已停止"
-  else
-    echo "⚪ Worker 未运行"
-  fi
 }
 
 start() {
@@ -518,18 +446,12 @@ start_mvp() {
   local server_start_status=0
   start_server_background || server_start_status=$?
   
-  local worker_start_status=0
-  start_worker_background || worker_start_status=$?
-  
   local client_start_status=0
   start_client_background || client_start_status=$?
 
   # Perform verification after all services are attempted to start
   local server_verify_status=0
   verify_server || server_verify_status=$?
-  
-  local worker_verify_status=0
-  verify_worker || worker_verify_status=$?
   
   local client_verify_status=0
   verify_client || client_verify_status=$?
@@ -540,12 +462,6 @@ start_mvp() {
     echo ""
     echo "❌ 后端服务启动失败"
     echo "   请查看日志: $SERVER_LOG"
-    has_failure=1
-  fi
-  if [[ $worker_start_status -ne 0 || $worker_verify_status -ne 0 ]]; then
-    echo ""
-    echo "❌ Worker 启动失败"
-    echo "   请查看日志: $WORKER_LOG"
     has_failure=1
   fi
   if [[ $client_start_status -ne 0 || $client_verify_status -ne 0 ]]; then
@@ -598,7 +514,6 @@ stop() {
 
 stop_mvp() {
   stop_client
-  stop_worker
   stop_server
 }
 
@@ -653,16 +568,8 @@ logs() {
         echo "未找到后端日志文件: $SERVER_LOG"
       fi
       ;;
-    worker)
-      if [[ -f "$WORKER_LOG" ]]; then
-        echo "📋 Worker 日志 ($WORKER_LOG):"
-        tail -f "$WORKER_LOG"
-      else
-        echo "未找到 Worker 日志文件: $WORKER_LOG"
-      fi
-      ;;
     *)
-      echo "未知服务: $target (可选: client, server, worker)"
+      echo "未知服务: $target (可选: client, server)"
       exit 1
       ;;
   esac
@@ -681,11 +588,6 @@ status() {
     echo "  🟢 后端: 运行中 (PID: $(cat "$SERVER_PID_FILE"))"
   else
     echo "  ⚪ 后端: 未运行"
-  fi
-  if is_worker_running; then
-    echo "  🟢 Worker: 运行中 (PID: $(cat "$WORKER_PID_FILE"))"
-  else
-    echo "  ⚪ Worker: 未运行"
   fi
   echo ""
 }

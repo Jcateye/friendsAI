@@ -14,7 +14,7 @@
     "server:dev": "bun run --cwd packages/server-nestjs start:dev",
     "server:build": "bun run --cwd packages/server-nestjs build",
     "server:start": "bun run --cwd packages/server-nestjs start:prod",
-    "server:migrate": "bun run --cwd packages/server migrate",
+    "server:migrate": "bun run --cwd packages/server-nestjs migrate",
     "dev": "concurrently \"bun run client:dev\" \"bun run server:dev\"",
     "build": "bun run client:build && bun run server:build",
     "user-stories:verify": "node scripts/verify-user-stories.js",

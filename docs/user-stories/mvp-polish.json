@@ -32,8 +32,8 @@
     "description": "Developer can run MVP with docker compose + env example",
     "steps": [
       "Start Postgres via docker compose",
-      "Copy packages/server/.env.example to packages/server/.env and set DATABASE_URL/JWT_SECRET",
-      "Run migrations and start server + worker + client",
+      "Create packages/server-nestjs/.env and set DATABASE_URL/JWT_SECRET/OPENAI_API_KEY",
+      "Run migrations and start server + client",
       "Login/register and use core MVP flow end-to-end"
     ],
     "passes": true

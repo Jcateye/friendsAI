@@ -1,5 +1,7 @@
 # 后端 MVP 实现进度与计划（FriendsAI）
 
+> ⚠️ 该文档为历史记录，Express 旧后端已删除，主线切换到 `packages/server-nestjs`。如需参考旧实现，请回退到删除前的 git commit/tag。
+
 最后更新：2026-02-01
 
 本文对照最初的目标/约束与模块划分，说明：

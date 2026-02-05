@@ -6,7 +6,6 @@ context: |
   Monorepo: Bun workspaces
     - packages/client：Taro 前端（当前主要运行 H5）
     - packages/server-nestjs：NestJS 后端主线（新主线，直接切换）
-    - packages/server：Express 旧主线（仅保留用于回滚对照；默认不再新增功能）
 
   Tech stack (client): Taro 3.6 + React 18 + TypeScript
   UI (client): taro-ui + 自定义组件（SCSS）
@@ -35,7 +34,7 @@ context: |
 
   Constraints:
     - 不引入新的跨端框架（继续使用 Taro）
-    - 新主线以 packages/server-nestjs 为准；除非明确，不要在 packages/server(Express) 上继续扩展
+    - 新主线以 packages/server-nestjs 为准
     - 允许前后端契约重写（激进模式）；但每次变更必须给出可跑通的验收路径/命令
     - 使用全新 DB；不做旧数据迁移（旧库仅保留回滚用）
 

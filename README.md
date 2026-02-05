@@ -13,9 +13,9 @@ AI-powered relationship management app - 智能社交关系管理应用
 
 ## 主线说明（NestJS v2）
 
-- 默认后端主线：`packages/server-nestjs`（NestJS，API 前缀 `/v1`）
+- 后端主线：`packages/server-nestjs`（NestJS，API 前缀 `/v1`）
 - 新数据库：`friendsai_v2`（通过 `DATABASE_URL` 指向）
-- `packages/server` 为旧版 Express，仅用于回滚/对照
+- Express 旧主线已移除（如需回滚请回退到删除前的 git commit/tag）
 
 ## 2. 项目结构
 
@@ -39,8 +39,6 @@ friendsAI/
 │   │   ├── Dockerfile
 │   │   └── ...
 │   │
-│   └── server/              # [LEGACY/ROLLBACK] 旧版后端 (Express)
-│
 ├── designs/                 # 设计文件 (.pen)
 ├── docs/                    # 项目文档
 ├── docker-compose.yml       # 数据库编排 (PostgreSQL + PGVector)
@@ -62,11 +60,6 @@ friendsAI/
 - **AI SDK**: OpenAI Node.js SDK
 - **测试**: Jest
 
-### 后端 (packages/server) - 旧版后端（已弃用）
-- **框架**: Express.js
-- **语言**: TypeScript
-- **运行时**: Node.js 18+
-- **包管理**: Bun
 
 ## 4. 功能模块详解
 
@@ -104,7 +97,7 @@ friendsAI/
 
 ### 前置要求
 - Node.js >= 18.0.0
-- Bun >= 1.2.0 (用于旧版后端)
+- Bun >= 1.2.0（可选，用于 monorepo 脚本）
 - Docker (用于运行数据库)
 - OpenAI API Key
 
@@ -154,20 +147,11 @@ node scripts/smoke-v2.js
 
 > 注意：聊天与简报依赖 `OPENAI_API_KEY`。
 
-### 主线与回滚说明
+### 回滚说明
 
 - **主线后端**：`packages/server-nestjs`（默认 `/v1`）
 - **主线数据库**：`friendsai_v2`
-- **回滚方式**：
-  1. 将默认启动脚本指回 `packages/server`（Express）
-  2. 前端切回旧 API BASE_URL
-  3. 继续使用旧数据库（不回迁 `friendsai_v2` 数据）
-
-### MVP 一键启动（旧版）
-
-```bash
-./project.sh start:mvp
-```
+- **回滚方式**：回退到删除 Express 之前的 git commit/tag，并按当时的 README 启动旧版。
 
 ### 使用 bun 脚本（主线）
 
@@ -206,18 +190,6 @@ bun run build            # 构建前后端
 | `src/utils/` | 工具函数 |
 | `config/` | 环境配置 (dev.ts, prod.ts) |
 
-### packages/server - 后端模块
-
-| 目录 | 说明 |
-|------|------|
-| `src/routes/` | API 路由定义 |
-| `src/controllers/` | 请求处理控制器 |
-| `src/services/` | 业务逻辑服务 |
-| `src/models/` | 数据模型 |
-| `src/middleware/` | Express 中间件 |
-| `src/utils/` | 工具函数 |
-| `src/types/` | TypeScript 类型定义 |
-
 ### designs/ - 设计文件
 
 | 文件 | 说明 |
@@ -249,8 +221,8 @@ bun run build            # 构建前后端
 4. 修改 `packages/client/project.config.json` 中的 `appid` 为你的小程序 ID
 
 ### 后端开发
-1. 后端代码位于 `packages/server/src`
-2. 使用环境文件 `packages/server/.env.development` / `packages/server/.env.production` 配置环境变量
+1. 后端代码位于 `packages/server-nestjs/src`
+2. 使用环境文件 `packages/server-nestjs/.env.development` / `packages/server-nestjs/.env.production` 配置环境变量
 3. 端口通过 `PORT` 配置（开发默认 3000）
 
 ### 前端配置

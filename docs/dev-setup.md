@@ -8,7 +8,7 @@
 docker compose -f docker-compose.dev.yml up -d
 ```
 
-你也可以直接使用一键脚本（会自动启动 DB + 迁移 + API + Worker + 前端）：
+你也可以直接使用一键脚本（会自动启动 DB + 迁移 + API + 前端）：
 
 ```bash
 ./project.sh start:mvp
@@ -18,17 +18,18 @@ docker compose -f docker-compose.dev.yml up -d
 
 ## 2) 配置后端环境变量
 
-复制并修改：
+创建并修改：
 
 ```bash
-cp packages/server/.env.example packages/server/.env
+touch packages/server-nestjs/.env
 ```
 
 建议最小可用配置：
 
-- `DATABASE_URL=postgres://friendsai:friendsai@localhost:5434/friendsai`
+- `DATABASE_URL=postgres://friendsai:friendsai@localhost:5434/friendsai_v2`
 - `JWT_SECRET=...`（随便一串即可）
-- 可选：`DEV_VERIFY_CODE=123456`（开发阶段万能验证码）
+- `OPENAI_API_KEY=...`
+- 可选：`OPENAI_MODEL=gpt-4o-mini` / `OPENAI_EMBEDDING_MODEL=text-embedding-3-small`
 
 ## 3) 迁移数据库
 
@@ -36,58 +37,13 @@ cp packages/server/.env.example packages/server/.env
 npm run server:migrate
 ```
 
-## 4) 启动后端 API + Worker
+## 4) 启动后端 API
 
 ```bash
 npm run server:dev
 ```
 
-另开一个终端：
-
-```bash
-npm run -w @friends-ai/server worker
-```
-
-如果你想用编译后的产物启动（更贴近生产），先 build 再：
-
-```bash
-npm run server:build
-npm run -w @friends-ai/server start
-```
-
-Worker：
-
-```bash
-npm run -w @friends-ai/server worker:start
-```
-
-## 5) AI 配置（你本地的 LLM Proxy + OpenAI Embeddings）
-
-你给的本地 LLM Proxy（OpenAI 兼容）：
-- `AI_PROVIDER=openai_compat`
-- `AI_BASE_URL=http://127.0.0.1:9739/v1`
-- `AI_MODEL=gemini-3-flash`
-
-Embeddings 只用 OpenAI：
-- `EMBEDDING_BASE_URL=https://api.openai.com/v1`
-- `EMBEDDING_API_KEY=你的 OpenAI key`
-- `EMBEDDING_MODEL=text-embedding-3-small`（和 pgvector 1536 维保持一致）
-
-可选：当本地模型不可用时自动 fallback 到云端：
-- `AI_ROUTING_MODE=auto`
-- `AI_FALLBACK_BASE_URL=https://api.openai.com/v1`
-- `AI_FALLBACK_API_KEY=你的 OpenAI key`
-- `AI_FALLBACK_MODEL=gpt-4o-mini`
-
-你可以跑脚本快速验证：
-
-```bash
-npm run -w @friends-ai/server test:ai
-npm run -w @friends-ai/server test:embedding
-npm run -w @friends-ai/server test:smoke
-```
-
-## 6) 启动前端（H5）
+## 5) 启动前端（H5）
 
 ```bash
 npm run client:dev
