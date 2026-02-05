@@ -1,8 +1,9 @@
-import { Controller, Get, Post, Patch, Delete, Body, Param, Query } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Delete, Body, Param, Query, Request } from '@nestjs/common';
 import { ContactsService } from './contacts.service';
 
 interface CreateContactDto {
-  name: string;
+  name?: string;
+  displayName?: string;
   email?: string;
   phone?: string;
   company?: string;
@@ -13,6 +14,7 @@ interface CreateContactDto {
 
 interface UpdateContactDto {
   name?: string;
+  displayName?: string;
   email?: string;
   phone?: string;
   company?: string;
@@ -26,32 +28,51 @@ export class ContactsController {
   constructor(private readonly contactsService: ContactsService) {}
 
   @Post()
-  create(@Body() createContactDto: CreateContactDto) {
-    return this.contactsService.create(createContactDto);
+  create(@Request() req: any, @Body() createContactDto: CreateContactDto) {
+    const name = createContactDto.name ?? createContactDto.displayName;
+    return this.contactsService.create(
+      {
+        ...createContactDto,
+        name,
+      },
+      req.user?.id,
+    );
   }
 
   @Get()
-  findAll(@Query('page') page: number = 1, @Query('limit') limit: number = 10) {
-    return this.contactsService.findAll(page, limit);
+  findAll(
+    @Request() req: any,
+    @Query('page') page: number = 1,
+    @Query('limit') limit: number = 10,
+  ) {
+    return this.contactsService.findAll(req.user?.id, page, limit);
   }
 
   @Get(':id/context')
-  getContext(@Param('id') id: string) {
-    return this.contactsService.getContactContext(id);
+  getContext(@Request() req: any, @Param('id') id: string) {
+    return this.contactsService.getContactContext(id, req.user?.id);
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.contactsService.findOne(id);
+  findOne(@Request() req: any, @Param('id') id: string) {
+    return this.contactsService.findOne(id, req.user?.id);
   }
 
   @Patch(':id')
-  update(@Param('id') id: string, @Body() updateContactDto: UpdateContactDto) {
-    return this.contactsService.update(id, updateContactDto);
+  update(@Request() req: any, @Param('id') id: string, @Body() updateContactDto: UpdateContactDto) {
+    const name = updateContactDto.name ?? updateContactDto.displayName;
+    return this.contactsService.update(
+      id,
+      {
+        ...updateContactDto,
+        name,
+      },
+      req.user?.id,
+    );
   }
 
   @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.contactsService.remove(id);
+  remove(@Request() req: any, @Param('id') id: string) {
+    return this.contactsService.remove(id, req.user?.id);
   }
 }

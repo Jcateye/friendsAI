@@ -3,7 +3,7 @@ CREATE EXTENSION IF NOT EXISTS vector;
 
 CREATE TABLE IF NOT EXISTS users (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  email text UNIQUE NOT NULL,
+  email text UNIQUE,
   phone text,
   password text NOT NULL,
   name text,

@@ -53,7 +53,7 @@ export class AgentController {
     try {
       const preparedRequest: AgentChatRequest = {
         ...body,
-        userId: body.userId ?? (req.user as { id?: string } | undefined)?.id,
+        userId: (req.user as { id?: string } | undefined)?.id ?? body.userId,
       };
 
       for await (const event of this.agentOrchestrator.streamChat(preparedRequest, {

@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import {
   ToolCall,
@@ -7,6 +7,7 @@ import {
   ToolExecutionResult,
   ToolPermission,
 } from './tool.types';
+import { ToolConfirmationsService } from '../../tool-confirmations/tool-confirmations.service';
 
 interface PendingConfirmation {
   id: string;
@@ -21,6 +22,11 @@ interface PendingConfirmation {
 export class ToolExecutionStrategy {
   private tools = new Map<string, ToolDefinition>();
   private pendingConfirmations = new Map<string, PendingConfirmation>();
+
+  constructor(
+    @Optional()
+    private readonly toolConfirmationsService?: ToolConfirmationsService,
+  ) {}
 
   registerTool(tool: ToolDefinition): void {
     this.tools.set(tool.name, tool);
@@ -72,6 +78,22 @@ export class ToolExecutionStrategy {
     }
 
     if (permission === 'confirm') {
+      if (this.toolConfirmationsService) {
+        const confirmation = await this.toolConfirmationsService.create({
+          toolName: tool.name,
+          payload: this.buildConfirmationPayload(argsResult.value),
+          conversationId: context.conversationId,
+          userId: context.userId,
+        });
+
+        return {
+          status: 'requires_confirmation',
+          toolName: tool.name,
+          callId: call.id,
+          confirmationId: confirmation.id,
+        };
+      }
+
       const confirmationId = randomUUID();
       this.pendingConfirmations.set(confirmationId, {
         id: confirmationId,
@@ -94,6 +116,30 @@ export class ToolExecutionStrategy {
   }
 
   async resolveConfirmation(confirmationId: string, approved: boolean): Promise<ToolExecutionResult> {
+    if (this.toolConfirmationsService) {
+      if (!approved) {
+        const confirmation = await this.toolConfirmationsService.reject(
+          confirmationId,
+          'User rejected tool execution.',
+        );
+        return {
+          status: 'denied',
+          toolName: confirmation.toolName,
+          callId: confirmation.id,
+          error: confirmation.error ?? undefined,
+        };
+      }
+
+      const confirmation = await this.toolConfirmationsService.confirm(confirmationId);
+      return {
+        status: confirmation.status === 'confirmed' ? 'success' : 'error',
+        toolName: confirmation.toolName,
+        callId: confirmation.id,
+        result: confirmation.result ?? undefined,
+        error: confirmation.error ?? undefined,
+      };
+    }
+
     const pending = this.pendingConfirmations.get(confirmationId);
     if (!pending) {
       return {
@@ -147,6 +193,16 @@ export class ToolExecutionStrategy {
     }
 
     return { ok: true, value: args };
+  }
+
+  private buildConfirmationPayload(args: unknown): Record<string, any> | undefined {
+    if (args === undefined) {
+      return undefined;
+    }
+    if (args && typeof args === 'object' && !Array.isArray(args)) {
+      return args as Record<string, any>;
+    }
+    return { input: args };
   }
 
   private async resolvePermission(

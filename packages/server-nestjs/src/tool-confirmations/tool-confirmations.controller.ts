@@ -6,7 +6,6 @@ interface CreateToolConfirmationDto {
   toolName: string;
   payload?: Record<string, any>;
   conversationId?: string;
-  userId?: string;
 }
 
 interface ConfirmToolDto {
@@ -23,7 +22,7 @@ export class ToolConfirmationsController {
 
   @Post()
   create(@Request() req: any, @Body() body: CreateToolConfirmationDto) {
-    const userId = req.user?.id || body.userId || 'mock-user-id';
+    const userId = req.user?.id;
     return this.toolConfirmationsService.create({
       toolName: body.toolName,
       payload: body.payload,
@@ -33,8 +32,14 @@ export class ToolConfirmationsController {
   }
 
   @Get()
-  findAll(@Query('status') status?: ToolConfirmationStatus, @Query('userId') userId?: string) {
-    return this.toolConfirmationsService.findAll(status, userId);
+  findAll(
+    @Request() req: any,
+    @Query('status') status?: ToolConfirmationStatus,
+    @Query('userId') userId?: string,
+    @Query('conversationId') conversationId?: string,
+  ) {
+    const resolvedUserId = userId ?? req.user?.id;
+    return this.toolConfirmationsService.findAll(status, resolvedUserId, conversationId);
   }
 
   @Get(':id')

@@ -2,7 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ContactsController } from './contacts.controller';
 import { ContactsService } from './contacts.service';
-import { User, Contact, Conversation, Event } from '../entities';
+import { User, Contact, Conversation, Event, ContactFact, ContactTodo } from '../entities';
 
 describe('ContactsController', () => {
   let controller: ContactsController;
@@ -18,7 +18,7 @@ describe('ContactsController', () => {
           username: 'postgres',
           password: 'postgres',
           database: 'friends_ai_db',
-          entities: [User, Contact, Conversation, Event],
+          entities: [User, Contact, Conversation, Event, ContactFact, ContactTodo],
           synchronize: true,
         }),
         TypeOrmModule.forFeature([Contact]),
@@ -37,7 +37,7 @@ describe('ContactsController', () => {
 
   describe('create', () => {
     it('should create a new contact', async () => {
-      const result = await controller.create({
+      const result = await controller.create({ user: { id: 'test-user' } }, {
         name: 'John Doe',
         email: 'john@example.com',
         phone: '1234567890',
@@ -54,10 +54,11 @@ describe('ContactsController', () => {
 
   describe('findAll', () => {
     it('should return paginated contacts', async () => {
-      await controller.create({ name: 'Contact 1', email: 'c1@example.com' });
-      await controller.create({ name: 'Contact 2', email: 'c2@example.com' });
+      const req = { user: { id: 'test-user' } };
+      await controller.create(req, { name: 'Contact 1', email: 'c1@example.com' });
+      await controller.create(req, { name: 'Contact 2', email: 'c2@example.com' });
 
-      const result = await controller.findAll(1, 10);
+      const result = await controller.findAll(req, 1, 10);
 
       expect(result).toHaveProperty('items');
       expect(result).toHaveProperty('total');
@@ -67,30 +68,32 @@ describe('ContactsController', () => {
 
   describe('findOne', () => {
     it('should return a contact by id', async () => {
-      const created = await controller.create({
+      const req = { user: { id: 'test-user' } };
+      const created = await controller.create(req, {
         name: 'Jane Doe',
         email: 'jane@example.com',
       });
 
-      const result = await controller.findOne(created.id);
+      const result = await controller.findOne(req, created.id);
 
       expect(result).toHaveProperty('id', created.id);
       expect(result).toHaveProperty('name', 'Jane Doe');
     });
 
     it('should throw not found error for invalid id', async () => {
-      await expect(controller.findOne('invalid-id')).rejects.toThrow();
+      await expect(controller.findOne({ user: { id: 'test-user' } }, 'invalid-id')).rejects.toThrow();
     });
   });
 
   describe('update', () => {
     it('should update a contact', async () => {
-      const created = await controller.create({
+      const req = { user: { id: 'test-user' } };
+      const created = await controller.create(req, {
         name: 'Original Name',
         email: 'original@example.com',
       });
 
-      const result = await controller.update(created.id, {
+      const result = await controller.update(req, created.id, {
         name: 'Updated Name',
       });
 
@@ -101,14 +104,15 @@ describe('ContactsController', () => {
 
   describe('remove', () => {
     it('should remove a contact', async () => {
-      const created = await controller.create({
+      const req = { user: { id: 'test-user' } };
+      const created = await controller.create(req, {
         name: 'To Delete',
         email: 'delete@example.com',
       });
 
-      await controller.remove(created.id);
+      await controller.remove(req, created.id);
 
-      await expect(controller.findOne(created.id)).rejects.toThrow();
+      await expect(controller.findOne(req, created.id)).rejects.toThrow();
     });
   });
 });

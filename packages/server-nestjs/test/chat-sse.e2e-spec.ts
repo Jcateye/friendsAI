@@ -3,15 +3,18 @@ import { Test, TestingModule } from '@nestjs/testing';
 import request from 'supertest';
 import { Repository } from 'typeorm';
 import { getRepositoryToken } from '@nestjs/typeorm';
+import { APP_GUARD } from '@nestjs/core';
 import { AppModule } from '../src/app.module';
-import { User } from '../src/entities';
+import { Conversation, User } from '../src/entities';
 import { AiService } from '../src/ai/ai.service';
 
 describe('Chat SSE Flow (e2e)', () => {
   let app: INestApplication;
   let aiServiceMock: { streamChat: jest.Mock; callAgent: jest.Mock; generateEmbedding: jest.Mock };
   let userRepository: Repository<User>;
+  let conversationRepository: Repository<Conversation>;
   let currentUserId: string | null = null;
+  let conversationId: string;
 
   beforeAll(async () => {
     aiServiceMock = {
@@ -25,9 +28,12 @@ describe('Chat SSE Flow (e2e)', () => {
     })
       .overrideProvider(AiService)
       .useValue(aiServiceMock)
+      .overrideProvider(APP_GUARD)
+      .useValue({ canActivate: () => true })
       .compile();
 
     app = moduleFixture.createNestApplication();
+    app.setGlobalPrefix('v1');
     app.use((req, _res, next) => {
       if (currentUserId) {
         req.user = { id: currentUserId };
@@ -37,9 +43,11 @@ describe('Chat SSE Flow (e2e)', () => {
     await app.init();
 
     userRepository = moduleFixture.get<Repository<User>>(getRepositoryToken(User));
+    conversationRepository = moduleFixture.get<Repository<Conversation>>(getRepositoryToken(Conversation));
   });
 
   beforeEach(async () => {
+    await conversationRepository.clear();
     await userRepository.clear();
 
     const user = userRepository.create({
@@ -49,6 +57,14 @@ describe('Chat SSE Flow (e2e)', () => {
     });
     const saved = await userRepository.save(user);
     currentUserId = saved.id;
+
+    const conversation = conversationRepository.create({
+      title: 'Chat Conversation',
+      content: '',
+      userId: saved.id,
+    });
+    const savedConversation = await conversationRepository.save(conversation);
+    conversationId = savedConversation.id;
   });
 
   afterAll(async () => {
@@ -71,8 +87,29 @@ describe('Chat SSE Flow (e2e)', () => {
         .expect(200);
 
       expect(response.headers['content-type']).toContain('text/event-stream');
-      expect(response.text).toContain('event: token');
-      expect(response.text).toContain('event: done');
+      expect(response.text).toContain('event: agent.start');
+      expect(response.text).toContain('event: agent.end');
+    });
+
+    it('should persist user and assistant messages', async () => {
+      const mockStreamGenerator = async function* () {
+        yield { choices: [{ delta: { content: 'Persisted' }, finish_reason: 'stop' }] };
+      };
+
+      aiServiceMock.streamChat.mockReturnValue(mockStreamGenerator());
+
+      await request(app.getHttpServer())
+        .post('/v1/agent/chat')
+        .send({ prompt: 'Persist me', conversationId })
+        .expect(200);
+
+      const messagesResponse = await request(app.getHttpServer())
+        .get(`/v1/conversations/${conversationId}/messages`)
+        .expect(200);
+
+      expect(messagesResponse.body.length).toBeGreaterThanOrEqual(2);
+      expect(messagesResponse.body[0].role).toBe('user');
+      expect(messagesResponse.body[messagesResponse.body.length - 1].role).toBe('assistant');
     });
 
     it('should handle messages array format', async () => {
@@ -240,7 +277,9 @@ describe('Chat SSE Flow (e2e)', () => {
 
       const events = response.text.split('\n\n').filter((e) => e.trim());
       events.forEach((event) => {
-        expect(event).toMatch(/^event: (token|done|error)\ndata: .+$/);
+        expect(event).toMatch(
+          /^event: (agent\.start|agent\.delta|agent\.message|tool\.state|context\.patch|agent\.end|error|ping)\ndata: .+$/
+        );
       });
     });
 
@@ -256,8 +295,8 @@ describe('Chat SSE Flow (e2e)', () => {
         .send({ prompt: 'Test' })
         .expect(200);
 
-      expect(response.text).toContain('event: done');
-      expect(response.text).toContain('"reason":"stop"');
+      expect(response.text).toContain('event: agent.end');
+      expect(response.text).toContain('"status":"succeeded"');
     });
   });
 });

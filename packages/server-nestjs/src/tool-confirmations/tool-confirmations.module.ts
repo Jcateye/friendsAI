@@ -8,5 +8,6 @@ import { ToolConfirmation } from '../entities';
   imports: [TypeOrmModule.forFeature([ToolConfirmation])],
   controllers: [ToolConfirmationsController],
   providers: [ToolConfirmationsService],
+  exports: [ToolConfirmationsService],
 })
 export class ToolConfirmationsModule {}

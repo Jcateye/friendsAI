@@ -6,6 +6,7 @@ import { ToolExecutionStrategy } from '../ai/tools/tool-execution.strategy';
 import { ToolRegistry } from '../ai/tool-registry';
 import { AgentChatRequest } from './agent.types';
 import { AgentMessageStore } from './agent-message.store';
+import { MessagesService } from '../conversations/messages.service';
 import type OpenAI from 'openai';
 
 describe('AgentOrchestrator', () => {
@@ -15,6 +16,7 @@ describe('AgentOrchestrator', () => {
   let toolExecutionStrategy: jest.Mocked<ToolExecutionStrategy>;
   let toolRegistry: jest.Mocked<ToolRegistry>;
   let messageStore: jest.Mocked<AgentMessageStore>;
+  let messagesService: jest.Mocked<MessagesService>;
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -60,6 +62,13 @@ describe('AgentOrchestrator', () => {
             appendMessage: jest.fn(),
           },
         },
+        {
+          provide: MessagesService,
+          useValue: {
+            appendMessage: jest.fn(),
+            listMessages: jest.fn(),
+          },
+        },
       ],
     }).compile();
 
@@ -69,6 +78,7 @@ describe('AgentOrchestrator', () => {
     toolExecutionStrategy = module.get(ToolExecutionStrategy);
     toolRegistry = module.get(ToolRegistry);
     messageStore = module.get(AgentMessageStore);
+    messagesService = module.get(MessagesService);
   });
 
   describe('streamChat', () => {

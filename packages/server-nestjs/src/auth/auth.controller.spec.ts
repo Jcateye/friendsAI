@@ -2,7 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AuthService } from './auth.service';
 import { AuthController } from './auth.controller';
-import { User, Contact, Conversation, Event } from '../entities';
+import { User, Contact, Conversation, Event, AuthSession } from '../entities';
 
 describe('AuthController', () => {
   let controller: AuthController;
@@ -18,10 +18,10 @@ describe('AuthController', () => {
           username: 'postgres',
           password: 'postgres',
           database: 'friends_ai_db',
-          entities: [User, Contact, Conversation, Event],
+          entities: [User, Contact, Conversation, Event, AuthSession],
           synchronize: true,
         }),
-        TypeOrmModule.forFeature([User]),
+        TypeOrmModule.forFeature([User, AuthSession]),
       ],
       controllers: [AuthController],
       providers: [AuthService],
@@ -43,8 +43,10 @@ describe('AuthController', () => {
         name: 'Test User',
       });
 
-      expect(result).toHaveProperty('id');
-      expect(result).toHaveProperty('email', 'test@example.com');
+      expect(result).toHaveProperty('accessToken');
+      expect(result).toHaveProperty('refreshToken');
+      expect(result.user).toHaveProperty('id');
+      expect(result.user).toHaveProperty('email', 'test@example.com');
     });
 
     it('should throw conflict error for duplicate email', async () => {
@@ -70,18 +72,19 @@ describe('AuthController', () => {
       });
 
       const result = await controller.login({
-        email: 'login@example.com',
+        emailOrPhone: 'login@example.com',
         password: 'password123',
       });
 
-      expect(result).toHaveProperty('id');
-      expect(result).toHaveProperty('email', 'login@example.com');
+      expect(result).toHaveProperty('accessToken');
+      expect(result).toHaveProperty('refreshToken');
+      expect(result.user).toHaveProperty('email', 'login@example.com');
     });
 
     it('should throw unauthorized error for invalid credentials', async () => {
       await expect(
         controller.login({
-          email: 'nonexistent@example.com',
+          emailOrPhone: 'nonexistent@example.com',
           password: 'wrongpassword',
         }),
       ).rejects.toThrow();
