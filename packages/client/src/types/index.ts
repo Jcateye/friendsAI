@@ -75,6 +75,18 @@ export interface ArchiveResult {
   todoItems: TodoItem[]
 }
 
+export type ArchiveStatus = 'ready_for_review' | 'applied' | 'discarded' | 'archived' | 'pending'
+
+export interface ConversationArchive {
+  id: string
+  conversationId?: string | null
+  status: ArchiveStatus
+  summary?: string | null
+  payload: ArchiveResult
+  createdAt?: string
+  updatedAt?: string
+}
+
 export interface ContactDetail extends Contact {
   briefing?: ContactBriefing
   events: ContactEvent[]
@@ -217,6 +229,8 @@ export interface ToolState {
   id: string
   name: string
   status: ToolStatus
+  confirmationId?: string
+  message?: string
   input?: JsonValue
   output?: JsonValue
   error?: AgentError
@@ -230,6 +244,7 @@ export interface ToolStateUpdate {
   status: ToolStatus
   previousStatus?: ToolStatus
   at: IsoDateString
+  confirmationId?: string
   message?: string
   input?: JsonValue
   output?: JsonValue

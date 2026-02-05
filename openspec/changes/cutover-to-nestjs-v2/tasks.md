@@ -83,7 +83,7 @@
 
 ## WS-80 Client / H5 Rewrite（单人负责，避免前端互相冲突）
 
-- [ ] WS-80 前端 H5 重写：services 对齐新 `/v1` 契约 + fetch-stream SSE + 页面闭环 [AUTH-050] [CHAT-030] [ARCH-030] [TOOL-020] [CONT-040] Done When:
+- [x] WS-80 前端 H5 重写：services 对齐新 `/v1` 契约 + fetch-stream SSE + 页面闭环 [AUTH-050] [CHAT-030] [ARCH-030] [TOOL-020] [CONT-040] Done When:
   - 登录后所有请求不再依赖 `X-Workspace-Id` 也可成功（token 存储/refresh 正常）。
   - 对话页可创建 conversation、进入会话、查看历史，并看到流式增量输出（`agent.delta/agent.message/agent.end`）。
   - 归档审核与 apply/discard 端到端可用；工具确认 UI 可 confirm/reject 并展示结果；联系人详情可刷新 brief 并看到 context 更新。

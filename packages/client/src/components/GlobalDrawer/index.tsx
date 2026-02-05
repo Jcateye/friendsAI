@@ -1,7 +1,7 @@
 import { View, Text, Input, ScrollView } from '@tarojs/components'
 import { useState } from 'react'
 import type { ConversationRecord, FilterType } from '@/types'
-import { formatDate, navigateTo } from '@/utils'
+import { formatDate, setStorage, switchTab } from '@/utils'
 import './index.scss'
 
 interface GlobalDrawerProps {
@@ -10,6 +10,7 @@ interface GlobalDrawerProps {
   records?: ConversationRecord[]
   onClose?: () => void
   onSettingsClick?: () => void
+  onRecordSelect?: (id: string) => void
 }
 
 const GlobalDrawer: React.FC<GlobalDrawerProps> = ({
@@ -18,6 +19,7 @@ const GlobalDrawer: React.FC<GlobalDrawerProps> = ({
   records,
   onClose,
   onSettingsClick,
+  onRecordSelect,
 }) => {
   const normalizedVisible = visible ?? isOpen ?? false
   const safeRecords = records ?? []
@@ -37,7 +39,12 @@ const GlobalDrawer: React.FC<GlobalDrawerProps> = ({
 
   const handleRecordClick = (id: string) => {
     handleClose()
-    navigateTo(`/pages/conversation-chat/index?id=${id}`)
+    if (onRecordSelect) {
+      onRecordSelect(id)
+      return
+    }
+    setStorage('conversation_active_id', id)
+    switchTab('/pages/conversation/index')
   }
 
   if (!normalizedVisible) return null

@@ -87,8 +87,7 @@ export const flushOutbox = async () => {
     return
   }
   const token = Taro.getStorageSync('token')
-  const workspaceId = Taro.getStorageSync('workspaceId')
-  if (!token || !workspaceId) {
+  if (!token) {
     return
   }
 
@@ -104,13 +103,12 @@ export const flushOutbox = async () => {
       const resp = await Taro.request({
         url: `${BASE_URL}${item.url}`,
         method: item.method,
-        data: item.data,
-        header: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-          'X-Workspace-Id': workspaceId,
-        },
-      })
+      data: item.data,
+      header: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+    })
 
       if (resp.statusCode >= 200 && resp.statusCode < 300) {
         continue

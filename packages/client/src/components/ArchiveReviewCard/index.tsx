@@ -15,9 +15,10 @@ interface ArchiveReviewCardProps {
   result: ArchiveResult
   onEdit?: () => void
   onConfirm?: () => void
+  onDiscard?: () => void
 }
 
-const ArchiveReviewCard: React.FC<ArchiveReviewCardProps> = ({ result, onEdit, onConfirm }) => {
+const ArchiveReviewCard: React.FC<ArchiveReviewCardProps> = ({ result, onEdit, onConfirm, onDiscard }) => {
   return (
     <View className="archive-review-card">
       <View className="ai-result-label">
@@ -126,9 +127,15 @@ const ArchiveReviewCard: React.FC<ArchiveReviewCardProps> = ({ result, onEdit, o
       </View>
 
       <View className="review-actions">
-        <View className="edit-btn" onClick={onEdit}>
-          <Text className="edit-text">编辑后归档</Text>
-        </View>
+        {onDiscard ? (
+          <View className="edit-btn" onClick={onDiscard}>
+            <Text className="edit-text">放弃归档</Text>
+          </View>
+        ) : (
+          <View className="edit-btn" onClick={onEdit}>
+            <Text className="edit-text">编辑后归档</Text>
+          </View>
+        )}
         <View className="confirm-btn" onClick={onConfirm}>
           <View className="icon-check" />
           <Text className="confirm-text">确认归档</Text>

@@ -47,20 +47,9 @@ const ContactDetailPage: React.FC = () => {
     if (!id) return
     try {
       Taro.showLoading({ title: '生成中...', mask: true })
-      const brief = await contactApi.refreshBrief(id)
-      setContact((prev) =>
-        prev
-          ? {
-              ...prev,
-              briefing: {
-                lastSummary: brief.content,
-                pendingTodos: [],
-                traits: [],
-                suggestion: '',
-              },
-            }
-          : prev
-      )
+      await contactApi.refreshBrief(id)
+      const refreshed = await api.getContactDetail(id)
+      setContact(refreshed)
       Taro.hideLoading()
       Taro.showToast({ title: '简报已更新', icon: 'success' })
     } catch (error) {

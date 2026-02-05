@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import Taro from '@tarojs/taro'
-import { createSseClient, type SseClient } from '@/utils/sse/sseClient'
 import type {
   AgentMessage,
   AgentMessageDelta,
@@ -33,6 +32,7 @@ export interface UseAgentChatReturn {
   sendMessage: (content: string, metadata?: Record<string, JsonValue>) => Promise<void>
   confirmTool: (toolId: string) => Promise<void>
   cancelTool: (toolId: string) => Promise<void>
+  replaceMessages: (messages: AgentChatMessage[]) => void
   clearMessages: () => void
   reconnect: () => void
 }
@@ -60,9 +60,20 @@ export const useAgentChat = (options: UseAgentChatOptions = {}): UseAgentChatRet
   const [isStreaming, setIsStreaming] = useState(false)
   const [error, setError] = useState<Error | AgentError | null>(null)
 
-  const sseClientRef = useRef<SseClient | null>(null)
   const currentMessageRef = useRef<AgentChatMessage | null>(null)
   const runIdRef = useRef<string | null>(null)
+  const messagesRef = useRef<AgentChatMessage[]>([])
+  const abortControllerRef = useRef<AbortController | null>(null)
+
+  useEffect(() => {
+    messagesRef.current = messages
+  }, [messages])
+
+  useEffect(() => {
+    return () => {
+      abortControllerRef.current?.abort()
+    }
+  }, [])
 
   // Handle SSE events
   const handleSseEvent = useCallback((event: AgentSseEvent) => {
@@ -152,11 +163,15 @@ export const useAgentChat = (options: UseAgentChatOptions = {}): UseAgentChatRet
               id: update.toolId,
               name: update.name,
               status: update.status,
+              confirmationId: update.confirmationId,
+              message: update.message,
               input: update.input,
               output: update.output,
               error: update.error,
               startedAt: existing?.startedAt || update.at,
-              endedAt: update.status === 'succeeded' || update.status === 'failed' ? update.at : undefined,
+              endedAt: update.status === 'succeeded' || update.status === 'failed' || update.status === 'cancelled'
+                ? update.at
+                : undefined,
             },
           }
         })
@@ -203,104 +218,159 @@ export const useAgentChat = (options: UseAgentChatOptions = {}): UseAgentChatRet
     }
   }, [onError])
 
-  // Initialize SSE connection
-  useEffect(() => {
-    if (!sessionId) return
+  const parseSseEvent = useCallback((raw: string): AgentSseEvent | null => {
+    const lines = raw.split('\n')
+    let eventName: string | null = null
+    let data = ''
 
-    const token = Taro.getStorageSync('token')
-    const workspaceId = Taro.getStorageSync('workspaceId')
-
-    // Build SSE URL with auth token (since EventSource doesn't support headers)
-    const sseUrl = `${baseUrl}/chat/sessions/${sessionId}/stream?token=${token}&workspaceId=${workspaceId}`
-
-    const client = createSseClient({
-      url: sseUrl,
-      onEvent: handleSseEvent,
-      onError: (err) => {
-        setError(err)
-        setIsConnected(false)
-        onConnectionChange?.(false)
-        onError?.(err)
-      },
-      onOpen: () => {
-        setIsConnected(true)
-        setError(null)
-        onConnectionChange?.(true)
-      },
-      onClose: () => {
-        setIsConnected(false)
-        onConnectionChange?.(false)
-      },
+    lines.forEach((line) => {
+      if (line.startsWith('event:')) {
+        eventName = line.replace('event:', '').trim()
+      } else if (line.startsWith('data:')) {
+        data += line.replace('data:', '').trim()
+      }
     })
 
-    sseClientRef.current = client
-    client.connect()
+    if (!data) return null
 
-    return () => {
-      client.disconnect()
-      sseClientRef.current = null
+    try {
+      const parsed = JSON.parse(data)
+      if (parsed?.event && parsed?.data) {
+        return parsed as AgentSseEvent
+      }
+      if (eventName) {
+        const allowed = [
+          'agent.start',
+          'agent.delta',
+          'agent.message',
+          'tool.state',
+          'context.patch',
+          'agent.end',
+          'error',
+          'ping',
+        ]
+        if (!allowed.includes(eventName)) return null
+        return { event: eventName as AgentSseEvent['event'], data: parsed } as AgentSseEvent
+      }
+    } catch (err) {
+      console.error('Failed to parse SSE event:', err, data)
     }
-  }, [sessionId, baseUrl, handleSseEvent, onConnectionChange, onError])
 
-  // Send user message
+    return null
+  }, [])
+
+  const streamAgentResponse = useCallback(async (payload: Record<string, any>) => {
+    if (!sessionId) return
+
+    abortControllerRef.current?.abort()
+    const controller = new AbortController()
+    abortControllerRef.current = controller
+
+    const token = Taro.getStorageSync('token')
+    setIsConnected(true)
+    onConnectionChange?.(true)
+
+    try {
+      const response = await fetch(`${baseUrl}/agent/chat`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: token ? `Bearer ${token}` : '',
+        },
+        body: JSON.stringify(payload),
+        signal: controller.signal,
+      })
+
+      if (!response.ok) {
+        throw new Error(`SSE request failed: ${response.status}`)
+      }
+
+      const reader = response.body?.getReader()
+      if (!reader) {
+        throw new Error('Streaming not supported')
+      }
+
+      const decoder = new TextDecoder('utf-8')
+      let buffer = ''
+
+      while (true) {
+        const { value, done } = await reader.read()
+        if (done) break
+        buffer += decoder.decode(value, { stream: true })
+
+        let index = buffer.indexOf('\n\n')
+        while (index !== -1) {
+          const chunk = buffer.slice(0, index).trim()
+          buffer = buffer.slice(index + 2)
+          if (chunk) {
+            const event = parseSseEvent(chunk)
+            if (event) {
+              handleSseEvent(event)
+            }
+          }
+          index = buffer.indexOf('\n\n')
+        }
+      }
+    } catch (err) {
+      if ((err as Error).name === 'AbortError') {
+        return
+      }
+      setError(err as Error)
+      onError?.(err as Error)
+    } finally {
+      setIsConnected(false)
+      onConnectionChange?.(false)
+      setIsStreaming(false)
+    }
+  }, [baseUrl, handleSseEvent, onConnectionChange, onError, parseSseEvent, sessionId])
+
+  // Send user message and stream assistant response
   const sendMessage = useCallback(
     async (content: string, metadata?: Record<string, JsonValue>) => {
       if (!sessionId) {
         throw new Error('No session ID')
       }
 
-      const token = Taro.getStorageSync('token')
-      const workspaceId = Taro.getStorageSync('workspaceId')
-
-      try {
-        const response = await Taro.request({
-          url: `${baseUrl}/chat/sessions/${sessionId}/messages`,
-          method: 'POST',
-          header: {
-            'Content-Type': 'application/json',
-            Authorization: token ? `Bearer ${token}` : '',
-            ...(workspaceId ? { 'X-Workspace-Id': workspaceId } : {}),
-          },
-          data: {
-            role: 'user',
-            content,
-            metadata,
-          },
-        })
-
-        if (response.statusCode >= 200 && response.statusCode < 300) {
-          // User message will be received via SSE
-          return
-        }
-
-        throw new Error('Failed to send message')
-      } catch (err) {
-        setError(err as Error)
-        onError?.(err as Error)
-        throw err
+      const now = new Date().toISOString()
+      const userMessage: AgentChatMessage = {
+        id: `local_${Date.now()}`,
+        role: 'user',
+        content,
+        createdAt: now,
+        metadata,
       }
+
+      setMessages((prev) => [...prev, userMessage])
+      setError(null)
+
+      const history = messagesRef.current
+        .filter((msg) => !msg.isStreaming)
+        .map((msg) => ({
+          role: msg.role,
+          content: msg.content,
+          metadata: msg.metadata,
+        }))
+
+      await streamAgentResponse({
+        conversationId: sessionId,
+        messages: [...history, { role: 'user', content, metadata }],
+      })
     },
-    [sessionId, baseUrl, onError]
+    [sessionId, streamAgentResponse]
   )
 
   // Confirm tool execution
   const confirmTool = useCallback(
     async (toolId: string) => {
-      if (!sessionId) {
-        throw new Error('No session ID')
-      }
-
       const token = Taro.getStorageSync('token')
-      const workspaceId = Taro.getStorageSync('workspaceId')
 
       try {
         await Taro.request({
-          url: `${baseUrl}/chat/sessions/${sessionId}/tools/${toolId}/confirm`,
+          url: `${baseUrl}/tool-confirmations/${toolId}/confirm`,
           method: 'POST',
           header: {
             'Content-Type': 'application/json',
             Authorization: token ? `Bearer ${token}` : '',
-            ...(workspaceId ? { 'X-Workspace-Id': workspaceId } : {}),
           },
           data: {},
         })
@@ -310,29 +380,23 @@ export const useAgentChat = (options: UseAgentChatOptions = {}): UseAgentChatRet
         throw err
       }
     },
-    [sessionId, baseUrl, onError]
+    [baseUrl, onError]
   )
 
   // Cancel tool execution
   const cancelTool = useCallback(
     async (toolId: string) => {
-      if (!sessionId) {
-        throw new Error('No session ID')
-      }
-
       const token = Taro.getStorageSync('token')
-      const workspaceId = Taro.getStorageSync('workspaceId')
 
       try {
         await Taro.request({
-          url: `${baseUrl}/chat/sessions/${sessionId}/tools/${toolId}/cancel`,
+          url: `${baseUrl}/tool-confirmations/${toolId}/reject`,
           method: 'POST',
           header: {
             'Content-Type': 'application/json',
             Authorization: token ? `Bearer ${token}` : '',
-            ...(workspaceId ? { 'X-Workspace-Id': workspaceId } : {}),
           },
-          data: {},
+          data: { reason: 'user_cancelled' },
         })
       } catch (err) {
         setError(err as Error)
@@ -340,25 +404,29 @@ export const useAgentChat = (options: UseAgentChatOptions = {}): UseAgentChatRet
         throw err
       }
     },
-    [sessionId, baseUrl, onError]
+    [baseUrl, onError]
   )
+
+  const replaceMessages = useCallback((nextMessages: AgentChatMessage[]) => {
+    setMessages(nextMessages)
+    setToolStates({})
+    setError(null)
+    currentMessageRef.current = null
+  }, [])
 
   // Clear messages
   const clearMessages = useCallback(() => {
     setMessages([])
     setToolStates({})
+    setContext(null)
     setError(null)
     currentMessageRef.current = null
   }, [])
 
   // Reconnect SSE
   const reconnect = useCallback(() => {
-    if (sseClientRef.current) {
-      sseClientRef.current.disconnect()
-      setTimeout(() => {
-        sseClientRef.current?.connect()
-      }, 100)
-    }
+    abortControllerRef.current?.abort()
+    setIsConnected(false)
   }, [])
 
   return {
@@ -371,6 +439,7 @@ export const useAgentChat = (options: UseAgentChatOptions = {}): UseAgentChatRet
     sendMessage,
     confirmTool,
     cancelTool,
+    replaceMessages,
     clearMessages,
     reconnect,
   }

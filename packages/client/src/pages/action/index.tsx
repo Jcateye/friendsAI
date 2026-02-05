@@ -5,30 +5,31 @@ import { AtIcon } from 'taro-ui'
 import Header from '../../components/Header'
 import TabBar from '../../components/TabBar'
 import GlobalDrawer from '../../components/GlobalDrawer'
-import { actionApi, toolTaskApi } from '../../services/api'
-import { ActionItem, ToolTask } from '../../types'
+import { actionApi, toolConfirmationApi } from '../../services/api'
+import { ActionItem, ToolConfirmation } from '../../types'
 import { showToast } from '../../utils'
 import './index.scss'
 
 const ActionPage: React.FC = () => {
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [items, setItems] = useState<ActionItem[]>([])
-  const [toolTasks, setToolTasks] = useState<ToolTask[]>([])
-  const [executedToolTasks, setExecutedToolTasks] = useState<ToolTask[]>([])
+  const [toolConfirmations, setToolConfirmations] = useState<ToolConfirmation[]>([])
+  const [executedConfirmations, setExecutedConfirmations] = useState<ToolConfirmation[]>([])
   const [loading, setLoading] = useState(false)
 
   const loadActions = async () => {
     try {
       setLoading(true)
-      const [actions, tasks, doneTasks, failedTasks] = await Promise.all([
-        actionApi.getOpenActions(),
-        toolTaskApi.listPending().catch(() => ({ items: [] })),
-        toolTaskApi.list('done').catch(() => ({ items: [] })),
-        toolTaskApi.list('failed').catch(() => ({ items: [] })),
+      const [actions, pending, confirmed, failed, rejected] = await Promise.all([
+        actionApi.getOpenActions().catch(() => ({ items: [] })),
+        toolConfirmationApi.list('pending').catch(() => ({ items: [] })),
+        toolConfirmationApi.list('confirmed').catch(() => ({ items: [] })),
+        toolConfirmationApi.list('failed').catch(() => ({ items: [] })),
+        toolConfirmationApi.list('rejected').catch(() => ({ items: [] })),
       ])
       setItems(actions.items)
-      setToolTasks(tasks.items)
-      setExecutedToolTasks([...(failedTasks.items || []), ...(doneTasks.items || [])].slice(0, 20))
+      setToolConfirmations(pending.items || [])
+      setExecutedConfirmations([...(failed.items || []), ...(rejected.items || []), ...(confirmed.items || [])].slice(0, 20))
     } catch (error) {
       showToast('加载失败')
     } finally {
@@ -50,22 +51,34 @@ const ActionPage: React.FC = () => {
     }
   }
 
-  const handleConfirmTool = async (task: ToolTask) => {
+  const handleConfirmTool = async (confirmation: ToolConfirmation) => {
     try {
-      await toolTaskApi.confirm(task.id)
+      const result = await toolConfirmationApi.confirm(confirmation.id)
       showToast('已确认执行', 'success')
-      setToolTasks((prev) => prev.filter((t) => t.id !== task.id))
+      setToolConfirmations((prev) => prev.filter((t) => t.id !== confirmation.id))
+      setExecutedConfirmations((prev) => [result, ...prev].slice(0, 20))
     } catch (error) {
       showToast('确认失败')
     }
   }
 
-  const handleViewToolExecution = async (task: ToolTask) => {
+  const handleRejectTool = async (confirmation: ToolConfirmation) => {
     try {
-      const executions = await toolTaskApi.listExecutions(task.id)
+      const result = await toolConfirmationApi.reject(confirmation.id, '用户拒绝')
+      showToast('已拒绝执行')
+      setToolConfirmations((prev) => prev.filter((t) => t.id !== confirmation.id))
+      setExecutedConfirmations((prev) => [result, ...prev].slice(0, 20))
+    } catch (error) {
+      showToast('操作失败')
+    }
+  }
+
+  const handleViewToolExecution = async (confirmation: ToolConfirmation) => {
+    try {
+      const payload = confirmation.result || confirmation.payload || {}
       Taro.showModal({
-        title: `${task.type} (${task.status})`,
-        content: JSON.stringify(executions.items?.[0]?.response_json ?? task.last_execution_response ?? {}, null, 2),
+        title: `${confirmation.toolName} (${confirmation.status})`,
+        content: JSON.stringify(payload, null, 2),
         showCancel: false,
       })
     } catch (error) {
@@ -81,22 +94,26 @@ const ActionPage: React.FC = () => {
       />
 
       <View className="action-content">
-        {toolTasks.length > 0 && (
+        {toolConfirmations.length > 0 && (
           <View className="tool-section">
             <Text className="section-title">待确认执行</Text>
             <View className="action-list">
-              {toolTasks.map((t) => (
+              {toolConfirmations.map((t) => (
                 <View key={t.id} className="action-row">
                   <View className="action-info">
                     <Text className="action-title">
-                      {t.contact_name ? `${t.contact_name}：` : ''}
-                      {t.type}
+                      {t.toolName}
+                      {t.conversationId ? `（${t.conversationId}）` : ''}
                     </Text>
-                    <Text className="action-due">{JSON.stringify(t.payload_json)}</Text>
+                    <Text className="action-due">{JSON.stringify(t.payload || {})}</Text>
                   </View>
                   <View className="action-complete" onClick={() => handleConfirmTool(t)}>
                     <AtIcon value="check" size="16" color="#7C9070" />
                     <Text className="complete-text">确认</Text>
+                  </View>
+                  <View className="action-complete" onClick={() => handleRejectTool(t)}>
+                    <AtIcon value="close-circle" size="16" color="#D4845E" />
+                    <Text className="complete-text">拒绝</Text>
                   </View>
                 </View>
               ))}
@@ -104,24 +121,22 @@ const ActionPage: React.FC = () => {
           </View>
         )}
 
-        {executedToolTasks.length > 0 && (
+        {executedConfirmations.length > 0 && (
           <View className="tool-section">
             <Text className="section-title">最近执行结果</Text>
             <View className="action-list">
-              {executedToolTasks.map((t) => (
+              {executedConfirmations.map((t) => (
                 <View key={t.id} className="action-row">
                   <View className="action-info">
                     <Text className="action-title">
-                      {t.contact_name ? `${t.contact_name}：` : ''}
-                      {t.type}
+                      {t.toolName}
                       {t.status ? `（${t.status}）` : ''}
                     </Text>
                     <Text className="action-due">
-                      {t.last_execution_at ? `执行时间 ${t.last_execution_at}` : '暂无执行记录'}
+                      {t.executedAt || t.confirmedAt || t.rejectedAt || '暂无执行记录'}
                     </Text>
                   </View>
                   <View className="action-complete" onClick={() => handleViewToolExecution(t)}>
-                    <AtIcon value="eye" size="16" color="#7C9070" />
                     <Text className="complete-text">查看</Text>
                   </View>
                 </View>
@@ -130,31 +145,29 @@ const ActionPage: React.FC = () => {
           </View>
         )}
 
-        {loading ? (
+        {items.length > 0 && (
+          <View className="section">
+            <Text className="section-title">待办事项</Text>
+            <View className="action-list">
+              {items.map((item) => (
+                <View key={item.id} className="action-row">
+                  <View className="action-info">
+                    <Text className="action-title">{item.suggestion_reason || '待办事项'}</Text>
+                    <Text className="action-due">{item.due_at ? `截止 ${item.due_at}` : '未设置时间'}</Text>
+                  </View>
+                  <View className="action-complete" onClick={() => handleComplete(item)}>
+                    <AtIcon value="check" size="16" color="#7C9070" />
+                    <Text className="complete-text">完成</Text>
+                  </View>
+                </View>
+              ))}
+            </View>
+          </View>
+        )}
+
+        {loading && (
           <View className="loading-state">
             <Text>加载中...</Text>
-          </View>
-        ) : items.length === 0 ? (
-          <View className="empty-state">
-            <Text className="empty-text">暂无待办</Text>
-          </View>
-        ) : (
-          <View className="action-list">
-            {items.map((item) => (
-              <View key={item.id} className="action-row">
-                <View className="action-info">
-                  <Text className="action-title">
-                    {item.contact_name ? `${item.contact_name}：` : ''}
-                    {item.suggestion_reason || '待办'}
-                  </Text>
-                  {item.due_at && <Text className="action-due">截止 {item.due_at}</Text>}
-                </View>
-                <View className="action-complete" onClick={() => handleComplete(item)}>
-                  <AtIcon value="check" size="16" color="#7C9070" />
-                  <Text className="complete-text">完成</Text>
-                </View>
-              </View>
-            ))}
           </View>
         )}
       </View>

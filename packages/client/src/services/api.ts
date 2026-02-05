@@ -2,20 +2,16 @@ import Taro from '@tarojs/taro'
 import type {
   User,
   ConversationRecord,
-  ConversationDetail,
+  ConversationArchive,
+  ArchiveResult,
   Contact,
   ContactDetail,
   ContactEvent,
   FollowUpItem,
   WeeklyStats,
   ActionItem,
-  ToolTask,
-  ExtractedItem,
   BriefSnapshot,
-  JournalEntry,
   MessageTemplate,
-  ChatSession,
-  ChatMessage,
   ToolConfirmation,
   CreateToolConfirmationDto,
   ToolConfirmationStatus
@@ -26,9 +22,7 @@ import {
   flushOutbox,
   generateId,
   getContactsCacheRaw,
-  getJournalsCacheRaw,
   setContactsCacheRaw,
-  setJournalsCacheRaw,
 } from '@/services/offlineStore'
 
 // H5 runtime may not define `process`, so guard access.
@@ -42,8 +36,6 @@ const resolveBaseUrl = () => {
   return 'http://localhost:3000/v1'
 }
 const BASE_URL = resolveBaseUrl()
-
-const getWorkspaceId = () => Taro.getStorageSync('workspaceId')
 
 const toQueryString = (params: Record<string, string | undefined>) => {
   const entries = Object.entries(params).filter(([, value]) => value)
@@ -60,7 +52,6 @@ const toQueryString = (params: Record<string, string | undefined>) => {
 const request = async <T,>(options: Taro.request.Option): Promise<T> => {
   try {
     const token = Taro.getStorageSync('token')
-    const workspaceId = getWorkspaceId()
     const doReq = (accessToken?: string) =>
       Taro.request({
       ...options,
@@ -68,7 +59,6 @@ const request = async <T,>(options: Taro.request.Option): Promise<T> => {
       header: {
         'Content-Type': 'application/json',
         Authorization: accessToken ? `Bearer ${accessToken}` : token ? `Bearer ${token}` : '',
-        ...(workspaceId ? { 'X-Workspace-Id': workspaceId } : {}),
         ...options.header,
       },
     })
@@ -112,32 +102,87 @@ const request = async <T,>(options: Taro.request.Option): Promise<T> => {
   }
 }
 
-const mapContact = (raw: any): Contact => ({
+const mapContact = (raw: any): Contact => {
+  const name = raw.displayName || raw.name || ''
+  return {
+    id: raw.id,
+    name,
+    initial: getInitial(name || ''),
+    avatarColor: getAvatarColor(name || ''),
+    company: raw.company,
+    role: raw.role || raw.position,
+    tags: raw.tags || [],
+    lastContactTime: raw.lastContactTime || raw.lastContactAt,
+    lastContactSummary: raw.lastContactSummary || raw.lastSummary,
+  }
+}
+
+const mapConversationRecord = (raw: any): ConversationRecord => ({
   id: raw.id,
-  name: raw.name,
-  initial: getInitial(raw.name || ''),
-  avatarColor: getAvatarColor(raw.name || ''),
-  company: raw.company,
-  role: raw.role,
-  tags: raw.tags || [],
-  lastContactTime: raw.lastContactTime,
-  lastContactSummary: raw.lastContactSummary,
+  title: raw.title || raw.summary || '对话',
+  summary: raw.summary || raw.latestMessage || '',
+  status: raw.status || (raw.archived ? 'archived' : 'pending'),
+  createdAt: raw.createdAt || raw.created_at,
+  updatedAt: raw.updatedAt || raw.updated_at || raw.createdAt || raw.created_at,
+  contactIds: raw.contactIds || raw.contact_ids,
 })
 
-const mapChatSession = (raw: any): ChatSession => ({
+const mapAgentMessage = (raw: any) => ({
   id: raw.id,
-  title: raw.title ?? null,
-  createdAt: raw.created_at,
-  updatedAt: raw.updated_at,
-})
-
-const mapChatMessage = (raw: any): ChatMessage => ({
-  id: raw.id,
-  sessionId: raw.session_id,
   role: raw.role,
   content: raw.content,
-  metadata: raw.metadata_json || {},
-  createdAt: raw.created_at,
+  createdAt: raw.createdAt || raw.created_at,
+  toolCallId: raw.toolCallId || raw.tool_call_id,
+  references: raw.references,
+  metadata: raw.metadata || raw.metadata_json || raw.metadataJson || {},
+})
+
+const mapArchiveResult = (raw: any): ArchiveResult => {
+  const people = raw?.recognizedPeople ?? raw?.contacts ?? []
+  const events = raw?.newEvents ?? raw?.events ?? []
+  const facts = raw?.extractedFacts ?? raw?.facts ?? []
+  const todos = raw?.todoItems ?? raw?.todos ?? []
+
+  return {
+    recognizedPeople: (people || []).map(mapContact),
+    newEvents: (events || []).map((event: any) => ({
+      id: event.id,
+      type: event.type || 'other',
+      date: event.date || event.occurredAt || event.occurred_at || '',
+      location: event.location,
+      summary: event.summary || event.title || event.description || '',
+      todoCount: event.todoCount,
+    })),
+    extractedFacts: (facts || []).map((fact: any) => ({
+      id: fact.id,
+      content: fact.content || fact.value || '',
+      type: fact.type === 'trait' || fact.type === 'preference' ? fact.type : 'info',
+    })),
+    todoItems: (todos || []).map((todo: any) => ({
+      id: todo.id,
+      content: todo.content || '',
+      suggestedDate: todo.suggestedDate || todo.suggested_date || todo.dueAt || todo.due_at,
+      completed: Boolean(todo.completed),
+    })),
+  }
+}
+
+const mapConversationArchive = (raw: any): ConversationArchive => ({
+  id: raw.id,
+  conversationId: raw.conversationId || raw.conversation_id,
+  status: raw.status || 'ready_for_review',
+  summary: raw.summary ?? null,
+  payload: mapArchiveResult(raw.payload || raw.archiveResult || raw.result || {}),
+  createdAt: raw.createdAt || raw.created_at,
+  updatedAt: raw.updatedAt || raw.updated_at,
+})
+
+const mapBriefSnapshot = (raw: any, fallbackContactId?: string): BriefSnapshot => ({
+  id: raw.id || fallbackContactId || '',
+  contact_id: raw.contactId || raw.contact_id || fallbackContactId || '',
+  content: raw.content || '',
+  generated_at: raw.generatedAt || raw.generated_at || '',
+  source_hash: raw.sourceHash || raw.source_hash || '',
 })
 
 export const authApi = {
@@ -170,158 +215,93 @@ export const authApi = {
     }),
 }
 
-export const journalApi = {
-  list: () =>
-    request<{ items: JournalEntry[] }>({
-      url: '/journal-entries',
+export const conversationApi = {
+  list: async () => {
+    const data = await request<any>({
+      url: '/conversations',
       method: 'GET',
     })
-      .then((res) => {
-        setJournalsCacheRaw(res.items)
-        return res
-      })
-      .catch(async () => {
-        await flushOutbox().catch(() => undefined)
-        return { items: getJournalsCacheRaw() as JournalEntry[] }
-      }),
+    const items = Array.isArray(data) ? data : data.items || []
+    return items.map(mapConversationRecord)
+  },
 
-  create: (data: { rawText: string; contactIds?: string[] }) =>
-    (async () => {
-      const id = generateId()
-      try {
-        const created = await request<JournalEntry>({
-          url: '/journal-entries',
-          method: 'POST',
-          data: { ...data, id },
-        })
-        const cached = getJournalsCacheRaw()
-        setJournalsCacheRaw([created, ...cached.filter((j: any) => j.id !== created.id)])
-        return created
-      } catch (error) {
-        const offline: JournalEntry = {
-          id,
-          workspace_id: getWorkspaceId(),
-          author_id: '',
-          raw_text: data.rawText,
-          status: 'new',
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        }
-        const cached = getJournalsCacheRaw()
-        setJournalsCacheRaw([offline, ...cached.filter((j: any) => j.id !== id)])
-        enqueueOutbox({
-          id,
-          kind: 'journal_create',
-          url: '/journal-entries',
-          method: 'POST',
-          data: { ...data, id },
-          createdAt: new Date().toISOString(),
-        })
-        return offline
-      }
-    })(),
+  create: async (data?: { title?: string }) =>
+    request<any>({
+      url: '/conversations',
+      method: 'POST',
+      data: data ?? {},
+    }).then(mapConversationRecord),
 
-  get: (id: string) =>
-    request<JournalEntry>({
-      url: `/journal-entries/${id}`,
+  get: async (id: string) =>
+    request<any>({
+      url: `/conversations/${id}`,
       method: 'GET',
-    }).catch(() => {
-      const cached = getJournalsCacheRaw()
-      const found = cached.find((j: any) => j.id === id)
-      if (found) return found as JournalEntry
-      throw new Error('Not found')
-    }),
+    }).then(mapConversationRecord),
 
-  extract: (id: string) =>
-    request<{ items: ExtractedItem[] }>({
-      url: `/journal-entries/${id}/extract`,
+  listMessages: async (conversationId: string) => {
+    const data = await request<any>({
+      url: `/conversations/${conversationId}/messages`,
+      method: 'GET',
+    })
+    const items = Array.isArray(data) ? data : data.items || []
+    return items.map(mapAgentMessage)
+  },
+
+  createArchive: async (conversationId: string) =>
+    request<any>({
+      url: `/conversations/${conversationId}/archive`,
       method: 'POST',
       data: {},
-    }),
-
-  listExtracted: (id: string) =>
-    request<{ items: ExtractedItem[] }>({
-      url: `/journal-entries/${id}/extract`,
-      method: 'GET',
-    }),
-
-  confirmExtracted: (id: string, data: { itemId: string; action: 'confirm' | 'reject' | 'edit'; payloadJson?: any; contactId?: string }) =>
-    request<any>({
-      url: `/journal-entries/${id}/confirm`,
-      method: 'POST',
-      data,
-    }),
+    }).then(mapConversationArchive),
 }
 
-export const conversationApi = {
-  getList: async () => {
-    const data = await journalApi.list()
-    return data.items.map((entry) => ({
-      id: entry.id,
-      title: entry.raw_text.slice(0, 20) || '记录',
-      summary: entry.raw_text.slice(0, 60) || '',
-      status: entry.status === 'processed' ? 'archived' : 'pending',
-      createdAt: entry.created_at,
-      updatedAt: entry.updated_at,
-    })) as ConversationRecord[]
-  },
+export const conversationArchiveApi = {
+  apply: (archiveId: string) =>
+    request<any>({
+      url: `/conversation-archives/${archiveId}/apply`,
+      method: 'POST',
+      data: {},
+    }).then(mapConversationArchive),
 
-  getDetail: async (id: string) => {
-    const entry = await journalApi.get(id)
-    return {
-      id: entry.id,
-      title: entry.raw_text.slice(0, 20) || '记录',
-      summary: entry.raw_text.slice(0, 60) || '',
-      status: entry.status === 'processed' ? 'archived' : 'pending',
-      createdAt: entry.created_at,
-      updatedAt: entry.updated_at,
-      originalContent: entry.raw_text,
-    } as ConversationDetail
-  },
-
-  create: async (content: string) => {
-    const entry = await journalApi.create({ rawText: content })
-    return {
-      id: entry.id,
-      title: entry.raw_text.slice(0, 20) || '记录',
-      summary: entry.raw_text.slice(0, 60) || '',
-      status: 'pending',
-      createdAt: entry.created_at,
-      updatedAt: entry.updated_at,
-      originalContent: entry.raw_text,
-    } as ConversationDetail
-  },
+  discard: (archiveId: string) =>
+    request<any>({
+      url: `/conversation-archives/${archiveId}/discard`,
+      method: 'POST',
+      data: {},
+    }).then(mapConversationArchive),
 }
 
 export const contactApi = {
   getList: async () => {
     try {
-      const data = await request<{ items: any[] }>({
+      const data = await request<any>({
         url: '/contacts',
         method: 'GET',
       })
-      setContactsCacheRaw(data.items)
-      return data.items.map(mapContact)
+      const items = Array.isArray(data) ? data : data.items || []
+      setContactsCacheRaw(items)
+      return items.map(mapContact)
     } catch (error) {
       await flushOutbox().catch(() => undefined)
       return getContactsCacheRaw().map(mapContact)
     }
   },
 
-  create: (data: { name: string; notes?: string }) =>
+  create: (data: { name: string; notes?: string; tags?: string[] }) =>
     (async () => {
       const id = generateId()
+      const payload = { displayName: data.name, note: data.notes, tags: data.tags }
       try {
         const created = await request<any>({
           url: '/contacts',
           method: 'POST',
-          data: { ...data, id },
+          data: payload,
         })
         const cached = getContactsCacheRaw()
         setContactsCacheRaw([created, ...cached.filter((c: any) => c.id !== created.id)])
         return created
       } catch (error) {
-        const offline = { id, name: data.name, notes: data.notes ?? null, offline: true }
+        const offline = { id, displayName: data.name, note: data.notes ?? null, tags: data.tags ?? [], offline: true }
         const cached = getContactsCacheRaw()
         setContactsCacheRaw([offline, ...cached.filter((c: any) => c.id !== id)])
         enqueueOutbox({
@@ -329,7 +309,7 @@ export const contactApi = {
           kind: 'contact_create',
           url: '/contacts',
           method: 'POST',
-          data: { ...data, id },
+          data: payload,
           createdAt: new Date().toISOString(),
         })
         return offline
@@ -358,17 +338,17 @@ export const contactApi = {
     }),
 
   getBrief: (id: string) =>
-    request<BriefSnapshot | null>({
+    request<any | null>({
       url: `/contacts/${id}/brief`,
       method: 'GET',
-    }),
+    }).then((data) => (data ? mapBriefSnapshot(data, id) : null)),
 
   refreshBrief: (id: string) =>
-    request<BriefSnapshot>({
-      url: `/contacts/${id}/brief`,
+    request<any>({
+      url: `/contacts/${id}/brief/refresh`,
       method: 'POST',
-      data: { forceRefresh: true },
-    }),
+      data: {},
+    }).then((data) => mapBriefSnapshot(data, id)),
 }
 
 export const actionApi = {
@@ -386,46 +366,23 @@ export const actionApi = {
     }),
 }
 
-export const toolTaskApi = {
-  list: (status: 'pending' | 'confirmed' | 'running' | 'done' | 'failed' | 'all' = 'pending') =>
-    request<{ items: ToolTask[] }>({
-      url: `/tool-tasks?status=${status}`,
-      method: 'GET',
-    }),
-
-  listPending: () => toolTaskApi.list('pending'),
-
-  confirm: (id: string) =>
-    request<ToolTask>({
-      url: `/tool-tasks/${id}/confirm`,
-      method: 'POST',
-      data: {},
-    }),
-
-  listExecutions: (id: string) =>
-    request<{ items: any[] }>({
-      url: `/tool-tasks/${id}/executions`,
-      method: 'GET',
-    }),
-}
-
 export const feishuApi = {
   getTemplates: () =>
     request<{ items: MessageTemplate[] }>({
-      url: '/feishu/templates',
+      url: '/feishu/message-templates',
       method: 'GET',
     }),
 
   sendTemplateMessage: (data: { templateId: string; receiverName: string; content: string }) =>
     request<{ id: string; status: 'success' | 'error'; response?: Record<string, any> }>({
-      url: '/feishu/messages',
+      url: '/feishu/messages/send',
       method: 'POST',
       data,
     }),
 
   feishuOAuthAuthorize: (params?: { redirectUri?: string; state?: string; scope?: string }) =>
-    request<{ configured: boolean; authorizeUrl: string | null; missing?: string[] }>({
-      url: `/connectors/feishu/oauth/authorize${toQueryString({
+    request<{ url: string }>({
+      url: `/feishu/oauth/url${toQueryString({
         redirect_uri: params?.redirectUri,
         state: params?.state,
         scope: params?.scope,
@@ -434,65 +391,23 @@ export const feishuApi = {
     }),
 
   feishuOAuthCallback: (code: string, state?: string) =>
-    request<{ success: boolean; code: string | null; state: string | null }>({
-      url: `/connectors/feishu/oauth/callback${toQueryString({
-        code,
-        state,
-      })}`,
+    request<{ success: boolean; message?: string }>({
+      url: '/feishu/oauth/callback',
+      method: 'POST',
+      data: { code, state },
+    }),
+
+  feishuOAuthToken: (_code?: string) =>
+    request<{ success: boolean; token?: string; message?: string }>({
+      url: '/feishu/tenant-token',
       method: 'GET',
     }),
 
-  feishuOAuthToken: (code: string) =>
-    request<{ success: boolean; message?: string; code: string | null }>({
-      url: '/connectors/feishu/oauth/token',
-      method: 'POST',
-      data: { code },
-    }),
-
-  feishuOAuthRefresh: (refreshToken: string) =>
-    request<{ success: boolean; message?: string; refreshToken: string | null }>({
-      url: '/connectors/feishu/oauth/refresh',
-      method: 'POST',
-      data: { refreshToken },
-    }),
-}
-
-export const chatApi = {
-  listSessions: () =>
-    request<{ items: ChatSession[] }>({
-      url: '/chat/sessions',
+  feishuOAuthRefresh: (_refreshToken: string) =>
+    request<{ success: boolean; message?: string }>({
+      url: '/feishu/tenant-token',
       method: 'GET',
-    }).then((res) => ({ items: (res.items || []).map(mapChatSession) })),
-
-  createSession: (data: { firstMessage: string; title?: string }) =>
-    request<{ session: ChatSession; messages: ChatMessage[] }>({
-      url: '/chat/sessions',
-      method: 'POST',
-      data,
-    }).then((res) => ({
-      session: mapChatSession(res.session),
-      messages: (res.messages || []).map(mapChatMessage),
-    })),
-
-  listMessages: (sessionId: string) =>
-    request<{ items: ChatMessage[] }>({
-      url: `/chat/sessions/${sessionId}/messages`,
-      method: 'GET',
-    }).then((res) => ({ items: (res.items || []).map(mapChatMessage) })),
-
-  appendMessage: (sessionId: string, data: { role?: 'user' | 'assistant' | 'tool'; content: string; metadata?: Record<string, any> }) =>
-    request<{ messages: ChatMessage[] }>({
-      url: `/chat/sessions/${sessionId}/messages`,
-      method: 'POST',
-      data,
-    }).then((res) => ({ messages: (res.messages || []).map(mapChatMessage) })),
-
-  updateMessage: (sessionId: string, messageId: string, data: { content?: string; metadata?: Record<string, any> }) =>
-    request<ChatMessage>({
-      url: `/chat/sessions/${sessionId}/messages/${messageId}`,
-      method: 'PATCH',
-      data,
-    }).then(mapChatMessage),
+    }),
 }
 
 export const toolConfirmationApi = {
@@ -504,10 +419,12 @@ export const toolConfirmationApi = {
     }),
 
   list: (status?: ToolConfirmationStatus, userId?: string) =>
-    request<{ items: ToolConfirmation[] }>({
+    request<any>({
       url: `/tool-confirmations${status ? `?status=${status}` : ''}${userId ? `${status ? '&' : '?'}userId=${userId}` : ''}`,
       method: 'GET',
-    }),
+    }).then((data) => ({
+      items: Array.isArray(data) ? data : data.items || [],
+    })),
 
   getOne: (id: string) =>
     request<ToolConfirmation>({
@@ -543,18 +460,18 @@ export const api = {
       contactApi.getBrief(id),
     ])
 
-    const events = (context.recentEvents || []).map((event: any) => ({
+    const events = (context.events || context.recentEvents || []).map((event: any) => ({
       id: event.id,
-      type: 'meeting',
-      date: event.occurred_at || event.occurredAt,
-      summary: event.summary,
+      type: event.type || 'meeting',
+      date: event.date || event.occurred_at || event.occurredAt || '',
+      summary: event.summary || event.title || event.description || '',
     })) as ContactEvent[]
 
     return {
       ...contact,
       events,
-      facts: (context.stableFacts || []).map((f: any) => `${f.key}: ${f.value}`),
-      actions: (context.openActions || []).map((a: any) => a.suggestion_reason || '待办'),
+      facts: (context.facts || context.stableFacts || []).map((f: any) => f.content || `${f.key}: ${f.value}`),
+      actions: (context.todos || context.openActions || []).map((a: any) => a.content || a.suggestion_reason || '待办'),
       briefing: brief
         ? {
             lastSummary: brief.content,
