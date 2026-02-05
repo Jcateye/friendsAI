@@ -19,7 +19,7 @@
 
 ## WS-00 Shared / Bootstrapping（安全 + 新主线启动链路）
 
-- [ ] WS-00 安全与启动链路切换（NestJS 主线 + /v1 + health + 新 DB 基础） [AUTH-010] [AUTH-020] [CHAT-010] [CHAT-030] [CHAT-040] Done When:
+- [x] WS-00 安全与启动链路切换（NestJS 主线 + /v1 + health + 新 DB 基础） [AUTH-010] [AUTH-020] [CHAT-010] [CHAT-030] [CHAT-040] Done When:
   - `git grep -n "sk-"` 无结果，且 `.env*` 不再被提交（例如 `packages/server-nestjs/.env` 被移除/替换为 `.env.example`）。
   - 新主线 DB 可连通：`psql "$DATABASE_URL" -c "select current_database()"` 返回 `friendsai_v2`。
   - 默认开发链路指向 NestJS：`bun run dev` 启动 client(H5)+server-nestjs（不再默认启动 Express）。
