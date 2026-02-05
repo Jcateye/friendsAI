@@ -28,7 +28,7 @@
 
 ## WS-10 Server / Database & Schema（DATABASE_URL + migrations + v2 初始表）
 
-- [ ] WS-10 数据库配置与 v2 schema（关闭 `synchronize`，引入 migrations，创建 v2 初始迁移） [CHAT-040] [AUTH-010] [CONT-010] [ARCH-010] [TOOL-040] Done When:
+- [x] WS-10 数据库配置与 v2 schema（关闭 `synchronize`，引入 migrations，创建 v2 初始迁移） [CHAT-040] [AUTH-010] [CONT-010] [ARCH-010] [TOOL-040] Done When:
   - NestJS DB 配置改为读取 `DATABASE_URL`，且启动日志可确认 `synchronize=false`。
   - migrations 流程可用：在空库执行 migrations 后，核心表可插入/查询（并包含 `CREATE EXTENSION vector`）。
   - 至少覆盖：users/auth_sessions、conversations/messages、contacts + events/facts/todos/brief、conversation_archives、tool_confirmations、connector_tokens（具体表名以 design 为准）。

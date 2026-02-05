@@ -121,10 +121,10 @@ export class ContextBuilderService {
       });
 
       context.connectors = connectorTokens.map((token) => ({
-        type: token.connectorType,
         id: token.id,
-        expiresAt: token.expiresAt?.toISOString(),
-        metadata: token.metadata,
+        type: token.connectorType,
+        name: token.connectorType,
+        enabled: true,
       }));
     }
 

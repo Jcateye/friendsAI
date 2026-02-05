@@ -6,6 +6,7 @@ import { ToolExecutionStrategy } from '../ai/tools/tool-execution.strategy';
 import { AgentController } from './agent.controller';
 import { AgentOrchestrator } from './agent.orchestrator';
 import { ContextBuilderService } from './context-builder.service';
+import { ContextBuilder } from './context-builder';
 
 @Module({
   imports: [
@@ -15,9 +16,10 @@ import { ContextBuilderService } from './context-builder.service';
   controllers: [AgentController],
   providers: [
     AgentOrchestrator,
+    ContextBuilder,
     ContextBuilderService,
     ToolExecutionStrategy,
   ],
-  exports: [AgentOrchestrator, ContextBuilderService],
+  exports: [AgentOrchestrator, ContextBuilderService, ContextBuilder],
 })
 export class AgentModule {}

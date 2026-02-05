@@ -172,7 +172,7 @@ const A2UIFormPropsSchema = z.object({
   submitAction: A2UIActionSchema.optional(),
 }).catchall(z.unknown());
 
-export const A2UIComponentSchema = z.lazy(() =>
+export const A2UIComponentSchema: z.ZodTypeAny = z.lazy(() =>
   z.discriminatedUnion('type', [
     A2UIBaseSchema.extend({
       type: z.literal('container'),

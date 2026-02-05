@@ -7,7 +7,7 @@ interface FeishuAuthorizeOptions {
   scope?: string;
 }
 
-interface FeishuAuthorizeResult {
+export interface FeishuAuthorizeResult {
   configured: boolean;
   authorizeUrl: string | null;
   missing: string[];

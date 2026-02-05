@@ -1,25 +1,24 @@
 import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, ManyToOne, JoinColumn } from 'typeorm';
 import { Contact } from './contact.entity';
 
-@Entity({ name: 'events' })
-export class Event {
+export type ContactTodoStatus = 'pending' | 'completed' | 'canceled';
+
+@Entity({ name: 'contact_todos' })
+export class ContactTodo {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column()
-  title: string;
+  @Column({ type: 'text' })
+  content: string;
 
-  @Column({ type: 'text', nullable: true })
-  description: string | null;
-
-  @Column({ type: 'jsonb', nullable: true })
-  details: Record<string, any>;
+  @Column({ default: 'pending' })
+  status: ContactTodoStatus;
 
   @Column({ type: 'timestamp', nullable: true })
-  eventDate: Date;
+  dueAt: Date | null;
 
-  @Column({ type: 'vector', nullable: true })
-  embedding: number[];
+  @Column({ type: 'jsonb', nullable: true })
+  metadata: Record<string, any> | null;
 
   @Column({ type: 'uuid', nullable: true })
   sourceConversationId: string | null;
@@ -27,12 +26,12 @@ export class Event {
   @Column({ type: 'uuid', array: true, nullable: true })
   sourceMessageIds: string[] | null;
 
-  @ManyToOne(() => Contact, contact => contact.events)
+  @ManyToOne(() => Contact, contact => contact.todos, { nullable: false })
   @JoinColumn({ name: 'contactId' })
   contact: Contact;
 
-  @Column({ type: 'uuid', nullable: true })
-  contactId: string | null;
+  @Column()
+  contactId: string;
 
   @CreateDateColumn()
   createdAt: Date;

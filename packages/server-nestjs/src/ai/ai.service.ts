@@ -1,6 +1,9 @@
 import { Injectable, InternalServerErrorException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import OpenAI from 'openai';
+import fs from 'fs';
+import path from 'path';
+import dotenv from 'dotenv';
 
 @Injectable()
 export class AiService {
@@ -9,13 +12,55 @@ export class AiService {
   private embeddingModel: string;
 
   constructor(private configService: ConfigService) {
-    const apiKey = this.configService.get<string>('OPENAI_API_KEY');
+    const { apiKey, model, embeddingModel } = this.resolveOpenAiConfig();
     if (!apiKey) {
       throw new InternalServerErrorException('OPENAI_API_KEY is not configured.');
     }
     this.openai = new OpenAI({ apiKey });
-    this.model = 'gpt-3.5-turbo'; // Default model for chat/agent calls
-    this.embeddingModel = 'text-embedding-ada-002'; // Default model for embeddings
+    this.model = model;
+    this.embeddingModel = embeddingModel;
+  }
+
+  private resolveOpenAiConfig(): {
+    apiKey: string | undefined;
+    model: string;
+    embeddingModel: string;
+  } {
+    const nodeEnv = this.configService.get<string>('NODE_ENV') ?? process.env.NODE_ENV;
+    const useEnvFile = nodeEnv !== 'production';
+    const fileConfig = useEnvFile ? this.loadLocalEnv() : {};
+
+    const apiKey =
+      fileConfig.OPENAI_API_KEY ?? this.configService.get<string>('OPENAI_API_KEY');
+    const model =
+      fileConfig.OPENAI_MODEL ??
+      this.configService.get<string>('OPENAI_MODEL') ??
+      'gpt-5.1-mini';
+    const embeddingModel =
+      fileConfig.OPENAI_EMBEDDING_MODEL ??
+      this.configService.get<string>('OPENAI_EMBEDDING_MODEL') ??
+      'text-embedding-ada-002';
+
+    return { apiKey, model, embeddingModel };
+  }
+
+  private loadLocalEnv(): Record<string, string> {
+    const candidates = [
+      path.resolve(process.cwd(), '.env.local'),
+      path.resolve(process.cwd(), '.env'),
+      path.resolve(process.cwd(), 'packages/server-nestjs/.env.local'),
+      path.resolve(process.cwd(), 'packages/server-nestjs/.env'),
+    ];
+
+    for (const candidate of candidates) {
+      if (!fs.existsSync(candidate)) {
+        continue;
+      }
+      const content = fs.readFileSync(candidate, 'utf8');
+      return dotenv.parse(content);
+    }
+
+    return {};
   }
 
   async generateEmbedding(text: string): Promise<number[]> {
@@ -67,16 +112,18 @@ export class AiService {
     }
   ): Promise<AsyncIterable<OpenAI.Chat.Completions.ChatCompletionChunk>> {
     try {
-      return await this.openai.chat.completions.create({
-        model: options?.model ?? this.model,
-        messages,
-        temperature: options?.temperature ?? 0.7,
-        max_tokens: options?.maxTokens ?? 500,
-        stream: true,
-        signal: options?.signal,
-        tools: options?.tools,
-        tool_choice: options?.tools && options.tools.length > 0 ? 'auto' : undefined,
-      });
+      return await this.openai.chat.completions.create(
+        {
+          model: options?.model ?? this.model,
+          messages,
+          temperature: options?.temperature ?? 0.7,
+          max_tokens: options?.maxTokens ?? 500,
+          stream: true,
+          tools: options?.tools,
+          tool_choice: options?.tools && options.tools.length > 0 ? 'auto' : undefined,
+        },
+        options?.signal ? { signal: options.signal } : undefined,
+      );
     } catch (error) {
       console.error('Error streaming AI agent:', error);
       throw new InternalServerErrorException('Failed to stream AI agent.');

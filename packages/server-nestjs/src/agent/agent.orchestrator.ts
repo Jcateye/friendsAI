@@ -41,7 +41,7 @@ export class AgentOrchestrator {
       });
 
       let assistantMessage = '';
-      let toolCalls: OpenAI.Chat.Completions.ChatCompletionMessageToolCall[] = [];
+      let toolCalls: OpenAI.Chat.Completions.ChatCompletionMessageFunctionToolCall[] = [];
       let finishReason: string | undefined;
 
       // 流式处理 AI 响应
@@ -58,6 +58,12 @@ export class AgentOrchestrator {
         // 处理工具调用
         if (choice?.delta?.tool_calls) {
           for (const toolCall of choice.delta.tool_calls) {
+            if (toolCall.type && toolCall.type !== 'function') {
+              continue;
+            }
+            if (!toolCall.function) {
+              continue;
+            }
             const index = toolCall.index ?? 0;
 
             if (!toolCalls[index]) {
@@ -65,14 +71,12 @@ export class AgentOrchestrator {
                 id: toolCall.id ?? '',
                 type: 'function',
                 function: {
-                  name: toolCall.function?.name ?? '',
-                  arguments: toolCall.function?.arguments ?? '',
+                  name: toolCall.function.name ?? '',
+                  arguments: toolCall.function.arguments ?? '',
                 },
               };
-            } else {
-              if (toolCall.function?.arguments) {
-                toolCalls[index].function.arguments += toolCall.function.arguments;
-              }
+            } else if (toolCall.function.arguments) {
+              toolCalls[index].function.arguments += toolCall.function.arguments;
             }
           }
         }
@@ -127,20 +131,26 @@ export class AgentOrchestrator {
   }
 
   private async *executeToolCalls(
-    toolCalls: OpenAI.Chat.Completions.ChatCompletionMessageToolCall[],
+    toolCalls: OpenAI.Chat.Completions.ChatCompletionMessageFunctionToolCall[],
     request: AgentChatRequest,
     messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[]
   ): AsyncGenerator<AgentStreamEvent> {
     for (const toolCall of toolCalls) {
-      const toolName = toolCall.function.name;
+      if (toolCall.type !== 'function') {
+        continue;
+      }
+      const toolName = toolCall.function?.name;
       const callId = toolCall.id;
+      if (!toolName || !callId) {
+        continue;
+      }
 
       // 发送工具调用事件
       yield {
         type: 'tool_call',
         toolName,
         callId,
-        arguments: toolCall.function.arguments,
+        arguments: toolCall.function?.arguments ?? '',
       };
 
       try {
@@ -149,7 +159,7 @@ export class AgentOrchestrator {
           {
             id: callId,
             name: toolName,
-            arguments: toolCall.function.arguments,
+            arguments: toolCall.function?.arguments ?? '',
           },
           {
             userId: request.userId,
@@ -170,7 +180,7 @@ export class AgentOrchestrator {
             toolName: executionResult.toolName,
             confirmationId: executionResult.confirmationId!,
             callId: executionResult.callId,
-            arguments: toolCall.function.arguments,
+            arguments: toolCall.function?.arguments ?? '',
           };
           continue;
         }

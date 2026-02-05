@@ -1,11 +1,15 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, ManyToOne, JoinColumn } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, ManyToOne, JoinColumn, OneToMany } from 'typeorm';
 import { User } from './user.entity';
 import { Contact } from './contact.entity';
+import { Message } from './message.entity';
 
-@Entity()
+@Entity({ name: 'conversations' })
 export class Conversation {
   @PrimaryGeneratedColumn('uuid')
   id: string;
+
+  @Column({ type: 'text', nullable: true })
+  title: string | null;
 
   @Column({ type: 'text' })
   content: string;
@@ -19,6 +23,9 @@ export class Conversation {
   @Column({ default: false })
   isArchived: boolean;
 
+  @Column({ default: 'active' })
+  status: string;
+
   @ManyToOne(() => User, user => user.conversations, { nullable: true })
   @JoinColumn({ name: 'userId' })
   user: User | null;
@@ -30,8 +37,11 @@ export class Conversation {
   @JoinColumn({ name: 'contactId' })
   contact: Contact | null;
 
-  @Column({ nullable: true })
+  @Column({ type: 'uuid', nullable: true })
   contactId: string | null;
+
+  @OneToMany(() => Message, message => message.conversation)
+  messages: Message[];
 
   @CreateDateColumn()
   createdAt: Date;

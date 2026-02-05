@@ -23,14 +23,14 @@ export class ToolConfirmation {
   @Column({ type: 'text', nullable: true })
   error: string | null;
 
-  @Column({ nullable: true })
+  @Column({ type: 'uuid', nullable: true })
   conversationId: string | null;
 
   @ManyToOne(() => User, user => user.toolConfirmations, { nullable: true })
   @JoinColumn({ name: 'userId' })
   user: User | null;
 
-  @Column({ nullable: true })
+  @Column({ type: 'uuid', nullable: true })
   userId: string | null;
 
   @Column({ type: 'timestamp', nullable: true })

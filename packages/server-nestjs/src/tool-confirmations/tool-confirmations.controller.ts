@@ -1,6 +1,6 @@
 import { Body, Controller, Get, Param, Post, Query, Request } from '@nestjs/common';
 import { ToolConfirmationsService } from './tool-confirmations.service';
-import { ToolConfirmationStatus } from '../entities';
+import type { ToolConfirmationStatus } from '../entities';
 
 interface CreateToolConfirmationDto {
   toolName: string;

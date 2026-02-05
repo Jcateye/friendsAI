@@ -1,9 +1,22 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { ConfigModule } from '@nestjs/config'; // Import ConfigModule
+import { ConfigModule, ConfigService } from '@nestjs/config'; // Import ConfigModule
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
-import { User, Contact, Conversation, Event, ToolConfirmation, ConnectorToken } from './entities';
+import {
+  User,
+  Contact,
+  Conversation,
+  Event,
+  ToolConfirmation,
+  ConnectorToken,
+  AuthSession,
+  Message,
+  ConversationArchive,
+  ContactFact,
+  ContactTodo,
+  ContactBrief,
+} from './entities';
 import { AuthModule } from './auth/auth.module';
 import { ContactsModule } from './contacts/contacts.module';
 import { ConversationsModule } from './conversations/conversations.module';
@@ -22,17 +35,38 @@ import { ToolConfirmationsModule } from './tool-confirmations/tool-confirmations
       isGlobal: true, // 使配置模块在整个应用中可用
       envFilePath: '.env', // 指定环境变量文件路径
     }),
-    TypeOrmModule.forRoot({
-      type: 'postgres',
-      host: 'localhost',
-      port: 5434,
-      username: 'postgres',
-      password: 'postgres',
-      database: 'friends_ai_db',
-      autoLoadEntities: true,
-      synchronize: true,
+    TypeOrmModule.forRootAsync({
+      inject: [ConfigService],
+      useFactory: (configService: ConfigService) => {
+        const databaseUrl = configService.get<string>('DATABASE_URL');
+        if (!databaseUrl) {
+          throw new Error('DATABASE_URL is required');
+        }
+        const synchronize = false;
+        console.log(`[TypeOrm] synchronize=${synchronize}`);
+        return {
+          type: 'postgres',
+          url: databaseUrl,
+          autoLoadEntities: true,
+          synchronize,
+          migrationsRun: false,
+        };
+      },
     }),
-    TypeOrmModule.forFeature([User, Contact, Conversation, Event, ToolConfirmation, ConnectorToken]),
+    TypeOrmModule.forFeature([
+      User,
+      Contact,
+      Conversation,
+      Event,
+      ToolConfirmation,
+      ConnectorToken,
+      AuthSession,
+      Message,
+      ConversationArchive,
+      ContactFact,
+      ContactTodo,
+      ContactBrief,
+    ]),
     AuthModule,
     ContactsModule,
     ConversationsModule,

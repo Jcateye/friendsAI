@@ -1,25 +1,16 @@
 import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, ManyToOne, JoinColumn } from 'typeorm';
 import { Contact } from './contact.entity';
 
-@Entity({ name: 'events' })
-export class Event {
+@Entity({ name: 'contact_facts' })
+export class ContactFact {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column()
-  title: string;
-
-  @Column({ type: 'text', nullable: true })
-  description: string | null;
+  @Column({ type: 'text' })
+  content: string;
 
   @Column({ type: 'jsonb', nullable: true })
-  details: Record<string, any>;
-
-  @Column({ type: 'timestamp', nullable: true })
-  eventDate: Date;
-
-  @Column({ type: 'vector', nullable: true })
-  embedding: number[];
+  metadata: Record<string, any> | null;
 
   @Column({ type: 'uuid', nullable: true })
   sourceConversationId: string | null;
@@ -27,12 +18,12 @@ export class Event {
   @Column({ type: 'uuid', array: true, nullable: true })
   sourceMessageIds: string[] | null;
 
-  @ManyToOne(() => Contact, contact => contact.events)
+  @ManyToOne(() => Contact, contact => contact.facts, { nullable: false })
   @JoinColumn({ name: 'contactId' })
   contact: Contact;
 
-  @Column({ type: 'uuid', nullable: true })
-  contactId: string | null;
+  @Column()
+  contactId: string;
 
   @CreateDateColumn()
   createdAt: Date;

@@ -3,14 +3,18 @@ import { Contact } from './contact.entity';
 import { Conversation } from './conversation.entity';
 import { ToolConfirmation } from './tool-confirmation.entity';
 import { ConnectorToken } from './connector-token.entity';
+import { AuthSession } from './auth-session.entity';
 
-@Entity()
+@Entity({ name: 'users' })
 export class User {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
   @Column({ unique: true })
   email: string;
+
+  @Column({ type: 'text', nullable: true })
+  phone: string | null;
 
   @Column()
   password: string;
@@ -29,6 +33,9 @@ export class User {
 
   @OneToMany(() => ConnectorToken, token => token.user)
   connectorTokens: ConnectorToken[];
+
+  @OneToMany(() => AuthSession, authSession => authSession.user)
+  authSessions: AuthSession[];
 
   @CreateDateColumn()
   createdAt: Date;
