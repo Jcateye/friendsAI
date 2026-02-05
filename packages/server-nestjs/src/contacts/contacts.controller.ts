@@ -35,6 +35,11 @@ export class ContactsController {
     return this.contactsService.findAll(page, limit);
   }
 
+  @Get(':id/context')
+  getContext(@Param('id') id: string) {
+    return this.contactsService.getContactContext(id);
+  }
+
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.contactsService.findOne(id);

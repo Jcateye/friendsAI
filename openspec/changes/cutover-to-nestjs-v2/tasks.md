@@ -76,7 +76,7 @@
 
 ## WS-70 Server / Contacts & Brief
 
-- [ ] WS-70 联系人：CRUD + context 聚合 + brief/refresh [CONT-010] [CONT-020] [CONT-030] [CONT-040] Done When:
+- [x] WS-70 联系人：CRUD + context 聚合 + brief/refresh [CONT-010] [CONT-020] [CONT-030] [CONT-040] Done When:
   - `GET/POST/PATCH /v1/contacts` 可用；`GET /v1/contacts/:contactId/context` 返回聚合的 events/facts/todos。
   - `GET /v1/contacts/:contactId/brief` 可返回已有 brief 或空；`POST /v1/contacts/:contactId/brief/refresh` 生成新 brief（`generatedAt` 更新）。
   - Touches：`packages/server-nestjs/src/contacts/**` + `packages/server-nestjs/src/briefings/**`（以及必要的 query/service）。

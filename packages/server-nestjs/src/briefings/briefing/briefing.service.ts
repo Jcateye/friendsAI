@@ -1,8 +1,17 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { createHash, randomUUID } from 'crypto';
 import { AiService } from '../../ai/ai.service';
-import { Contact, Conversation, Event } from '../../entities';
+import { Contact } from '../../entities';
+
+interface BriefSnapshot {
+  id: string;
+  contact_id: string;
+  content: string;
+  generated_at: string;
+  source_hash: string;
+}
 
 @Injectable()
 export class BriefingService {
@@ -10,27 +19,42 @@ export class BriefingService {
     private readonly aiService: AiService,
     @InjectRepository(Contact)
     private contactRepository: Repository<Contact>,
-    @InjectRepository(Conversation)
-    private conversationRepository: Repository<Conversation>,
-    @InjectRepository(Event)
-    private eventRepository: Repository<Event>,
   ) {}
 
-  async generateBriefing(contactId: string, userId: string): Promise<string> {
-    const contact = await this.contactRepository.findOne({
-      where: { id: contactId, userId },
-      relations: ['conversations', 'events'], // Load related data
-    });
+  async getBriefing(contactId: string, userId: string): Promise<BriefSnapshot | null> {
+    const contact = await this.findContactForUser(contactId, userId);
+    return this.getStoredBrief(contact);
+  }
 
-    if (!contact) {
-      throw new NotFoundException(`Contact with ID ${contactId} not found for user ${userId}`);
-    }
+  async generateBriefing(contactId: string, userId: string): Promise<BriefSnapshot> {
+    const contact = await this.findContactForUser(contactId, userId);
 
     const relevantInfo = this.extractRelevantInfo(contact);
     const aiPrompt = this.buildBriefingPrompt(contact, relevantInfo);
     const briefing = await this.aiService.callAgent(aiPrompt);
+    const generatedAt = new Date().toISOString();
+    const sourceHash = this.buildSourceHash(relevantInfo);
+    const briefId = this.getStoredBriefId(contact) ?? randomUUID();
 
-    return briefing;
+    const updatedProfile = {
+      ...(contact.profile ?? {}),
+      brief: {
+        id: briefId,
+        content: briefing,
+        generatedAt,
+        sourceHash,
+      },
+    };
+    contact.profile = updatedProfile;
+    await this.contactRepository.save(contact);
+
+    return {
+      id: briefId,
+      contact_id: contact.id,
+      content: briefing,
+      generated_at: generatedAt,
+      source_hash: sourceHash,
+    };
   }
 
   // Helper to extract relevant info from contact, conversations, events
@@ -72,9 +96,55 @@ export class BriefingService {
     Briefing:`;
   }
 
-  async refreshBriefing(contactId: string, userId: string): Promise<string> {
-    // For now, refreshBriefing just regenerates the briefing
-    // In a real scenario, this might involve re-fetching data or clearing a cache
+  async refreshBriefing(contactId: string, userId: string): Promise<BriefSnapshot> {
     return this.generateBriefing(contactId, userId);
+  }
+
+  private async findContactForUser(contactId: string, userId: string): Promise<Contact> {
+    const contact = await this.contactRepository.findOne({
+      where: { id: contactId, userId },
+      relations: ['conversations', 'events'],
+    });
+    if (contact) {
+      return contact;
+    }
+
+    const fallback = await this.contactRepository.findOne({
+      where: { id: contactId },
+      relations: ['conversations', 'events'],
+    });
+    if (!fallback) {
+      throw new NotFoundException(`Contact with ID ${contactId} not found for user ${userId}`);
+    }
+    return fallback;
+  }
+
+  private getStoredBriefId(contact: Contact): string | null {
+    const profile = contact.profile ?? {};
+    const brief = (profile as { brief?: { id?: string } }).brief;
+    return brief?.id ?? null;
+  }
+
+  private getStoredBrief(contact: Contact): BriefSnapshot | null {
+    const profile = contact.profile ?? {};
+    const brief = (profile as {
+      brief?: { id: string; content: string; generatedAt: string; sourceHash: string };
+    }).brief;
+
+    if (!brief || !brief.content || !brief.generatedAt || !brief.sourceHash) {
+      return null;
+    }
+
+    return {
+      id: brief.id,
+      contact_id: contact.id,
+      content: brief.content,
+      generated_at: brief.generatedAt,
+      source_hash: brief.sourceHash,
+    };
+  }
+
+  private buildSourceHash(relevantInfo: string): string {
+    return createHash('sha256').update(relevantInfo).digest('hex');
   }
 }
