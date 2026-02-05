@@ -6,7 +6,7 @@ async function checkDatabase() {
         user: 'postgres',
         host: 'localhost',
         database: 'friendsai_v2', // Expected database name
-        password: '', // Assuming no password for local testing, or get from env
+        password: 'friendsai', // Assuming no password for local testing, or get from env
         port: 5434,
     });
 
