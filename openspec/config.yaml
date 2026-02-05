@@ -40,25 +40,29 @@ context: |
     - 使用全新 DB；不做旧数据迁移（旧库仅保留回滚用）
 
 rules:
-  global: |
+  proposal:
     - 正文中文；保留英文技术标识：API/字段/错误码/路径/命令/Requirement IDs。
     - 所有输出以“可验收”为第一优先，避免空话。
-
-  proposal: |
     - 必须包含：Intent / Scope / Non-Goals / Risks / Rollback / Acceptance。
     - Acceptance 必须可验证（命令或可观察检查点）。
 
-  specs: |
+  specs:
+    - 正文中文；保留英文技术标识：API/字段/错误码/路径/命令/Requirement IDs。
+    - 所有输出以“可验收”为第一优先，避免空话。
     - Delta 必须用 ADDED/MODIFIED/REMOVED（英文关键字）。
     - 每条 Requirement 必须有稳定 ID（如 AUTH-010）+ 至少 1 个 Given/When/Then（英文关键字）。
     - 只写行为合同，不写实现细节。
-    - 先引用现有模式，再发明新模式
+    - 先引用现有模式，再发明新模式。
 
-  design: |
+  design:
+    - 正文中文；保留英文技术标识：API/字段/错误码/路径/命令/Requirement IDs。
+    - 所有输出以“可验收”为第一优先，避免空话。
     - 必须覆盖：Contracts（API/数据结构）/ Edge Cases / Security / Rollout-Rollback。
     - 写清兼容策略（保持不变/变化点/避免破坏方式）。
 
-  tasks: |
+  tasks:
+    - 正文中文；保留英文技术标识：API/字段/错误码/路径/命令/Requirement IDs。
+    - 所有输出以“可验收”为第一优先，避免空话。
     - 每条任务映射 Requirement ID；每条任务都有 Done When（可验证）。
     - 任务必须 PR-sized + 单目标；优先先契约后实现以降低冲突。
 
