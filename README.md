@@ -114,7 +114,7 @@ friendsAI/
 2.  **配置后端环境**
     进入 `packages/server-nestjs` 并创建 `.env` 文件：
     ```env
-    OPENAI_API_KEY=sk-your-actual-api-key
+    OPENAI_API_KEY=your-openai-api-key
     ```
 
 3.  **安装并启动后端**

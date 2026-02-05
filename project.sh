@@ -28,11 +28,23 @@ fi
 
 load_env() {
   local node_env="${NODE_ENV:-development}"
+  local nest_env_file="$ROOT_DIR/packages/server-nestjs/.env.${node_env}"
+  local nest_env_fallback="$ROOT_DIR/packages/server-nestjs/.env"
   local server_env_file="$ROOT_DIR/packages/server/.env.${node_env}"
   local server_env_fallback="$ROOT_DIR/packages/server/.env"
   local client_env_file="$ROOT_DIR/packages/client/.env.${node_env}"
 
-  if [[ -f "$server_env_file" ]]; then
+  if [[ -f "$nest_env_file" ]]; then
+    # shellcheck disable=SC1090
+    set -a
+    source "$nest_env_file"
+    set +a
+  elif [[ -f "$nest_env_fallback" ]]; then
+    # shellcheck disable=SC1090
+    set -a
+    source "$nest_env_fallback"
+    set +a
+  elif [[ -f "$server_env_file" ]]; then
     # shellcheck disable=SC1090
     set -a
     source "$server_env_file"
@@ -51,7 +63,7 @@ load_env() {
     set +a
   fi
 
-  export DATABASE_URL="${DATABASE_URL:-postgres://friendsai:friendsai@localhost:5434/friendsai}"
+  export DATABASE_URL="${DATABASE_URL:-postgres://friendsai:friendsai@localhost:5434/friendsai_v2}"
   export JWT_SECRET="${JWT_SECRET:-dev-smoke-secret}"
   export PORT="${PORT:-3000}"
   export CLIENT_PORT="${CLIENT_PORT:-10086}"
@@ -253,11 +265,11 @@ verify_server() {
   if check_service_status "server" "$SERVER_PID_FILE" "$SERVER_LOG" "${PORT:-3000}"; then
     echo "✅ 后端已启动，PID: $(cat "$SERVER_PID_FILE")"
     echo "   日志文件: $SERVER_LOG"
-    echo "   API 健康检查（本机）：http://localhost:${PORT:-3000}/health"
+    echo "   API 健康检查（本机）：http://localhost:${PORT:-3000}/v1/health"
     local lan_ip
     lan_ip="$(get_lan_ip)"
     if [[ -n "$lan_ip" ]]; then
-      echo "   API 健康检查（局域网）：http://${lan_ip}:${PORT:-3000}/health"
+      echo "   API 健康检查（局域网）：http://${lan_ip}:${PORT:-3000}/v1/health"
     else
       echo "   API 健康检查（局域网）：未检测到本机局域网 IP"
     fi
@@ -484,12 +496,12 @@ start_mvp() {
   echo "✅ MVP 已启动"
   echo "👉 访问提示："
   echo "   前端地址（本机）：http://localhost:${CLIENT_PORT:-10086}"
-  echo "   API 地址（本机）：http://localhost:${PORT:-3000}/health"
+  echo "   API 地址（本机）：http://localhost:${PORT:-3000}/v1/health"
   local lan_ip
   lan_ip="$(get_lan_ip)"
   if [[ -n "$lan_ip" ]]; then
     echo "   前端地址（局域网）：http://${lan_ip}:${CLIENT_PORT:-10086}"
-    echo "   API 地址（局域网）：http://${lan_ip}:${PORT:-3000}/health"
+    echo "   API 地址（局域网）：http://${lan_ip}:${PORT:-3000}/v1/health"
   else
     echo "   局域网访问：未检测到本机局域网 IP"
   fi
