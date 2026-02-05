@@ -14,7 +14,7 @@ export class ConversationsController {
   @HttpCode(HttpStatus.OK)
   create(
     @Request() req: any,
-    @Body() body: { title?: string; content?: string; contactId?: string },
+    @Body() body: { title?: string; content?: string; contactId?: string } = {},
   ) {
     return this.conversationsService.create(
       {

@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Query, Request } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query, Request, HttpCode, HttpStatus } from '@nestjs/common';
 import { ToolConfirmationsService } from './tool-confirmations.service';
 import type { ToolConfirmationStatus } from '../entities';
 
@@ -48,11 +48,13 @@ export class ToolConfirmationsController {
   }
 
   @Post(':id/confirm')
+  @HttpCode(HttpStatus.OK)
   confirm(@Param('id') id: string, @Body() body: ConfirmToolDto) {
     return this.toolConfirmationsService.confirm(id, body.payload);
   }
 
   @Post(':id/reject')
+  @HttpCode(HttpStatus.OK)
   reject(@Param('id') id: string, @Body() body: RejectToolDto) {
     return this.toolConfirmationsService.reject(id, body.reason);
   }
