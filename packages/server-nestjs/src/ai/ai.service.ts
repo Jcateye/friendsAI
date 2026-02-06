@@ -28,7 +28,7 @@ export class AiService {
   } {
     const nodeEnv = this.configService.get<string>('NODE_ENV') ?? process.env.NODE_ENV;
     const useEnvFile = nodeEnv !== 'production';
-    const fileConfig = useEnvFile ? this.loadLocalEnv() : {};
+    const fileConfig = useEnvFile ? this.loadLocalEnv(nodeEnv ?? 'development') : {};
 
     const apiKey =
       fileConfig.OPENAI_API_KEY ??
@@ -48,15 +48,27 @@ export class AiService {
     return { apiKey, model, embeddingModel };
   }
 
-  private loadLocalEnv(): Record<string, string> {
-    const candidates = [
-      path.resolve(process.cwd(), '.env.local'),
-      path.resolve(process.cwd(), '.env'),
-      path.resolve(process.cwd(), 'packages/server-nestjs/.env.local'),
-      path.resolve(process.cwd(), 'packages/server-nestjs/.env'),
+  private loadLocalEnv(nodeEnv: string): Record<string, string> {
+    const envNames = [nodeEnv];
+    if (nodeEnv === 'development') envNames.push('dev');
+    if (nodeEnv === 'dev') envNames.push('development');
+
+    const baseNames = envNames.flatMap((name) => [
+      `.env.${name}.local`,
+      `.env.${name}`,
+    ]);
+    const shared = ['.env.local', '.env'];
+    const candidates = [...baseNames, ...shared];
+    const cwd = process.cwd();
+    const inPackage = path.basename(cwd) === 'server-nestjs';
+    const resolved = [
+      ...candidates.map((file) => path.resolve(cwd, file)),
+      ...(!inPackage
+        ? candidates.map((file) => path.resolve(cwd, 'packages/server-nestjs', file))
+        : []),
     ];
 
-    for (const candidate of candidates) {
+    for (const candidate of resolved) {
       if (!fs.existsSync(candidate)) {
         continue;
       }

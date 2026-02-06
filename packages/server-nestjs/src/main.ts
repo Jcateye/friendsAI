@@ -15,12 +15,15 @@ async function bootstrap() {
         return callback(null, true);
       }
 
-      // 开发环境允许 localhost 和局域网 IP
-      if (process.env.NODE_ENV === 'development') {
+      // 开发环境允许 localhost 和局域网 IP（NODE_ENV 未设置时默认为开发环境）
+      const isDev = !process.env.NODE_ENV || process.env.NODE_ENV === 'development';
+      if (isDev) {
         if (
           origin.includes('localhost') ||
           origin.includes('127.0.0.1') ||
-          origin.includes('192.168.')
+          origin.includes('192.168.') ||
+          origin.includes('10.') ||
+          origin.includes('172.')
         ) {
           return callback(null, true);
         }

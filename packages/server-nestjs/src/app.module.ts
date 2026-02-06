@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule, ConfigService } from '@nestjs/config';
+import path from 'path';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { JwtAuthGuard } from './auth/jwt-auth.guard';
@@ -36,7 +37,26 @@ import { ConversationArchivesModule } from './conversation-archives/conversation
   imports: [
     ConfigModule.forRoot({
       isGlobal: true, // 使配置模块在整个应用中可用
-      envFilePath: '.env', // 指定环境变量文件路径
+      envFilePath: (() => {
+        const nodeEnv = process.env.NODE_ENV ?? 'development';
+        const envNames = [nodeEnv];
+        if (nodeEnv === 'development') envNames.push('dev');
+        if (nodeEnv === 'dev') envNames.push('development');
+
+        const baseNames = envNames.flatMap((name) => [
+          `.env.${name}.local`,
+          `.env.${name}`,
+        ]);
+        const shared = ['.env.local', '.env'];
+        const candidates = [...baseNames, ...shared];
+        const cwd = process.cwd();
+        const inPackage = path.basename(cwd) === 'server-nestjs';
+        const rootPaths = candidates.map((file) => path.resolve(cwd, file));
+        const packagePaths = inPackage
+          ? []
+          : candidates.map((file) => path.resolve(cwd, 'packages/server-nestjs', file));
+        return Array.from(new Set([...rootPaths, ...packagePaths]));
+      })(),
     }),
     TypeOrmModule.forRootAsync({
       inject: [ConfigService],
