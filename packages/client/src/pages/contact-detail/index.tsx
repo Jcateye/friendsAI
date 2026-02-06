@@ -4,8 +4,8 @@ import Taro, { useRouter, useDidShow } from '@tarojs/taro'
 import { AtIcon } from 'taro-ui'
 import Header from '../../components/Header'
 import { ContactDetail, ContactEvent } from '../../types'
-import { api, contactApi, chatApi } from '../../services/api'
-import { formatDate, getAvatarStyle } from '../../utils'
+import { api, contactApi, conversationApi } from '../../services/api'
+import { formatDate, getAvatarStyle, getStorage, setStorage } from '../../utils'
 import './index.scss'
 
 const ContactDetailPage: React.FC = () => {
@@ -47,20 +47,19 @@ const ContactDetailPage: React.FC = () => {
 
   const handleStartConversation = async () => {
     if (!id || !contact) return
-    const defaultSessionKey = 'conversation_default_session_id'
-    const contactSessionKey = `contact_chat_session_${id}`
+    const defaultConversationKey = 'conversation_default_id'
+    const activeConversationKey = 'conversation_active_id'
+    const contactConversationKey = `contact_conversation_${id}`
     try {
       Taro.showLoading({ title: '打开中...', mask: true })
-      let sessionId = Taro.getStorageSync(contactSessionKey)
-      if (!sessionId) {
-        const created = await chatApi.createSession({
-          firstMessage: `开始与${contact.name}对话`,
-          title: contact.name,
-        })
-        sessionId = created.session.id
-        Taro.setStorageSync(contactSessionKey, sessionId)
+      let conversationId = getStorage<string>(contactConversationKey)
+      if (!conversationId) {
+        const created = await conversationApi.create({ title: contact.name })
+        conversationId = created.id
+        setStorage(contactConversationKey, conversationId)
       }
-      Taro.setStorageSync(defaultSessionKey, sessionId)
+      setStorage(defaultConversationKey, conversationId)
+      setStorage(activeConversationKey, conversationId)
       Taro.hideLoading()
       Taro.navigateTo({ url: '/pages/conversation/index' })
     } catch (error) {

@@ -16,7 +16,7 @@ async function bootstrap() {
       }
 
       // 开发环境允许 localhost 和局域网 IP（NODE_ENV 未设置时默认为开发环境）
-      const isDev = !process.env.NODE_ENV || process.env.NODE_ENV === 'development';
+      const isDev = !process.env.NODE_ENV || process.env.NODE_ENV === 'dev';
       if (isDev) {
         if (
           origin.includes('localhost') ||
