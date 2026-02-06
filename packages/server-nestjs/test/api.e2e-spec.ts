@@ -1,11 +1,14 @@
 import { INestApplication } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import request from 'supertest';
+import { DataSource } from 'typeorm';
 import { AppModule } from '../src/app.module';
+import { cleanupDatabase } from './db-cleanup';
 process.env.FEISHU_APP_ID = process.env.FEISHU_APP_ID ?? 'test-feishu-app-id';
 
 describe('API (e2e)', () => {
   let app: INestApplication;
+  let dataSource: DataSource;
 
   const uniqueEmail = (prefix: string) =>
     `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}@example.com`;
@@ -45,6 +48,11 @@ describe('API (e2e)', () => {
     app = moduleFixture.createNestApplication();
     app.setGlobalPrefix('v1');
     await app.init();
+    dataSource = moduleFixture.get(DataSource);
+  });
+
+  beforeEach(async () => {
+    await cleanupDatabase(dataSource);
   });
 
   afterAll(async () => {

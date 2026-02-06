@@ -1,17 +1,19 @@
 import { INestApplication } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import request from 'supertest';
-import { Repository } from 'typeorm';
+import { DataSource, Repository } from 'typeorm';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { APP_GUARD } from '@nestjs/core';
 import { AppModule } from '../src/app.module';
 import { Contact, Conversation, User } from '../src/entities';
+import { cleanupDatabase } from './db-cleanup';
 
 describe('Conversation Archive Apply (e2e)', () => {
   let app: INestApplication;
   let userRepository: Repository<User>;
   let contactRepository: Repository<Contact>;
   let conversationRepository: Repository<Conversation>;
+  let dataSource: DataSource;
   let currentUserId: string | null = null;
 
   beforeAll(async () => {
@@ -35,12 +37,11 @@ describe('Conversation Archive Apply (e2e)', () => {
     userRepository = moduleFixture.get<Repository<User>>(getRepositoryToken(User));
     contactRepository = moduleFixture.get<Repository<Contact>>(getRepositoryToken(Contact));
     conversationRepository = moduleFixture.get<Repository<Conversation>>(getRepositoryToken(Conversation));
+    dataSource = moduleFixture.get(DataSource);
   });
 
   beforeEach(async () => {
-    await conversationRepository.clear();
-    await contactRepository.clear();
-    await userRepository.clear();
+    await cleanupDatabase(dataSource);
 
     const user = userRepository.create({
       email: 'archive-user@example.com',

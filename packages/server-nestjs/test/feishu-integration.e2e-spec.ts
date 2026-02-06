@@ -1,14 +1,16 @@
 import { INestApplication } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import request from 'supertest';
-import { Repository } from 'typeorm';
+import { DataSource, Repository } from 'typeorm';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { AppModule } from '../src/app.module';
 import { User } from '../src/entities';
+import { cleanupDatabase } from './db-cleanup';
 
 describe('Feishu Integration (e2e)', () => {
   let app: INestApplication;
   let userRepository: Repository<User>;
+  let dataSource: DataSource;
   let currentUserId: string | null = null;
 
   beforeAll(async () => {
@@ -26,10 +28,11 @@ describe('Feishu Integration (e2e)', () => {
     await app.init();
 
     userRepository = moduleFixture.get<Repository<User>>(getRepositoryToken(User));
+    dataSource = moduleFixture.get(DataSource);
   });
 
   beforeEach(async () => {
-    await userRepository.clear();
+    await cleanupDatabase(dataSource);
 
     const user = userRepository.create({
       email: 'feishu-user@example.com',

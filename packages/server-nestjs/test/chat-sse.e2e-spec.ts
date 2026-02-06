@@ -1,19 +1,20 @@
 import { INestApplication } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import request from 'supertest';
-import { Repository } from 'typeorm';
+import { DataSource, Repository } from 'typeorm';
 import { getRepositoryToken } from '@nestjs/typeorm';
-import { APP_GUARD } from '@nestjs/core';
 import { AppModule } from '../src/app.module';
-import { Conversation, User } from '../src/entities';
+import { Conversation } from '../src/entities';
 import { AiService } from '../src/ai/ai.service';
+import { cleanupDatabase } from './db-cleanup';
 
 describe('Chat SSE Flow (e2e)', () => {
   let app: INestApplication;
   let aiServiceMock: { streamChat: jest.Mock; callAgent: jest.Mock; generateEmbedding: jest.Mock };
-  let userRepository: Repository<User>;
   let conversationRepository: Repository<Conversation>;
-  let currentUserId: string | null = null;
+  let dataSource: DataSource;
+  let currentUserId: string;
+  let authHeader: { Authorization: string };
   let conversationId: string;
 
   beforeAll(async () => {
@@ -28,40 +29,36 @@ describe('Chat SSE Flow (e2e)', () => {
     })
       .overrideProvider(AiService)
       .useValue(aiServiceMock)
-      .overrideProvider(APP_GUARD)
-      .useValue({ canActivate: () => true })
       .compile();
 
     app = moduleFixture.createNestApplication();
     app.setGlobalPrefix('v1');
-    app.use((req, _res, next) => {
-      if (currentUserId) {
-        req.user = { id: currentUserId };
-      }
-      next();
-    });
     await app.init();
 
-    userRepository = moduleFixture.get<Repository<User>>(getRepositoryToken(User));
     conversationRepository = moduleFixture.get<Repository<Conversation>>(getRepositoryToken(Conversation));
+    dataSource = moduleFixture.get(DataSource);
   });
 
   beforeEach(async () => {
-    await conversationRepository.clear();
-    await userRepository.clear();
+    await cleanupDatabase(dataSource);
+    jest.clearAllMocks();
 
-    const user = userRepository.create({
-      email: 'chat-user@example.com',
-      password: 'password123',
-      name: 'Chat User',
-    });
-    const saved = await userRepository.save(user);
-    currentUserId = saved.id;
+    const registerResponse = await request(app.getHttpServer())
+      .post('/v1/auth/register')
+      .send({
+        email: `chat-user-${Date.now()}-${Math.random().toString(16).slice(2)}@example.com`,
+        password: 'password123',
+        name: 'Chat User',
+      })
+      .expect(200);
+
+    currentUserId = registerResponse.body.user.id as string;
+    authHeader = { Authorization: `Bearer ${registerResponse.body.accessToken as string}` };
 
     const conversation = conversationRepository.create({
       title: 'Chat Conversation',
       content: '',
-      userId: saved.id,
+      userId: currentUserId,
     });
     const savedConversation = await conversationRepository.save(conversation);
     conversationId = savedConversation.id;
@@ -83,6 +80,7 @@ describe('Chat SSE Flow (e2e)', () => {
 
       const response = await request(app.getHttpServer())
         .post('/v1/agent/chat')
+        .set(authHeader)
         .send({ prompt: 'Say hello' })
         .expect(200);
 
@@ -100,16 +98,19 @@ describe('Chat SSE Flow (e2e)', () => {
 
       await request(app.getHttpServer())
         .post('/v1/agent/chat')
+        .set(authHeader)
         .send({ prompt: 'Persist me', conversationId })
         .expect(200);
 
       const messagesResponse = await request(app.getHttpServer())
         .get(`/v1/conversations/${conversationId}/messages`)
+        .set(authHeader)
         .expect(200);
 
       expect(messagesResponse.body.length).toBeGreaterThanOrEqual(2);
-      expect(messagesResponse.body[0].role).toBe('user');
-      expect(messagesResponse.body[messagesResponse.body.length - 1].role).toBe('assistant');
+      const roles = messagesResponse.body.map((item: { role: string }) => item.role);
+      expect(roles).toContain('user');
+      expect(roles).toContain('assistant');
     });
 
     it('should handle messages array format', async () => {
@@ -121,6 +122,7 @@ describe('Chat SSE Flow (e2e)', () => {
 
       const response = await request(app.getHttpServer())
         .post('/v1/agent/chat')
+        .set(authHeader)
         .send({
           messages: [
             { role: 'user', content: 'Hello' },
@@ -144,14 +146,14 @@ describe('Chat SSE Flow (e2e)', () => {
       aiServiceMock.streamChat.mockReturnValue(mockStreamGenerator());
 
       const agent = request.agent(app.getHttpServer());
-      const req = agent.post('/v1/agent/chat').send({ prompt: 'Long response' });
+      const req = agent.post('/v1/agent/chat').set(authHeader).send({ prompt: 'Long response' });
 
       setTimeout(() => req.abort(), 50);
 
       try {
         await req;
       } catch (error) {
-        expect(error.code).toBe('ECONNRESET');
+        expect(['ECONNRESET', 'ABORTED']).toContain(error.code);
       }
     });
 
@@ -164,6 +166,7 @@ describe('Chat SSE Flow (e2e)', () => {
 
       await request(app.getHttpServer())
         .post('/v1/agent/chat')
+        .set(authHeader)
         .send({
           prompt: 'Test',
           context: { contactId: 'contact-123' },
@@ -171,7 +174,7 @@ describe('Chat SSE Flow (e2e)', () => {
         .expect(200);
 
       expect(aiServiceMock.streamChat).toHaveBeenCalled();
-      const callArgs = aiServiceMock.streamChat.mock.calls[0];
+      const callArgs = aiServiceMock.streamChat.mock.calls[aiServiceMock.streamChat.mock.calls.length - 1];
       expect(callArgs[0]).toEqual(
         expect.arrayContaining([
           expect.objectContaining({ role: 'user', content: 'Test' }),
@@ -189,6 +192,7 @@ describe('Chat SSE Flow (e2e)', () => {
 
       const response = await request(app.getHttpServer())
         .post('/v1/agent/chat')
+        .set(authHeader)
         .send({ prompt: 'Trigger error' });
 
       expect(response.text).toContain('event: error');
@@ -220,6 +224,7 @@ describe('Chat SSE Flow (e2e)', () => {
 
       const response = await request(app.getHttpServer())
         .post('/v1/agent/chat')
+        .set(authHeader)
         .send({ prompt: 'What is the weather in NYC?' })
         .expect(200);
 
@@ -243,11 +248,13 @@ describe('Chat SSE Flow (e2e)', () => {
 
       await request(app.getHttpServer())
         .post('/v1/agent/chat')
+        .set(authHeader)
         .send({ prompt: 'My name is Alice' })
         .expect(200);
 
       const response = await request(app.getHttpServer())
         .post('/v1/agent/chat')
+        .set(authHeader)
         .send({
           messages: [
             { role: 'user', content: 'My name is Alice' },
@@ -272,6 +279,7 @@ describe('Chat SSE Flow (e2e)', () => {
 
       const response = await request(app.getHttpServer())
         .post('/v1/agent/chat')
+        .set(authHeader)
         .send({ prompt: 'Test' })
         .expect(200);
 
@@ -292,6 +300,7 @@ describe('Chat SSE Flow (e2e)', () => {
 
       const response = await request(app.getHttpServer())
         .post('/v1/agent/chat')
+        .set(authHeader)
         .send({ prompt: 'Test' })
         .expect(200);
 

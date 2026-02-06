@@ -49,13 +49,13 @@ export class ToolConfirmationsController {
 
   @Post(':id/confirm')
   @HttpCode(HttpStatus.OK)
-  confirm(@Param('id') id: string, @Body() body: ConfirmToolDto) {
+  confirm(@Param('id') id: string, @Body() body: ConfirmToolDto = {}) {
     return this.toolConfirmationsService.confirm(id, body.payload);
   }
 
   @Post(':id/reject')
   @HttpCode(HttpStatus.OK)
-  reject(@Param('id') id: string, @Body() body: RejectToolDto) {
+  reject(@Param('id') id: string, @Body() body: RejectToolDto = {}) {
     return this.toolConfirmationsService.reject(id, body.reason);
   }
 }

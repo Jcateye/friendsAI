@@ -1,7 +1,17 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ConflictException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
-import { Contact } from '../entities';
+import { In, QueryFailedError, Repository } from 'typeorm';
+import {
+  Contact,
+  ContactBrief,
+  ContactFact,
+  ContactTodo,
+  Conversation,
+  ConversationArchive,
+  Event,
+  Message,
+  ToolConfirmation,
+} from '../entities';
 
 interface CreateContactDto {
   name?: string;
@@ -140,7 +150,50 @@ export class ContactsService {
   }
 
   async remove(id: string, userId?: string): Promise<void> {
-    const contact = await this.findOne(id, userId);
-    await this.contactRepository.remove(contact);
+    try {
+      await this.contactRepository.manager.transaction(async manager => {
+        const contactRepository = manager.getRepository(Contact);
+        const conversationRepository = manager.getRepository(Conversation);
+
+        const contact = await contactRepository.findOne({
+          where: userId ? { id, userId } : { id },
+        });
+        if (!contact) {
+          throw new NotFoundException('Contact not found');
+        }
+
+        const conversations = await conversationRepository.find({
+          select: { id: true },
+          where: { contactId: contact.id },
+        });
+        const conversationIds = conversations.map(conversation => conversation.id);
+
+        if (conversationIds.length > 0) {
+          await manager.getRepository(Message).delete({ conversationId: In(conversationIds) });
+          await manager.getRepository(ConversationArchive).delete({ conversationId: In(conversationIds) });
+          await manager.getRepository(ToolConfirmation).delete({ conversationId: In(conversationIds) });
+          await conversationRepository.delete({ id: In(conversationIds) });
+        }
+
+        await manager.getRepository(Event).delete({ contactId: contact.id });
+        await manager.getRepository(ContactFact).delete({ contactId: contact.id });
+        await manager.getRepository(ContactTodo).delete({ contactId: contact.id });
+        await manager.getRepository(ContactBrief).delete({ contactId: contact.id });
+        await contactRepository.delete({ id: contact.id });
+      });
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+
+      const driverError = (error as { driverError?: { code?: string; constraint?: string } }).driverError;
+      if (error instanceof QueryFailedError && driverError?.code === '23503') {
+        throw new ConflictException(
+          `Contact deletion blocked by foreign key constraint: ${driverError.constraint ?? 'unknown_constraint'}`,
+        );
+      }
+
+      throw error;
+    }
   }
 }
