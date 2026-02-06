@@ -22,7 +22,7 @@ export class CreateContactDto {
   @ApiProperty({ required: false, description: 'Additional notes' })
   note?: string;
 
-  @ApiProperty({ required: false, description: 'Profile metadata', type: 'object' })
+  @ApiProperty({ required: false, description: 'Profile metadata', additionalProperties: true })
   profile?: Record<string, any>;
 
   @ApiProperty({ required: false, description: 'Tags', type: [String] })

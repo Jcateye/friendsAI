@@ -67,7 +67,7 @@ export class MessagesService {
       content: row.content,
       createdAt: row.createdAt.toISOString(),
       metadata: row.metadata ?? undefined,
-      references: row.citations ?? undefined,
+      references: (row.citations as AgentMessage['references']) ?? undefined,
     }));
   }
 
