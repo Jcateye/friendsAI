@@ -3367,6 +3367,56 @@
           "flow": "飞书集成"
         }
       ]
+    },
+    {
+      "id": "TASK-033",
+      "title": "SSE 流式回复重复消息",
+      "phase": "Bug",
+      "priority": "P1",
+      "status": "backlog",
+      "assignee": "claude-code",
+      "estimate": "0.5天",
+      "dependencies": [],
+      "files": {
+        "modify": [
+          "packages/server-nestjs/src/**/*.ts",
+          "packages/client/src/hooks/useAgentChat.ts",
+          "packages/client/src/pages/conversation-chat/index.tsx"
+        ]
+      },
+      "description": "在 /v1/agent/chat SSE 流式返回时，客户端显示了两条相同的助手消息。怀疑流式消息处理或 message.final/agent.message 合并逻辑有问题。",
+      "requirements": {
+        "repro": {
+          "url": "http://192.168.1.68:3000/v1/agent/chat",
+          "example_events": [
+            "event: agent.start",
+            "event: agent.delta (multiple)",
+            "event: agent.message (full content)",
+            "event: agent.end"
+          ],
+          "observed": "UI 中出现两条相同助手消息。"
+        },
+        "expected": "同一 runId 只渲染一条助手消息；delta 只用于流式更新，不生成第二条独立消息。"
+      },
+      "implementation_steps": [
+        "1. 复现问题并记录一次完整 SSE 事件序列（包含 runId、message id、event 顺序）",
+        "2. 检查前端 SSE 事件处理逻辑：delta 累积与 final/message 合并是否重复插入",
+        "3. 检查后端事件发送：agent.message 与 agent.delta 是否同时触发了两次入库/推送",
+        "4. 统一事件协议：确保只在终态创建/追加消息实体",
+        "5. 增加防重复保护（基于 message id/runId 去重）"
+      ],
+      "acceptance_criteria": [
+        "同一 runId 的一次回复在 UI 中只出现一条助手消息",
+        "SSE 流式显示过程中不出现重复消息",
+        "message.final 或 agent.message 与 delta 合并逻辑一致",
+        "新增或更新测试覆盖流式去重"
+      ],
+      "testing": {
+        "manual": [
+          "curl -N http://192.168.1.68:3000/v1/agent/chat -H 'Content-Type: application/json' -d '{...}'",
+          "在聊天页发送消息，观察流式与最终消息渲染"
+        ]
+      }
     }
   ],
   "milestones": [

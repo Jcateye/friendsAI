@@ -140,6 +140,21 @@ export const useAgentChat = (options: UseAgentChatOptions = {}): UseAgentChatRet
                 : m
             )
           }
+          // If streaming message exists but IDs differ (e.g. persisted id), replace it
+          const streamingId = currentMessageRef.current?.id
+          if (streamingId) {
+            const streamingIndex = prev.findIndex((m) => m.id === streamingId)
+            if (streamingIndex >= 0) {
+              return prev.map((m, i) =>
+                i === streamingIndex
+                  ? {
+                      ...message,
+                      isStreaming: false,
+                    }
+                  : m
+              )
+            }
+          }
           // Add new complete message
           return [
             ...prev,
