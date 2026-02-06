@@ -28,7 +28,7 @@ export class AiService {
   } {
     const nodeEnv = this.configService.get<string>('NODE_ENV') ?? process.env.NODE_ENV;
     const useEnvFile = nodeEnv !== 'production';
-    const fileConfig = useEnvFile ? this.loadLocalEnv(nodeEnv ?? 'development') : {};
+    const fileConfig = useEnvFile ? this.loadLocalEnv(nodeEnv ?? 'dev') : {};
 
     const apiKey =
       fileConfig.OPENAI_API_KEY ??
@@ -50,8 +50,8 @@ export class AiService {
 
   private loadLocalEnv(nodeEnv: string): Record<string, string> {
     const envNames = [nodeEnv];
-    if (nodeEnv === 'development') envNames.push('dev');
-    if (nodeEnv === 'dev') envNames.push('development');
+    if (nodeEnv === 'dev') envNames.push('dev');
+    if (nodeEnv === 'dev') envNames.push('dev');
 
     const baseNames = envNames.flatMap((name) => [
       `.env.${name}.local`,
