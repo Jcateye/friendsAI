@@ -3,8 +3,10 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Conversation, Message } from '../entities';
 import type { AgentMessage } from '../agent/client-types';
+import { generateUlid } from '../utils/ulid';
 
 interface AppendMessageInput {
+  id?: string;
   role: string;
   content: string;
   metadata?: Record<string, any>;
@@ -28,6 +30,7 @@ export class MessagesService {
     await this.getConversation(conversationId, input.userId);
 
     const message = this.messageRepository.create({
+      id: input.id ?? generateUlid(),
       role: input.role,
       content: input.content,
       metadata: input.metadata ?? null,

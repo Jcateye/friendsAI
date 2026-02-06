@@ -15,7 +15,7 @@ export class ContactFact {
   @Column({ type: 'uuid', nullable: true })
   sourceConversationId: string | null;
 
-  @Column({ type: 'uuid', array: true, nullable: true })
+  @Column({ type: 'text', array: true, nullable: true })
   sourceMessageIds: string[] | null;
 
   @ManyToOne(() => Contact, contact => contact.facts, { nullable: false })

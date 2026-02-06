@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { randomUUID } from 'crypto';
+import { generateUlid } from '../utils/ulid';
 import type {
   AgentMessage,
   AgentMessageRole,
@@ -28,7 +28,7 @@ export class AgentMessageStore {
 
   createMessage(input: MessageInput): AgentMessage {
     return {
-      id: input.id ?? randomUUID(),
+      id: input.id ?? generateUlid(),
       role: input.role,
       content: input.content,
       createdAt: input.createdAt ?? new Date().toISOString(),

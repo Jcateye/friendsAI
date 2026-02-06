@@ -1,9 +1,9 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, ManyToOne, JoinColumn } from 'typeorm';
+import { Entity, PrimaryColumn, Column, CreateDateColumn, ManyToOne, JoinColumn } from 'typeorm';
 import { Conversation } from './conversation.entity';
 
 @Entity({ name: 'messages' })
 export class Message {
-  @PrimaryGeneratedColumn('uuid')
+  @PrimaryColumn({ type: 'text' })
   id: string;
 
   @Column({ type: 'text' })

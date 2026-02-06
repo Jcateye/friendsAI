@@ -1,5 +1,4 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { randomUUID } from 'crypto';
 import type OpenAI from 'openai';
 import { AiService } from '../ai/ai.service';
 import { ToolExecutionStrategy } from '../ai/tools/tool-execution.strategy';
@@ -8,6 +7,7 @@ import { AgentMessageStore } from './agent-message.store';
 import { AgentChatRequest, AgentStreamEvent } from './agent.types';
 import { ContextBuilder } from './context-builder';
 import { MessagesService } from '../conversations/messages.service';
+import { generateUlid } from '../utils/ulid';
 import type {
   AgentError,
   AgentMessage,
@@ -39,7 +39,7 @@ export class AgentOrchestrator {
   ): AsyncGenerator<AgentStreamEvent> {
     let messages = this.contextBuilder.buildMessages(request);
     let iterationCount = 0;
-    const runId = randomUUID();
+    const runId = generateUlid();
     const startEvent: AgentRunStart = {
       runId,
       createdAt: new Date().toISOString(),
@@ -57,6 +57,7 @@ export class AgentOrchestrator {
       let storedMessage = userMessage;
       if (conversationId) {
         const persisted = await this.messagesService.appendMessage(conversationId, {
+          id: userMessage.id,
           role: userMessage.role,
           content: userMessage.content,
           metadata: userMessage.metadata as Record<string, any> | undefined,
@@ -88,7 +89,7 @@ export class AgentOrchestrator {
       });
 
       let assistantMessage = '';
-      const assistantMessageId = randomUUID();
+      const assistantMessageId = generateUlid();
       let toolCalls: OpenAI.Chat.Completions.ChatCompletionMessageFunctionToolCall[] = [];
       let finishReason: string | undefined;
 
@@ -142,20 +143,19 @@ export class AgentOrchestrator {
 
       // 如果没有工具调用，返回完成事件
       if (!toolCalls.length || finishReason === 'stop') {
-        let persistedMessageId: string | undefined;
         let persistedCreatedAt: string | undefined;
         if (conversationId) {
           const persisted = await this.messagesService.appendMessage(conversationId, {
+            id: assistantMessageId,
             role: 'assistant',
             content: assistantMessage,
             userId: request.userId,
           });
-          persistedMessageId = persisted.id;
           persistedCreatedAt = persisted.createdAt.toISOString();
         }
 
         const finalMessage = this.messageStore.createMessage({
-          id: persistedMessageId ?? assistantMessageId,
+          id: assistantMessageId,
           role: 'assistant',
           content: assistantMessage,
           createdAt: persistedCreatedAt,
@@ -248,7 +248,7 @@ export class AgentOrchestrator {
       if (!toolName) {
         continue;
       }
-      const callId = toolCall.id ?? randomUUID();
+      const callId = toolCall.id ?? generateUlid();
       const toolInput = toolCall.function?.arguments ?? '';
       let previousStatus: ToolStatus | undefined;
 
@@ -385,7 +385,7 @@ export class AgentOrchestrator {
     );
 
     const toolStateEvent = this.buildToolStateUpdate({
-      toolId: executionResult.callId ?? randomUUID(),
+      toolId: executionResult.callId ?? generateUlid(),
       name: executionResult.toolName,
       status: this.mapToolResultToState(executionResult.status),
       output: executionResult.result,
@@ -398,7 +398,7 @@ export class AgentOrchestrator {
     // 如果用户拒绝或执行失败，返回错误
     if (executionResult.status === 'denied' || executionResult.status === 'error') {
       const endEvent: AgentRunEnd = {
-        runId: randomUUID(),
+        runId: generateUlid(),
         status: executionResult.status === 'denied' ? 'cancelled' : 'failed',
         finishedAt: new Date().toISOString(),
         error: executionResult.error
