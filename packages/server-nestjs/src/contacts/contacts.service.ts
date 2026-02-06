@@ -9,6 +9,7 @@ interface CreateContactDto {
   phone?: string;
   company?: string;
   position?: string;
+  note?: string;
   profile?: Record<string, any>;
   tags?: string[];
 }
@@ -19,6 +20,7 @@ interface UpdateContactDto {
   phone?: string;
   company?: string;
   position?: string;
+  note?: string;
   profile?: Record<string, any>;
   tags?: string[];
 }
