@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react'
 import { View, Text, ScrollView } from '@tarojs/components'
-import Taro, { useRouter } from '@tarojs/taro'
+import Taro, { useRouter, useDidShow } from '@tarojs/taro'
 import { AtIcon } from 'taro-ui'
 import Header from '../../components/Header'
 import { ContactDetail, ContactEvent } from '../../types'
-import { api, contactApi } from '../../services/api'
+import { api, contactApi, chatApi } from '../../services/api'
 import { formatDate, getAvatarStyle } from '../../utils'
 import './index.scss'
 
@@ -14,33 +14,59 @@ const ContactDetailPage: React.FC = () => {
   const [contact, setContact] = useState<ContactDetail | null>(null)
   const [loading, setLoading] = useState(true)
 
-  useEffect(() => {
-    const loadContact = async () => {
-      if (!id) return
-      setLoading(true)
-      try {
-        const data = await api.getContactDetail(id)
-        setContact(data)
-      } catch (error) {
-        console.error('Failed to load contact:', error)
-        Taro.showToast({ title: '加载失败', icon: 'error' })
-      } finally {
-        setLoading(false)
-      }
+  const loadContact = async () => {
+    if (!id) return
+    setLoading(true)
+    try {
+      const data = await api.getContactDetail(id)
+      setContact(data)
+    } catch (error) {
+      console.error('Failed to load contact:', error)
+      Taro.showToast({ title: '加载失败', icon: 'error' })
+    } finally {
+      setLoading(false)
     }
+  }
+
+  useEffect(() => {
     loadContact()
   }, [id])
+
+  useDidShow(() => {
+    loadContact()
+  })
 
   const handleBack = () => {
     Taro.navigateBack()
   }
 
   const handleEdit = () => {
-    Taro.showToast({ title: '编辑联系人', icon: 'none' })
+    if (!id) return
+    Taro.navigateTo({ url: `/pages/contact-edit/index?id=${id}` })
   }
 
-  const handleStartConversation = () => {
-    Taro.showToast({ title: '开始对话', icon: 'none' })
+  const handleStartConversation = async () => {
+    if (!id || !contact) return
+    const defaultSessionKey = 'conversation_default_session_id'
+    const contactSessionKey = `contact_chat_session_${id}`
+    try {
+      Taro.showLoading({ title: '打开中...', mask: true })
+      let sessionId = Taro.getStorageSync(contactSessionKey)
+      if (!sessionId) {
+        const created = await chatApi.createSession({
+          firstMessage: `开始与${contact.name}对话`,
+          title: contact.name,
+        })
+        sessionId = created.session.id
+        Taro.setStorageSync(contactSessionKey, sessionId)
+      }
+      Taro.setStorageSync(defaultSessionKey, sessionId)
+      Taro.hideLoading()
+      Taro.navigateTo({ url: '/pages/conversation/index' })
+    } catch (error) {
+      Taro.hideLoading()
+      Taro.showToast({ title: '打开失败', icon: 'error' })
+    }
   }
 
   const handleRefreshBrief = async () => {

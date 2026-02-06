@@ -1,0 +1,63 @@
+@import '../../app.scss';
+
+.contact-edit-page {
+  min-height: 100vh;
+  background-color: $bg-primary;
+}
+
+.content {
+  padding: 32rpx;
+}
+
+.field {
+  margin-bottom: 28rpx;
+}
+
+.label {
+  display: block;
+  margin-bottom: 12rpx;
+  font-size: $font-xs;
+  font-weight: 600;
+  color: $text-tertiary;
+  text-transform: uppercase;
+}
+
+.input-wrapper {
+  background-color: $bg-secondary;
+  border-radius: $radius-lg;
+  padding: 20rpx;
+}
+
+.input {
+  font-size: $font-md;
+  color: $text-primary;
+}
+
+.textarea {
+  width: 100%;
+  min-height: 220rpx;
+  font-size: $font-sm;
+  color: $text-primary;
+}
+
+.save-btn {
+  margin-top: 20rpx;
+  height: 104rpx;
+  border-radius: 24rpx;
+  background: #7C9070;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.save-text {
+  color: #fff;
+  font-size: 32rpx;
+  font-weight: 600;
+}
+
+.loading-state {
+  padding: 48rpx 0;
+  text-align: center;
+  color: $text-tertiary;
+}

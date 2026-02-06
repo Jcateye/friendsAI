@@ -40,6 +40,8 @@ export interface Contact {
   company?: string
   role?: string
   tags?: string[]
+  notes?: string | null
+  status?: string | null
   lastContactTime?: string
   lastContactSummary?: string
 }

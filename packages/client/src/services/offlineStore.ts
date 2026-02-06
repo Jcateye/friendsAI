@@ -12,13 +12,13 @@ const resolveBaseUrl = () => {
 }
 const BASE_URL = resolveBaseUrl()
 
-type OutboxKind = 'contact_create' | 'journal_create'
+type OutboxKind = 'contact_create' | 'contact_update' | 'journal_create'
 
 export interface OutboxItem {
   id: string
   kind: OutboxKind
   url: string
-  method: 'POST'
+  method: 'POST' | 'PATCH'
   data: any
   createdAt: string
 }

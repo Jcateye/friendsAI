@@ -7,6 +7,7 @@ export default {
     'pages/contacts/index',
     'pages/contact-detail/index',
     'pages/contact-create/index',
+    'pages/contact-edit/index',
     'pages/action/index',
     'pages/settings/index',
     'pages/connector/index',
