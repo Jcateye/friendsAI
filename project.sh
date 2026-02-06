@@ -90,12 +90,13 @@ get_lan_ip() {
 }
 
 # 检查服务是否成功启动
-# 参数: $1=服务名称, $2=PID文件, $3=日志文件, $4=监听端口(可选)
+# 参数: $1=服务名称, $2=PID文件, $3=日志文件, $4=监听端口(可选), $5=命令行匹配(可选)
 check_service_status() {
   local service_name="$1"
   local pid_file="$2"
   local log_file="$3"
   local port="${4:-}"
+  local match_cmd="${5:-}"
   local max_attempts=30
   local attempt=0
 
@@ -125,22 +126,39 @@ check_service_status() {
     local warned_port_in_use=0
     while true; do
       local port_pids
-      port_pids=$(lsof -ti ":$port" 2>/dev/null || true)
+      port_pids=$(lsof -nP -iTCP:"$port" -sTCP:LISTEN -t 2>/dev/null || true)
       if [[ -n "$port_pids" ]]; then
         if echo "$port_pids" | tr ' ' '\n' | grep -qx "$pid"; then
           break
         fi
-        local child_match=0
+        # 检查是否是我们进程的后代（子进程、孙进程等）
+        local descendant_match=0
         for port_pid in $port_pids; do
-          local ppid
-          ppid="$(ps -o ppid= -p "$port_pid" 2>/dev/null | tr -d ' ')"
-          if [[ "$ppid" == "$pid" ]]; then
-            child_match=1
-            break
-          fi
+          # 递归向上查找，检查是否是 $pid 的后代
+          local check_pid="$port_pid"
+          while [[ -n "$check_pid" && "$check_pid" != "1" && "$check_pid" != "0" ]]; do
+            local ppid
+            ppid="$(ps -o ppid= -p "$check_pid" 2>/dev/null | tr -d ' ')"
+            if [[ "$ppid" == "$pid" ]]; then
+              descendant_match=1
+              break 2
+            fi
+            check_pid="$ppid"
+          done
         done
-        if [[ $child_match -eq 1 ]]; then
+        if [[ $descendant_match -eq 1 ]]; then
           break
+        fi
+        if [[ -n "$match_cmd" ]]; then
+          for port_pid in $port_pids; do
+            local cmd
+            cmd="$(ps -o command= -p "$port_pid" 2>/dev/null || true)"
+            if [[ -n "$cmd" && "$cmd" == *"$match_cmd"* ]]; then
+              echo "ℹ️ 监听进程与 PID 文件不一致，更新 PID 为 $port_pid"
+              echo "$port_pid" > "$pid_file"
+              break 2
+            fi
+          done
         fi
         if [[ $warned_port_in_use -eq 0 ]]; then
           echo "⚠️ 端口 $port 已被其他进程占用: $port_pids"
@@ -214,6 +232,19 @@ is_server_running() {
       return 0
     fi
   fi
+  # 如果 PID 文件失效，尝试从端口监听进程恢复
+  local port_pids
+  port_pids=$(lsof -nP -iTCP:"${PORT:-3000}" -sTCP:LISTEN -t 2>/dev/null || true)
+  if [[ -n "$port_pids" ]]; then
+    for pid in $port_pids; do
+      local cmd
+      cmd="$(ps -o command= -p "$pid" 2>/dev/null || true)"
+      if [[ -n "$cmd" && "$cmd" == *"$ROOT_DIR/packages/server-nestjs/"* ]]; then
+        echo "$pid" > "$SERVER_PID_FILE"
+        return 0
+      fi
+    done
+  fi
   return 1
 }
 
@@ -285,7 +316,7 @@ start_server_background() {
 
 verify_server() {
   # 检查服务是否成功启动
-  if check_service_status "server" "$SERVER_PID_FILE" "$SERVER_LOG" "${PORT:-3000}"; then
+  if check_service_status "server" "$SERVER_PID_FILE" "$SERVER_LOG" "${PORT:-3000}" "$ROOT_DIR/packages/server-nestjs/"; then
     echo "✅ 后端已启动，PID: $(cat "$SERVER_PID_FILE")"
     echo "   日志文件: $SERVER_LOG"
     echo "   API 健康检查（本机）：http://localhost:${PORT:-3000}/v1/health"
@@ -320,7 +351,7 @@ kill_port() {
   fi
 
   local port_pids
-  port_pids=$(lsof -ti ":$port" 2>/dev/null || true)
+  port_pids=$(lsof -nP -iTCP:"$port" -sTCP:LISTEN -t 2>/dev/null || true)
 
   if [[ -z "$port_pids" ]]; then
     return 0
@@ -339,14 +370,42 @@ kill_port() {
   sleep 1
 }
 
+# 清理残留的本项目进程占用端口（当 PID 文件缺失时兜底）
+# 参数: $1=端口, $2=命令行匹配关键字
+kill_orphan_port_process() {
+  local port="$1"
+  local match="$2"
+
+  local port_pids
+  port_pids=$(lsof -nP -iTCP:"$port" -sTCP:LISTEN -t 2>/dev/null || true)
+  if [[ -z "$port_pids" ]]; then
+    return 0
+  fi
+
+  for pid in $port_pids; do
+    local cmd
+    cmd="$(ps -o command= -p "$pid" 2>/dev/null || true)"
+    if [[ -n "$cmd" && "$cmd" == *"$match"* ]]; then
+      echo "🔪 发现残留进程占用端口 $port: $pid"
+      kill "$pid" 2>/dev/null || true
+      sleep 1
+      if kill -0 "$pid" >/dev/null 2>&1; then
+        echo "⚠️ 进程 $pid 仍在运行，强制结束"
+        kill -9 "$pid" 2>/dev/null || true
+      fi
+    fi
+  done
+}
+
 stop_client() {
   if is_client_running; then
     local pid
     pid="$(cat "$CLIENT_PID_FILE")"
     echo "⏹️  停止前端服务 (PID: $pid)..."
-    kill "$pid" 2>/dev/null || true
-    sleep 1
+    # 先杀子进程，再杀父进程（避免子进程变成孤儿进程）
     pkill -P "$pid" 2>/dev/null || true
+    sleep 1
+    kill "$pid" 2>/dev/null || true
     rm -f "$CLIENT_PID_FILE"
   else
     echo "⚪ 前端服务未运行"
@@ -361,15 +420,18 @@ stop_server() {
     local pid
     pid="$(cat "$SERVER_PID_FILE")"
     echo "⏹️  停止后端服务 (PID: $pid)..."
-    kill "$pid" 2>/dev/null || true
-    sleep 1
+    # 先杀子进程，再杀父进程（避免子进程变成孤儿进程）
     pkill -P "$pid" 2>/dev/null || true
+    sleep 1
+    kill "$pid" 2>/dev/null || true
     rm -f "$SERVER_PID_FILE"
   else
     echo "⚪ 后端服务未运行"
   fi
   # 确保端口被释放（只杀死我们启动的进程）
   kill_port "${PORT:-3000}" "$SERVER_PID_FILE"
+  # 兜底清理残留进程
+  kill_orphan_port_process "${PORT:-3000}" "$ROOT_DIR/packages/server-nestjs/"
   echo "✅ 后端已停止"
 }
 
