@@ -1,8 +1,8 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { AiService } from './ai.service';
 import { ConfigService } from '@nestjs/config';
-import OpenAI from 'openai';
 import { InternalServerErrorException } from '@nestjs/common';
+import fs from 'fs';
 
 // Mock OpenAI client
 const mockOpenAI = {
@@ -50,21 +50,41 @@ describe('AiService', () => {
     (service as any)['openai'] = mockOpenAI;
   });
 
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
   it('should be defined', () => {
     expect(service).toBeDefined();
   });
 
   it('should throw InternalServerErrorException if OPENAI_API_KEY is not configured', async () => {
-    (configService.get as jest.Mock).mockReturnValueOnce(null); // Simulate no API key
-    await expect(Test.createTestingModule({
-      providers: [
-        AiService,
-        {
-          provide: ConfigService,
-          useValue: { get: jest.fn().mockReturnValueOnce(null) },
-        },
-      ],
-    }).compile()).rejects.toThrow(InternalServerErrorException);
+    const originalApiKey = process.env.OPENAI_API_KEY;
+    delete process.env.OPENAI_API_KEY;
+    jest.spyOn(fs, 'existsSync').mockReturnValue(false);
+
+    await expect(
+      Test.createTestingModule({
+        providers: [
+          AiService,
+          {
+            provide: ConfigService,
+            useValue: {
+              get: jest.fn((key: string) => {
+                if (key === 'NODE_ENV') {
+                  return 'test';
+                }
+                return null;
+              }),
+            },
+          },
+        ],
+      }).compile(),
+    ).rejects.toThrow(InternalServerErrorException);
+
+    if (originalApiKey !== undefined) {
+      process.env.OPENAI_API_KEY = originalApiKey;
+    }
   });
 
 
@@ -104,11 +124,11 @@ describe('AiService', () => {
       const response = await service.callAgent(prompt);
 
       expect(mockOpenAI.chat.completions.create).toHaveBeenCalledWith({
-        model: 'gpt-3.5-turbo',
-        messages: expect.arrayContaining([
+        model: 'gpt-5.1-mini',
+        messages: [
           { role: 'system', content: 'You are a helpful assistant.' },
           { role: 'user', content: prompt },
-        ]),
+        ],
         temperature: 0.7,
         max_tokens: 500,
       });

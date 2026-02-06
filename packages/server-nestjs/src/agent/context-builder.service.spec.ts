@@ -231,8 +231,8 @@ describe('ContextBuilderService', () => {
       expect(result.connectors![0]).toEqual({
         type: 'google',
         id: 'token-1',
-        expiresAt: expect.any(String),
-        metadata: { provider: 'oauth2' },
+        name: 'google',
+        enabled: true,
       });
     });
   });
