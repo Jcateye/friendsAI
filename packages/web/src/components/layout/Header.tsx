@@ -8,6 +8,8 @@ interface HeaderProps {
   showNewChat?: boolean
   showEdit?: boolean
   rightElement?: React.ReactNode
+  onMenuClick?: () => void
+  onNewChatClick?: () => void
 }
 
 export function Header({
@@ -17,19 +19,21 @@ export function Header({
   showNewChat = false,
   showEdit = false,
   rightElement,
+  onMenuClick,
+  onNewChatClick,
 }: HeaderProps) {
   const navigate = useNavigate()
 
   return (
     <div className="flex items-center justify-between h-14 px-4 bg-bg-card">
-      <div className="w-6 h-6">
+      <div className="flex items-center">
         {showBack && (
-          <button onClick={() => navigate(-1)} aria-label="返回">
+          <button onClick={() => navigate(-1)} aria-label="返回" className="p-1 -ml-1">
             <ChevronLeft className="w-6 h-6 text-text-primary" />
           </button>
         )}
         {showMenu && (
-          <button aria-label="菜单">
+          <button onClick={onMenuClick} aria-label="菜单" className="p-1 -ml-1">
             <Menu className="w-6 h-6 text-text-primary" />
           </button>
         )}
@@ -39,14 +43,14 @@ export function Header({
         {title}
       </h1>
 
-      <div className="w-6 h-6 flex items-center justify-center">
+      <div className="flex items-center justify-center">
         {showNewChat && (
-          <button aria-label="新对话">
+          <button onClick={onNewChatClick} aria-label="新对话" className="p-1 -mr-1">
             <SquarePen className="w-6 h-6 text-text-primary" />
           </button>
         )}
         {showEdit && (
-          <button aria-label="编辑">
+          <button aria-label="编辑" className="p-1 -mr-1">
             <SquarePen className="w-6 h-6 text-text-primary" />
           </button>
         )}

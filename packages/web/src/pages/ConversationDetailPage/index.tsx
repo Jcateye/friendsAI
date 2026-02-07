@@ -1,143 +1,143 @@
-import { Check, User, Calendar, Lightbulb, CheckSquare } from 'lucide-react'
-import { Header } from '../../components/layout/Header'
+import { useParams } from 'react-router-dom';
+import { useState, useEffect, useRef } from 'react';
+import { Header } from '../../components/layout/Header';
+import { CustomMessageRenderer } from '../../components/chat/CustomMessageRenderer';
+import { ToolConfirmationOverlay } from '../../components/chat/ToolConfirmationOverlay';
+import { useConversationHistory } from '../../hooks/useConversationHistory';
+import { useAgentChat } from '../../hooks/useAgentChat';
+import { useToolConfirmations } from '../../hooks/useToolConfirmations';
+import { Send } from 'lucide-react';
 
 export function ConversationDetailPage() {
+  const { id } = useParams<{ id: string }>();
+  const conversationId = id;
+
+  // 加载会话历史
+  const { messages: historyMessages, loading: historyLoading } = useConversationHistory({
+    conversationId,
+    enabled: !!conversationId,
+  });
+
+  // 转换历史消息格式
+  const initialMessages = historyMessages?.map((msg) => ({
+    id: msg.id,
+    role: msg.role as 'user' | 'assistant' | 'system',
+    content: msg.content,
+  })) || [];
+
+  // 使用 useAgentChat
+  const chat = useAgentChat({
+    conversationId,
+    initialMessages: initialMessages.map((msg) => ({
+      id: msg.id,
+      role: msg.role,
+      content: msg.content,
+      createdAt: new Date(),
+    })),
+  });
+
+  // 从工具状态中筛选需要确认的工具
+  const toolStates = chat.pendingConfirmations;
+  const { pending: pendingConfirmations, confirm, reject } = useToolConfirmations({
+    toolStates,
+  });
+
+  // 输入框状态
+  const [input, setInput] = useState('');
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // 滚动到底部
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [chat.messages.length]);
+
+  // 发送消息
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!input.trim() || chat.isLoading) {
+      return;
+    }
+    chat.sendMessage(input);
+    setInput('');
+  };
+
   return (
-    <div className="flex flex-col h-full">
-      <Header title="今日记录 2026/01/28" showBack />
+    <div className="flex flex-col h-full bg-bg-page">
+      <Header
+        title={historyLoading ? '加载中...' : '会话详情'}
+        showBack
+      />
 
-      {/* Scroll Content */}
-      <div className="flex-1 flex flex-col gap-4 p-4 overflow-y-auto">
-        {/* Input Section */}
-        <div className="flex flex-col gap-3 p-4 bg-bg-card rounded-lg">
-          <span className="text-[12px] font-medium text-text-muted font-primary">
-            记录内容
-          </span>
-          <div className="p-3.5 bg-primary-tint rounded-md">
-            <p className="text-[14px] text-text-primary font-primary leading-relaxed">
-              今天和张伟见面，讨论了Q1投资计划。他对AI领域很感兴趣，希望下周能安排一次详细的项目演示。
-            </p>
+      {/* 聊天消息区域 */}
+      <div className="flex-1 overflow-y-auto px-4 py-4">
+        {historyLoading ? (
+          <div className="flex items-center justify-center h-full">
+            <span className="text-text-muted">加载中...</span>
           </div>
-        </div>
-
-        {/* AI Result Label */}
-        <div className="flex items-center gap-2">
-          <div className="w-6 h-6 bg-primary rounded-md flex items-center justify-center">
-            <span className="text-white text-xs">AI</span>
-          </div>
-          <span className="text-[16px] font-semibold text-text-primary font-display">
-            AI 归档结果
-          </span>
-        </div>
-
-        {/* Card 1 - Person */}
-        <div className="flex flex-col gap-3 p-4 bg-bg-card rounded-md">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <User className="w-4 h-4 text-primary" />
-              <span className="text-[14px] font-semibold text-text-primary font-primary">
-                相关联系人
-              </span>
-            </div>
-            <button className="text-[13px] text-primary font-medium font-primary">
-              编辑
-            </button>
-          </div>
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-[#C9B8A8] rounded-md flex items-center justify-center">
-              <span className="text-white font-semibold">张</span>
-            </div>
-            <div>
-              <p className="text-[14px] font-medium text-text-primary font-primary">
-                张伟
-              </p>
-              <p className="text-[13px] text-text-secondary font-primary">
-                某投资公司 · 合伙人
+        ) : chat.messages.length === 0 ? (
+          <div className="flex items-center justify-center h-full">
+            <div className="text-center">
+              <p className="text-[16px] text-text-secondary font-primary">
+                开始新的对话
               </p>
             </div>
           </div>
-        </div>
-
-        {/* Card 2 - Event */}
-        <div className="flex flex-col gap-3 p-4 bg-bg-card rounded-md">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Calendar className="w-4 h-4 text-info" />
-              <span className="text-[14px] font-semibold text-text-primary font-primary">
-                事件记录
-              </span>
-            </div>
-            <button className="text-[13px] text-primary font-medium font-primary">
-              编辑
-            </button>
+        ) : (
+          <div className="flex flex-col gap-4">
+            {chat.messages.map((message) => (
+              <div
+                key={message.id}
+                className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
+              >
+                <div
+                  className={`max-w-[80%] rounded-2xl px-4 py-3 ${
+                    message.role === 'user'
+                      ? 'bg-primary text-white'
+                      : 'bg-bg-card text-text-primary'
+                  }`}
+                >
+                  {message.role === 'assistant' ? (
+                    <CustomMessageRenderer message={message} />
+                  ) : (
+                    <p className="text-[15px] font-primary whitespace-pre-wrap">
+                      {message.content}
+                    </p>
+                  )}
+                </div>
+              </div>
+            ))}
+            <div ref={messagesEndRef} />
           </div>
-          <div className="flex flex-col gap-3">
-            <div className="flex items-start gap-2">
-              <div className="w-1.5 h-1.5 mt-2 bg-info rounded-full" />
-              <p className="text-[14px] text-text-primary font-primary">
-                与张伟讨论Q1投资计划
-              </p>
-            </div>
-          </div>
-        </div>
-
-        {/* Card 3 - Facts */}
-        <div className="flex flex-col gap-3 p-4 bg-bg-card rounded-md">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Lightbulb className="w-4 h-4 text-warning" />
-              <span className="text-[14px] font-semibold text-text-primary font-primary">
-                关键事实
-              </span>
-            </div>
-            <button className="text-[13px] text-primary font-medium font-primary">
-              编辑
-            </button>
-          </div>
-          <div className="flex flex-col gap-2.5">
-            <div className="flex items-start gap-2.5">
-              <div className="w-1.5 h-1.5 mt-2 bg-warning rounded-full" />
-              <p className="text-[14px] text-text-primary font-primary">
-                张伟对AI领域投资很感兴趣
-              </p>
-            </div>
-            <div className="flex items-start gap-2.5">
-              <div className="w-1.5 h-1.5 mt-2 bg-warning rounded-full" />
-              <p className="text-[14px] text-text-primary font-primary">
-                希望下周安排项目演示
-              </p>
-            </div>
-          </div>
-        </div>
-
-        {/* Card 4 - Todos */}
-        <div className="flex flex-col gap-3 p-4 bg-bg-card rounded-md">
-          <span className="text-[14px] font-semibold text-text-primary font-primary">
-            待办事项
-          </span>
-          <div className="flex items-center gap-2.5">
-            <CheckSquare className="w-4 h-4 text-primary" />
-            <p className="text-[14px] text-text-primary font-primary">
-              安排下周项目演示会议
-            </p>
-          </div>
-        </div>
+        )}
       </div>
 
-      {/* Bottom Actions */}
-      <div className="flex items-center gap-3 px-4 pt-3 pb-7 bg-bg-card border-t border-border">
-        <button className="flex-1 h-12 bg-bg-card border border-border rounded-md flex items-center justify-center">
-          <span className="text-[15px] font-medium text-text-secondary font-primary">
-            编辑后归档
-          </span>
+      {/* 输入框 */}
+      <form onSubmit={handleSubmit} className="flex items-center gap-2 p-4 bg-bg-card border-t border-border shrink-0">
+        <input
+          type="text"
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          placeholder="输入消息..."
+          className="flex-1 px-4 py-3 bg-bg-surface rounded-full text-[15px] text-text-primary placeholder:text-text-muted outline-none focus:ring-2 focus:ring-primary font-primary"
+          disabled={chat.isLoading}
+        />
+        <button
+          type="submit"
+          disabled={!input.trim() || chat.isLoading}
+          className="w-12 h-12 flex items-center justify-center rounded-full bg-primary disabled:bg-text-muted disabled:opacity-50 transition-opacity shrink-0"
+        >
+          <Send className="w-5 h-5 text-white" />
         </button>
-        <button className="flex-1 h-12 bg-primary rounded-md flex items-center justify-center gap-2">
-          <Check className="w-[18px] h-[18px] text-white" />
-          <span className="text-[15px] font-semibold text-white font-primary">
-            确认归档
-          </span>
-        </button>
-      </div>
+      </form>
+
+      {/* 工具确认弹层 */}
+      {pendingConfirmations.length > 0 && (
+        <ToolConfirmationOverlay
+          confirmation={pendingConfirmations[0]}
+          onConfirm={() => confirm(pendingConfirmations[0].confirmationId)}
+          onReject={() => reject(pendingConfirmations[0].confirmationId)}
+        />
+      )}
     </div>
-  )
+  );
 }
