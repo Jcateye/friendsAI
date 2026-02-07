@@ -3,6 +3,8 @@ import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
+  const port = process.env.PORT ?? 3000;
+
   const app = await NestFactory.create(AppModule);
 
   // 生产级 CORS 配置
@@ -55,6 +57,11 @@ async function bootstrap() {
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('api', app, document);
 
-  await app.listen(process.env.PORT ?? 3000);
+  await app.listen(port);
+  console.log(`🚀 Server is running on http://localhost:${port}`);
+  console.log(`📚 Swagger docs available at http://localhost:${port}/api`);
 }
-bootstrap();
+bootstrap().catch((error) => {
+  console.error('❌ Bootstrap failed:', error);
+  process.exit(1);
+});

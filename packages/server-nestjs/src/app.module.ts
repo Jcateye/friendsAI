@@ -73,6 +73,7 @@ import { ConversationArchivesModule } from './conversation-archives/conversation
           autoLoadEntities: true,
           synchronize,
           migrationsRun: false,
+          logging: ['error', 'warn'], // Enable TypeORM error logging
         };
       },
     }),

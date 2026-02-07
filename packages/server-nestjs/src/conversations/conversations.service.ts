@@ -25,10 +25,11 @@ export class ConversationsService {
   }
 
   async findAll(userId?: string): Promise<Conversation[]> {
-    return this.conversationRepository.find({
+    const queryOptions = {
       where: userId ? { userId } : undefined,
-      order: { updatedAt: 'DESC' },
-    });
+      order: { updatedAt: 'DESC' as const },
+    };
+    return this.conversationRepository.find(queryOptions);
   }
 
   async findOne(id: string, userId?: string): Promise<Conversation | null> {

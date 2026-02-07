@@ -133,7 +133,7 @@ export class AiService {
           model: options?.model ?? this.model,
           messages,
           temperature: options?.temperature ?? 0.7,
-          max_tokens: options?.maxTokens ?? 500,
+          max_tokens: options?.maxTokens ?? 4096,
           stream: true,
           tools: options?.tools,
           tool_choice: options?.tools && options.tools.length > 0 ? 'auto' : undefined,
