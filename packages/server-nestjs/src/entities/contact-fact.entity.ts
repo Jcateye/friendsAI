@@ -1,5 +1,6 @@
 import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, ManyToOne, JoinColumn } from 'typeorm';
 import { Contact } from './contact.entity';
+import { timestampMsTransformer } from './timestamp-ms.transformer';
 
 @Entity({ name: 'contact_facts' })
 export class ContactFact {
@@ -25,9 +26,9 @@ export class ContactFact {
   @Column()
   contactId: string;
 
-  @CreateDateColumn()
+  @CreateDateColumn({ type: 'bigint', transformer: timestampMsTransformer })
   createdAt: Date;
 
-  @UpdateDateColumn()
+  @UpdateDateColumn({ type: 'bigint', transformer: timestampMsTransformer })
   updatedAt: Date;
 }

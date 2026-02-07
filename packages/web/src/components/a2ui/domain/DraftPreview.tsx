@@ -1,11 +1,13 @@
 import { useState } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { A2UIComponentProps, A2UIAction } from '../types';
+import { formatTimestamp, resolveEpochMs } from '../../../lib/time/timestamp';
 
 interface DraftVersion {
   id: string;
   content: string;
   createdAt: string;
+  createdAtMs?: number;
   preview?: string;
 }
 
@@ -91,6 +93,11 @@ export function DraftPreview({ node, onAction }: A2UIComponentProps) {
     );
   }
 
+  const versionCreatedAtText = formatTimestamp(
+    resolveEpochMs(currentVersion.createdAtMs, currentVersion.createdAt),
+    { locale: 'zh-CN' },
+  );
+
   return (
     <div
       className="bg-bg-card rounded-md p-4 border border-border"
@@ -114,7 +121,7 @@ export function DraftPreview({ node, onAction }: A2UIComponentProps) {
               版本 {currentIndex + 1} / {versions.length}
             </p>
             <p className="text-xs text-text-secondary font-primary">
-              {new Date(currentVersion.createdAt).toLocaleString('zh-CN')}
+              {versionCreatedAtText}
             </p>
           </div>
 
@@ -159,6 +166,3 @@ export function DraftPreview({ node, onAction }: A2UIComponentProps) {
     </div>
   );
 }
-
-
-

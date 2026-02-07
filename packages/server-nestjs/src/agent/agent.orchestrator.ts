@@ -61,13 +61,14 @@ export class AgentOrchestrator {
           role: userMessage.role,
           content: userMessage.content,
           metadata: userMessage.metadata as Record<string, any> | undefined,
-          createdAt: userMessage.createdAt,
+          createdAtMs: userMessage.createdAtMs,
           userId: request.userId,
         });
         storedMessage = {
           ...userMessage,
           id: persisted.id,
           createdAt: persisted.createdAt.toISOString(),
+          createdAtMs: persisted.createdAtMs,
         };
       }
       this.messageStore.appendMessage(storeKey, storedMessage);
@@ -143,22 +144,23 @@ export class AgentOrchestrator {
 
       // 如果没有工具调用，返回完成事件
       if (!toolCalls.length || finishReason === 'stop') {
-        let persistedCreatedAt: string | undefined;
+        let persistedCreatedAtMs: number | undefined;
         if (conversationId) {
           const persisted = await this.messagesService.appendMessage(conversationId, {
             id: assistantMessageId,
             role: 'assistant',
             content: assistantMessage,
+            createdAtMs: Date.now(),
             userId: request.userId,
           });
-          persistedCreatedAt = persisted.createdAt.toISOString();
+          persistedCreatedAtMs = persisted.createdAtMs;
         }
 
         const finalMessage = this.messageStore.createMessage({
           id: assistantMessageId,
           role: 'assistant',
           content: assistantMessage,
-          createdAt: persistedCreatedAt,
+          createdAtMs: persistedCreatedAtMs,
         });
         yield { event: 'agent.message', data: finalMessage };
         this.messageStore.appendMessage(storeKey, finalMessage);

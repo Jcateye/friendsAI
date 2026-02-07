@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { useLocalRuntime } from '@assistant-ui/react';
-import { useAgentChat } from '../../hooks/useAgentChat';
+import { useMemo } from 'react';
+import { useEdgeRuntime } from '@assistant-ui/react';
+import type { CoreMessage } from '@assistant-ui/react';
 import type { ToolState } from '../../lib/api/types';
 
 export interface UseFriendsAIRuntimeOptions {
@@ -13,64 +13,62 @@ export interface UseFriendsAIRuntimeOptions {
   }>;
 }
 
-/**
- * FriendsAI 自定义运行时
- *
- * 使用 Vercel AI SDK 的 useChat hook 与后端流式接口集成
- * 通过 useLocalRuntime 创建 Assistant-UI 运行时，并同步 useChat 的状态
- */
+function getAuthToken(): string | null {
+  return localStorage.getItem('auth_token') || localStorage.getItem('token');
+}
+
+function toCoreMessage(message: {
+  role: 'user' | 'assistant' | 'system';
+  content: string;
+}): CoreMessage {
+  const textPart = { type: 'text' as const, text: message.content };
+
+  if (message.role === 'assistant') {
+    return {
+      role: 'assistant',
+      content: [textPart],
+    };
+  }
+
+  if (message.role === 'system') {
+    return {
+      role: 'system',
+      content: [textPart],
+    };
+  }
+
+  return {
+    role: 'user',
+    content: [textPart],
+  };
+}
+
 export function useFriendsAIRuntime(options: UseFriendsAIRuntimeOptions = {}) {
-  const { conversationId, onToolConfirmation, initialMessages } = options;
-
-  const chat = useAgentChat({
+  const {
     conversationId,
-    initialMessages: initialMessages?.map((msg) => ({
-      id: msg.id,
-      role: msg.role,
-      content: msg.content,
-      createdAt: new Date(),
-    })),
-    onToolConfirmation,
-  });
+    initialMessages,
+    onToolConfirmation: _onToolConfirmation,
+  } = options;
 
-  // 将 useChat 的消息转换为 Assistant-UI RuntimeMessage 格式
-  const messagesIdsStringRef = useRef('');
-  const [isInitialized, setIsInitialized] = useState(false);
-  const initialMessagesRef = useRef<any[]>([]);
-
-  // 转换消息格式
-  const runtimeMessages = useMemo(() => {
-    const currentIdsString = chat.messages.map(m => m.id).join(',');
-    messagesIdsStringRef.current = currentIdsString;
-
-    return chat.messages.map((msg) => {
-      if (msg.role === 'user') {
-        return {
-          id: msg.id,
-          role: 'user',
-          content: [{ type: 'text', text: msg.content || '' }],
-        } as const;
-      } else {
-        return {
-          id: msg.id,
-          role: 'assistant',
-          content: [{ type: 'text', text: msg.content || '' }],
-        } as const;
-      }
-    });
-  }, [chat.messages.length]);
-
-  // 初始化
-  useEffect(() => {
-    if (!isInitialized && runtimeMessages.length > 0) {
-      initialMessagesRef.current = runtimeMessages;
-      setIsInitialized(true);
+  const authHeaders = useMemo(() => {
+    const token = getAuthToken();
+    if (!token) {
+      return undefined;
     }
-  }, [runtimeMessages.length, isInitialized]);
 
-  const runtime = useLocalRuntime({
-    initialMessages: initialMessagesRef.current,
+    return {
+      Authorization: `Bearer ${token}`,
+    };
+  }, []);
+
+  const coreInitialMessages = useMemo<CoreMessage[]>(() => {
+    return (initialMessages ?? []).map((message) => toCoreMessage(message));
+  }, [initialMessages]);
+
+  return useEdgeRuntime({
+    api: '/v1/agent/chat?format=vercel-ai',
+    headers: authHeaders,
+    body: conversationId ? { conversationId } : {},
+    initialMessages: coreInitialMessages,
   });
-
-  return runtime;
 }

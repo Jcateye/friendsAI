@@ -1,5 +1,6 @@
 import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, ManyToOne, JoinColumn } from 'typeorm';
 import { Contact } from './contact.entity';
+import { timestampMsTransformer } from './timestamp-ms.transformer';
 
 @Entity({ name: 'contact_briefs' })
 export class ContactBrief {
@@ -12,7 +13,7 @@ export class ContactBrief {
   @Column({ type: 'jsonb', nullable: true })
   citations: Record<string, any> | null;
 
-  @Column({ type: 'timestamp' })
+  @Column({ type: 'bigint', transformer: timestampMsTransformer })
   generatedAt: Date;
 
   @ManyToOne(() => Contact, contact => contact.briefs, { nullable: false })
@@ -22,9 +23,9 @@ export class ContactBrief {
   @Column()
   contactId: string;
 
-  @CreateDateColumn()
+  @CreateDateColumn({ type: 'bigint', transformer: timestampMsTransformer })
   createdAt: Date;
 
-  @UpdateDateColumn()
+  @UpdateDateColumn({ type: 'bigint', transformer: timestampMsTransformer })
   updatedAt: Date;
 }

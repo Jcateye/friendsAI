@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
+import { APP_INTERCEPTOR } from '@nestjs/core';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import path from 'path';
@@ -32,6 +33,7 @@ import { ConnectorsModule } from './connectors/connectors.module';
 import { ToolsModule } from './tools/tools.module';
 import { ToolConfirmationsModule } from './tool-confirmations/tool-confirmations.module';
 import { ConversationArchivesModule } from './conversation-archives/conversation-archives.module';
+import { TimestampMsInterceptor } from './common/interceptors/timestamp-ms.interceptor';
 
 @Module({
   imports: [
@@ -110,6 +112,10 @@ import { ConversationArchivesModule } from './conversation-archives/conversation
     {
       provide: APP_GUARD,
       useClass: JwtAuthGuard,
+    },
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: TimestampMsInterceptor,
     },
   ],
 })

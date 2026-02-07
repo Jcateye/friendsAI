@@ -5,6 +5,7 @@ import { Conversation } from './conversation.entity';
 import { ContactFact } from './contact-fact.entity';
 import { ContactTodo } from './contact-todo.entity';
 import { ContactBrief } from './contact-brief.entity';
+import { timestampMsTransformer } from './timestamp-ms.transformer';
 
 @Entity({ name: 'contacts' })
 export class Contact {
@@ -60,9 +61,9 @@ export class Contact {
   @OneToMany(() => Conversation, conversation => conversation.contact)
   conversations: Conversation[];
 
-  @CreateDateColumn()
+  @CreateDateColumn({ type: 'bigint', transformer: timestampMsTransformer })
   createdAt: Date;
 
-  @UpdateDateColumn()
+  @UpdateDateColumn({ type: 'bigint', transformer: timestampMsTransformer })
   updatedAt: Date;
 }

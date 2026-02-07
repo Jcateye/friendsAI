@@ -11,6 +11,7 @@ interface MessageInput {
   role: AgentMessageRole;
   content: string;
   createdAt?: string;
+  createdAtMs?: number;
   toolCallId?: string;
   metadata?: Record<string, JsonValue>;
 }
@@ -20,6 +21,21 @@ export class AgentMessageStore {
   private readonly messages = new Map<string, AgentMessage[]>();
   private readonly maxMessagesPerKey = 200;
 
+  private resolveCreatedAtMs(input: Pick<MessageInput, 'createdAt' | 'createdAtMs'>): number {
+    if (typeof input.createdAtMs === 'number' && Number.isFinite(input.createdAtMs)) {
+      return input.createdAtMs;
+    }
+
+    if (typeof input.createdAt === 'string') {
+      const parsed = new Date(input.createdAt).getTime();
+      if (!Number.isNaN(parsed)) {
+        return parsed;
+      }
+    }
+
+    return Date.now();
+  }
+
   buildKey(userId?: string, conversationId?: string): string {
     const userKey = userId?.trim() || 'anonymous';
     const conversationKey = conversationId?.trim() || 'default';
@@ -27,11 +43,14 @@ export class AgentMessageStore {
   }
 
   createMessage(input: MessageInput): AgentMessage {
+    const createdAtMs = this.resolveCreatedAtMs(input);
+
     return {
       id: input.id ?? generateUlid(),
       role: input.role,
       content: input.content,
-      createdAt: input.createdAt ?? new Date().toISOString(),
+      createdAt: new Date(createdAtMs).toISOString(),
+      createdAtMs,
       toolCallId: input.toolCallId,
       metadata: input.metadata,
     };

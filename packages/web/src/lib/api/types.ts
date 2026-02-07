@@ -52,7 +52,9 @@ export interface Contact {
   note?: string | null;
   userId?: string | null;
   createdAt: string;
+  createdAtMs?: number;
   updatedAt: string;
+  updatedAtMs?: number;
 }
 
 export interface CreateContactRequest {
@@ -129,7 +131,9 @@ export interface Conversation {
   userId: string;
   contactId?: string | null;
   createdAt: string;
+  createdAtMs?: number;
   updatedAt: string;
+  updatedAtMs?: number;
 }
 
 export interface CreateConversationRequest {
@@ -146,6 +150,7 @@ export interface Message {
   citations?: Record<string, any> | null;
   conversationId: string;
   createdAt: string;
+  createdAtMs?: number;
 }
 
 export interface GetMessagesRequest {
@@ -162,12 +167,15 @@ export interface Event {
   description?: string | null;
   details?: Record<string, any>;
   eventDate?: string | null;
+  eventDateMs?: number | null;
   embedding?: number[] | null;
   sourceConversationId?: string | null;
   sourceMessageIds?: string[] | null;
   contactId?: string | null;
   createdAt: string;
+  createdAtMs?: number;
   updatedAt: string;
+  updatedAtMs?: number;
 }
 
 export interface CreateEventRequest {
@@ -255,7 +263,9 @@ export interface ToolConfirmation {
   status: ToolConfirmationStatus;
   userId?: string | null;
   createdAt: string;
+  createdAtMs?: number;
   updatedAt: string;
+  updatedAtMs?: number;
 }
 
 export interface CreateToolConfirmationRequest {

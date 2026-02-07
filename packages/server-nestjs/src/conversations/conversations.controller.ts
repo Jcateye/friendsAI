@@ -54,7 +54,7 @@ export class ConversationsController {
   @ApiOperation({ summary: 'Get messages for a conversation' })
   @ApiParam({ name: 'id', description: 'Conversation ID', type: String })
   @ApiQuery({ name: 'limit', required: false, type: Number, description: 'Maximum number of messages to return' })
-  @ApiQuery({ name: 'before', required: false, type: String, description: 'Get messages before this message ID' })
+  @ApiQuery({ name: 'before', required: false, type: String, description: 'Get messages before this ISO timestamp' })
   @ApiResponse({ status: 200, description: 'Messages retrieved successfully' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({ status: 404, description: 'Conversation not found' })

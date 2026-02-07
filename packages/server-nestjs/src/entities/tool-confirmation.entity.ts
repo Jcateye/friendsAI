@@ -1,5 +1,6 @@
 import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, ManyToOne, JoinColumn } from 'typeorm';
 import { User } from './user.entity';
+import { timestampMsTransformer } from './timestamp-ms.transformer';
 
 export type ToolConfirmationStatus = 'pending' | 'confirmed' | 'rejected' | 'failed';
 
@@ -33,18 +34,18 @@ export class ToolConfirmation {
   @Column({ type: 'uuid', nullable: true })
   userId: string | null;
 
-  @Column({ type: 'timestamp', nullable: true })
+  @Column({ type: 'bigint', nullable: true, transformer: timestampMsTransformer })
   confirmedAt: Date | null;
 
-  @Column({ type: 'timestamp', nullable: true })
+  @Column({ type: 'bigint', nullable: true, transformer: timestampMsTransformer })
   rejectedAt: Date | null;
 
-  @Column({ type: 'timestamp', nullable: true })
+  @Column({ type: 'bigint', nullable: true, transformer: timestampMsTransformer })
   executedAt: Date | null;
 
-  @CreateDateColumn()
+  @CreateDateColumn({ type: 'bigint', transformer: timestampMsTransformer })
   createdAt: Date;
 
-  @UpdateDateColumn()
+  @UpdateDateColumn({ type: 'bigint', transformer: timestampMsTransformer })
   updatedAt: Date;
 }

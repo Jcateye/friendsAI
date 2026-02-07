@@ -2,7 +2,6 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Header } from '../../components/layout/Header';
 import { CustomMessageRenderer } from '../../components/chat/CustomMessageRenderer';
-import { ChatComposer } from '../../components/chat/ChatComposer';
 import { ToolConfirmationOverlay } from '../../components/chat/ToolConfirmationOverlay';
 import { useConversations } from '../../hooks/useConversations';
 import { useAgentChat } from '../../hooks/useAgentChat';

@@ -1,5 +1,6 @@
 import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, ManyToOne, JoinColumn } from 'typeorm';
 import { Contact } from './contact.entity';
+import { timestampMsTransformer } from './timestamp-ms.transformer';
 
 @Entity({ name: 'events' })
 export class Event {
@@ -15,7 +16,7 @@ export class Event {
   @Column({ type: 'jsonb', nullable: true })
   details: Record<string, any>;
 
-  @Column({ type: 'timestamp', nullable: true })
+  @Column({ type: 'bigint', nullable: true, transformer: timestampMsTransformer })
   eventDate: Date;
 
   @Column({ type: 'vector', nullable: true })
@@ -34,9 +35,9 @@ export class Event {
   @Column({ type: 'uuid', nullable: true })
   contactId: string | null;
 
-  @CreateDateColumn()
+  @CreateDateColumn({ type: 'bigint', transformer: timestampMsTransformer })
   createdAt: Date;
 
-  @UpdateDateColumn()
+  @UpdateDateColumn({ type: 'bigint', transformer: timestampMsTransformer })
   updatedAt: Date;
 }

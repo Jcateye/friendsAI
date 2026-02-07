@@ -1,5 +1,6 @@
 import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, ManyToOne, JoinColumn } from 'typeorm';
 import { User } from './user.entity';
+import { timestampMsTransformer } from './timestamp-ms.transformer';
 
 @Entity({ name: 'connector_tokens' })
 export class ConnectorToken {
@@ -21,7 +22,7 @@ export class ConnectorToken {
   @Column({ type: 'text', nullable: true })
   scope: string | null;
 
-  @Column({ type: 'timestamp', nullable: true })
+  @Column({ type: 'bigint', nullable: true, transformer: timestampMsTransformer })
   expiresAt: Date | null;
 
   @Column({ type: 'jsonb', nullable: true })
@@ -34,9 +35,9 @@ export class ConnectorToken {
   @Column()
   userId: string;
 
-  @CreateDateColumn()
+  @CreateDateColumn({ type: 'bigint', transformer: timestampMsTransformer })
   createdAt: Date;
 
-  @UpdateDateColumn()
+  @UpdateDateColumn({ type: 'bigint', transformer: timestampMsTransformer })
   updatedAt: Date;
 }

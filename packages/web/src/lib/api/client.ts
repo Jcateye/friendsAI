@@ -86,9 +86,13 @@ async function fetchWithAuth(
  */
 async function handleResponse<T>(response: Response): Promise<T> {
   if (!response.ok) {
-    // 401 未授权，清除 token
+    // 401 未授权，清除 token 并重定向到登录页
     if (response.status === 401) {
       clearAuthToken();
+      // 如果不在登录页，重定向到登录页
+      if (window.location.pathname !== '/login') {
+        window.location.href = '/login';
+      }
     }
     
     const errorText = await response.text();

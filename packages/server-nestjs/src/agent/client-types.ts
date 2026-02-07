@@ -44,6 +44,7 @@ export interface AgentMessage {
   role: AgentMessageRole;
   content: string;
   createdAt: IsoDateString;
+  createdAtMs?: number;
   toolCallId?: string;
   references?: AgentReference[];
   metadata?: Record<string, JsonValue>;

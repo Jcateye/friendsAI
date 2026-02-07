@@ -1,5 +1,6 @@
 import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, ManyToOne, JoinColumn } from 'typeorm';
 import { Contact } from './contact.entity';
+import { timestampMsTransformer } from './timestamp-ms.transformer';
 
 export type ContactTodoStatus = 'pending' | 'completed' | 'canceled';
 
@@ -14,7 +15,7 @@ export class ContactTodo {
   @Column({ default: 'pending' })
   status: ContactTodoStatus;
 
-  @Column({ type: 'timestamp', nullable: true })
+  @Column({ type: 'bigint', nullable: true, transformer: timestampMsTransformer })
   dueAt: Date | null;
 
   @Column({ type: 'jsonb', nullable: true })
@@ -33,9 +34,9 @@ export class ContactTodo {
   @Column()
   contactId: string;
 
-  @CreateDateColumn()
+  @CreateDateColumn({ type: 'bigint', transformer: timestampMsTransformer })
   createdAt: Date;
 
-  @UpdateDateColumn()
+  @UpdateDateColumn({ type: 'bigint', transformer: timestampMsTransformer })
   updatedAt: Date;
 }

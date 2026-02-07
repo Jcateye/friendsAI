@@ -2,6 +2,7 @@ import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateCol
 import { User } from './user.entity';
 import { Contact } from './contact.entity';
 import { Message } from './message.entity';
+import { timestampMsTransformer } from './timestamp-ms.transformer';
 
 @Entity({ name: 'conversations' })
 export class Conversation {
@@ -43,9 +44,9 @@ export class Conversation {
   @OneToMany(() => Message, message => message.conversation)
   messages: Message[];
 
-  @CreateDateColumn()
+  @CreateDateColumn({ type: 'bigint', transformer: timestampMsTransformer })
   createdAt: Date;
 
-  @UpdateDateColumn()
+  @UpdateDateColumn({ type: 'bigint', transformer: timestampMsTransformer })
   updatedAt: Date;
 }

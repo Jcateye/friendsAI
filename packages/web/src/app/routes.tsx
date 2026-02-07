@@ -1,5 +1,6 @@
 import { createBrowserRouter } from 'react-router-dom'
 import { AppShell } from '../components/layout/AppShell'
+import { ProtectedRoute } from '../components/auth/ProtectedRoute'
 import { LoginPage } from '../pages/LoginPage'
 import { ChatPage } from '../pages/ChatPage'
 import { ConversationDetailPage } from '../pages/ConversationDetailPage'
@@ -15,7 +16,11 @@ export const router = createBrowserRouter([
   },
   {
     path: '/',
-    element: <AppShell />,
+    element: (
+      <ProtectedRoute>
+        <AppShell />
+      </ProtectedRoute>
+    ),
     children: [
       { index: true, element: <ChatPage /> },
       { path: 'chat', element: <ChatPage /> },
@@ -26,25 +31,31 @@ export const router = createBrowserRouter([
   {
     path: '/conversation/:id',
     element: (
-      <AppShell showTabBar={false}>
-        <ConversationDetailPage />
-      </AppShell>
+      <ProtectedRoute>
+        <AppShell showTabBar={false}>
+          <ConversationDetailPage />
+        </AppShell>
+      </ProtectedRoute>
     ),
   },
   {
     path: '/contacts/:id',
     element: (
-      <AppShell showTabBar={false}>
-        <ContactDetailPage />
-      </AppShell>
+      <ProtectedRoute>
+        <AppShell showTabBar={false}>
+          <ContactDetailPage />
+        </AppShell>
+      </ProtectedRoute>
     ),
   },
   {
     path: '/settings',
     element: (
-      <AppShell showStatusBar showTabBar={false}>
-        <SettingsPage />
-      </AppShell>
+      <ProtectedRoute>
+        <AppShell showStatusBar showTabBar={false}>
+          <SettingsPage />
+        </AppShell>
+      </ProtectedRoute>
     ),
   },
 ])

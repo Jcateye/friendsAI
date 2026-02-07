@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { ChevronDown, ChevronUp, Loader2, CheckCircle2, XCircle, Clock, AlertCircle } from 'lucide-react';
 import { A2UIComponentProps } from '../types';
+import { formatTimestamp, resolveEpochMs } from '../../../lib/time/timestamp';
 
 type ToolStatus = 'queued' | 'running' | 'succeeded' | 'failed' | 'awaiting_input';
 
@@ -11,7 +12,9 @@ interface ToolTraceCardProps {
   output?: Record<string, unknown>;
   error?: string;
   startedAt?: string;
+  startedAtMs?: number;
   completedAt?: string;
+  completedAtMs?: number;
 }
 
 export function ToolTraceCard({ node }: A2UIComponentProps) {
@@ -20,11 +23,20 @@ export function ToolTraceCard({ node }: A2UIComponentProps) {
   }
 
   const props = (node.props || {}) as ToolTraceCardProps;
-  const { toolName, status, input, output, error, startedAt, completedAt } = props;
+  const {
+    toolName,
+    status,
+    input,
+    output,
+    error,
+    startedAt,
+    startedAtMs,
+    completedAt,
+    completedAtMs,
+  } = props;
 
   const [isExpanded, setIsExpanded] = useState(false);
 
-  // 状态图标和颜色
   const statusConfig: Record<ToolStatus, { icon: React.ReactNode; color: string; bgColor: string }> = {
     queued: {
       icon: <Clock className="w-4 h-4" />,
@@ -62,6 +74,9 @@ export function ToolTraceCard({ node }: A2UIComponentProps) {
       return String(obj);
     }
   };
+
+  const startedAtValue = resolveEpochMs(startedAtMs, startedAt);
+  const completedAtValue = resolveEpochMs(completedAtMs, completedAt);
 
   return (
     <div
@@ -134,14 +149,14 @@ export function ToolTraceCard({ node }: A2UIComponentProps) {
             </div>
           )}
 
-          {startedAt && (
+          {startedAtValue !== null && (
             <p className="text-xs text-text-muted font-primary">
-              开始时间: {new Date(startedAt).toLocaleString('zh-CN')}
+              开始时间: {formatTimestamp(startedAtValue, { locale: 'zh-CN' })}
             </p>
           )}
-          {completedAt && (
+          {completedAtValue !== null && (
             <p className="text-xs text-text-muted font-primary">
-              完成时间: {new Date(completedAt).toLocaleString('zh-CN')}
+              完成时间: {formatTimestamp(completedAtValue, { locale: 'zh-CN' })}
             </p>
           )}
         </div>
@@ -149,5 +164,3 @@ export function ToolTraceCard({ node }: A2UIComponentProps) {
     </div>
   );
 }
-
-

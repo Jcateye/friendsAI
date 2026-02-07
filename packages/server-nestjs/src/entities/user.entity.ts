@@ -4,6 +4,7 @@ import { Conversation } from './conversation.entity';
 import { ToolConfirmation } from './tool-confirmation.entity';
 import { ConnectorToken } from './connector-token.entity';
 import { AuthSession } from './auth-session.entity';
+import { timestampMsTransformer } from './timestamp-ms.transformer';
 
 @Entity({ name: 'users' })
 export class User {
@@ -37,9 +38,9 @@ export class User {
   @OneToMany(() => AuthSession, authSession => authSession.user)
   authSessions: AuthSession[];
 
-  @CreateDateColumn()
+  @CreateDateColumn({ type: 'bigint', transformer: timestampMsTransformer })
   createdAt: Date;
 
-  @UpdateDateColumn()
+  @UpdateDateColumn({ type: 'bigint', transformer: timestampMsTransformer })
   updatedAt: Date;
 }

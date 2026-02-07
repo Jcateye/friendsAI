@@ -1,5 +1,6 @@
 import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, ManyToOne, JoinColumn } from 'typeorm';
 import { Conversation } from './conversation.entity';
+import { timestampMsTransformer } from './timestamp-ms.transformer';
 
 export type ConversationArchiveStatus = 'ready_for_review' | 'applied' | 'discarded';
 
@@ -26,15 +27,15 @@ export class ConversationArchive {
   @Column({ type: 'text', default: 'ready_for_review' })
   status: ConversationArchiveStatus;
 
-  @Column({ type: 'timestamp', nullable: true })
+  @Column({ type: 'bigint', nullable: true, transformer: timestampMsTransformer })
   appliedAt: Date | null;
 
-  @Column({ type: 'timestamp', nullable: true })
+  @Column({ type: 'bigint', nullable: true, transformer: timestampMsTransformer })
   discardedAt: Date | null;
 
-  @CreateDateColumn()
+  @CreateDateColumn({ type: 'bigint', transformer: timestampMsTransformer })
   createdAt: Date;
 
-  @UpdateDateColumn()
+  @UpdateDateColumn({ type: 'bigint', transformer: timestampMsTransformer })
   updatedAt: Date;
 }

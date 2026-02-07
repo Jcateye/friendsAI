@@ -11,7 +11,7 @@ interface AppendMessageInput {
   content: string;
   metadata?: Record<string, any>;
   citations?: Record<string, any>;
-  createdAt?: string;
+  createdAtMs?: number;
 }
 
 @Injectable()
@@ -36,7 +36,9 @@ export class MessagesService {
       metadata: input.metadata ?? null,
       citations: input.citations ?? null,
       conversationId,
-      createdAt: input.createdAt ? new Date(input.createdAt) : undefined,
+      createdAtMs: Number.isFinite(input.createdAtMs)
+        ? Number(input.createdAtMs)
+        : Date.now(),
     });
 
     const saved = await this.messageRepository.save(message);
@@ -52,7 +54,8 @@ export class MessagesService {
     const limit = Math.min(Math.max(options?.limit ?? 50, 1), 200);
     const qb = this.messageRepository.createQueryBuilder('message')
       .where('message.conversationId = :conversationId', { conversationId })
-      .orderBy('message.createdAt', 'ASC')
+      .orderBy('message.createdAtMs', 'ASC')
+      .addOrderBy('message.id', 'ASC')
       .limit(limit);
 
     if (options?.before) {
@@ -60,7 +63,7 @@ export class MessagesService {
       if (Number.isNaN(beforeDate.getTime())) {
         throw new BadRequestException('Invalid before timestamp');
       }
-      qb.andWhere('message.createdAt < :before', { before: beforeDate });
+      qb.andWhere('message.createdAtMs < :beforeMs', { beforeMs: beforeDate.getTime() });
     }
 
     const rows = await qb.getMany();
@@ -68,7 +71,8 @@ export class MessagesService {
       id: row.id,
       role: row.role as AgentMessage['role'],
       content: row.content,
-      createdAt: row.createdAt.toISOString(),
+      createdAt: new Date(row.createdAtMs).toISOString(),
+      createdAtMs: row.createdAtMs,
       metadata: row.metadata ?? undefined,
       references: (row.citations as AgentMessage['references']) ?? undefined,
     }));

@@ -1,5 +1,11 @@
 import { Entity, PrimaryColumn, Column, CreateDateColumn, ManyToOne, JoinColumn } from 'typeorm';
 import { Conversation } from './conversation.entity';
+import { timestampMsTransformer } from './timestamp-ms.transformer';
+
+const BIGINT_TO_NUMBER = {
+  to: (value: number): number => value,
+  from: (value: string | number): number => Number(value),
+};
 
 @Entity({ name: 'messages' })
 export class Message {
@@ -25,6 +31,13 @@ export class Message {
   @Column()
   conversationId: string;
 
-  @CreateDateColumn()
+  @Column({
+    type: 'bigint',
+    name: 'createdAtMs',
+    transformer: BIGINT_TO_NUMBER,
+  })
+  createdAtMs: number;
+
+  @CreateDateColumn({ type: 'bigint', transformer: timestampMsTransformer })
   createdAt: Date;
 }

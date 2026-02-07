@@ -1,7 +1,16 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { StatusBar } from '../../components/layout/StatusBar'
 import { api } from '../../lib/api/client'
+
+/**
+ * 获取认证 token（从 localStorage）
+ */
+function getAuthToken(): string | null {
+  return localStorage.getItem('auth_token') || localStorage.getItem('token')
+}
+
+const REMEMBERED_EMAIL_KEY = 'remembered_email'
 
 export function LoginPage() {
   const navigate = useNavigate()
@@ -10,6 +19,22 @@ export function LoginPage() {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  // 如果已经登录，重定向到主页
+  useEffect(() => {
+    const token = getAuthToken()
+    if (token) {
+      navigate('/chat', { replace: true })
+    }
+  }, [navigate])
+
+  // 页面加载时，从 localStorage 读取保存的账号
+  useEffect(() => {
+    const rememberedEmail = localStorage.getItem(REMEMBERED_EMAIL_KEY)
+    if (rememberedEmail) {
+      setEmail(rememberedEmail)
+    }
+  }, [])
+
   const handleLogin = async () => {
     setError(null)
     setIsLoading(true)
@@ -17,10 +42,15 @@ export function LoginPage() {
     try {
       // 使用 email 和 code 作为 password 进行登录
       // 这里简化处理，实际应该是验证码登录流程
-      const result = await api.auth.login({
+      await api.auth.login({
         emailOrPhone: email,
         password: code, // 暂时使用验证码作为密码
       })
+
+      // 登录成功，保存账号到 localStorage
+      if (email.trim()) {
+        localStorage.setItem(REMEMBERED_EMAIL_KEY, email.trim())
+      }
 
       // 登录成功，导航到聊天页面
       navigate('/chat')
