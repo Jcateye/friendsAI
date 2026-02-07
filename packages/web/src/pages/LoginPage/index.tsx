@@ -1,16 +1,37 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { StatusBar } from '../../components/layout/StatusBar'
+import { api } from '../../lib/api/client'
 
 export function LoginPage() {
   const navigate = useNavigate()
   const [email, setEmail] = useState('')
   const [code, setCode] = useState('')
+  const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
-  const handleLogin = () => {
-    // TODO: Implement actual login logic
-    navigate('/chat')
+  const handleLogin = async () => {
+    setError(null)
+    setIsLoading(true)
+
+    try {
+      // 使用 email 和 code 作为 password 进行登录
+      // 这里简化处理，实际应该是验证码登录流程
+      const result = await api.auth.login({
+        emailOrPhone: email,
+        password: code, // 暂时使用验证码作为密码
+      })
+
+      // 登录成功，导航到聊天页面
+      navigate('/chat')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '登录失败，请重试')
+    } finally {
+      setIsLoading(false)
+    }
   }
+
+  const isLoginDisabled = !email.trim() || !code.trim() || isLoading
 
   return (
     <div className="flex flex-col h-full bg-bg-page px-6 pt-[60px] pb-10 justify-between">
@@ -33,6 +54,13 @@ export function LoginPage() {
 
         {/* Form Area */}
         <div className="flex flex-col gap-4">
+          {/* Error Message */}
+          {error && (
+            <div className="px-4 py-2 bg-red-50 rounded-md border border-red-200">
+              <p className="text-[13px] text-red-600 font-primary">{error}</p>
+            </div>
+          )}
+
           {/* Email Input */}
           <div className="flex items-center h-[52px] px-4 bg-bg-card rounded-md border border-border">
             <input
@@ -41,6 +69,7 @@ export function LoginPage() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               className="flex-1 bg-transparent text-[15px] text-text-primary placeholder:text-text-muted outline-none font-primary"
+              disabled={isLoading}
             />
           </div>
 
@@ -48,14 +77,23 @@ export function LoginPage() {
           <div className="flex gap-3 h-[52px]">
             <div className="flex-1 flex items-center px-4 bg-bg-card rounded-md border border-border">
               <input
-                type="text"
-                placeholder="验证码"
+                type="password"
+                placeholder="密码"
                 value={code}
                 onChange={(e) => setCode(e.target.value)}
                 className="flex-1 bg-transparent text-[15px] text-text-primary placeholder:text-text-muted outline-none font-primary"
+                disabled={isLoading}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !isLoginDisabled) {
+                    handleLogin()
+                  }
+                }}
               />
             </div>
-            <button className="px-4 bg-bg-card rounded-md border border-border text-[14px] text-text-secondary font-medium font-primary whitespace-nowrap">
+            <button
+              className="px-4 bg-bg-card rounded-md border border-border text-[14px] text-text-secondary font-medium font-primary whitespace-nowrap disabled:opacity-50"
+              disabled={isLoading}
+            >
               获取验证码
             </button>
           </div>
@@ -63,10 +101,11 @@ export function LoginPage() {
           {/* Login Button */}
           <button
             onClick={handleLogin}
-            className="h-[52px] bg-primary rounded-md flex items-center justify-center"
+            disabled={isLoginDisabled}
+            className="h-[52px] bg-primary rounded-md flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
           >
             <span className="text-[16px] font-semibold text-white font-primary">
-              登录 / 注册
+              {isLoading ? '登录中...' : '登录 / 注册'}
             </span>
           </button>
         </div>
