@@ -150,11 +150,12 @@ export function useAgentChat(
   } = options;
 
   // 使用 Vercel AI SDK 的 useChat，传入自定义 fetch 来添加认证
+  // 使用函数形式的 body 来支持动态 conversationId
   const chat = useChat({
     api: '/v1/agent/chat?format=vercel-ai',
-    body: {
+    body: () => ({
       conversationId,
-    },
+    }),
     initialMessages,
     fetch: fetchWithAuth as typeof globalThis.fetch,
   });
@@ -299,6 +300,7 @@ export function useAgentChat(
     chat.append({
       role: 'user',
       content: message,
+      createdAt: new Date(), // 确保新消息有正确的时间戳
     });
   }, [chat]);
 

@@ -7,17 +7,25 @@ import { ToolConfirmationOverlay } from '../../components/chat/ToolConfirmationO
 import { useConversations } from '../../hooks/useConversations';
 import { useAgentChat } from '../../hooks/useAgentChat';
 import { useToolConfirmations } from '../../hooks/useToolConfirmations';
+import { sortMessagesByCreatedAt } from '../../lib/messages/sortMessagesByCreatedAt';
 import { ChevronRight, Send } from 'lucide-react';
 
 export function ChatPage() {
   const navigate = useNavigate();
   const { conversations, isLoading: conversationsLoading, reload: reloadConversations, createConversation } = useConversations();
   const [conversationId, setConversationId] = useState<string | undefined>();
+  // 使用 ref 来存储当前的 conversationId，确保在发送消息时使用最新值
+  const conversationIdRef = useRef<string | undefined>(conversationId);
 
   // 使用 useAgentChat 处理消息发送和接收
   const chat = useAgentChat({
     conversationId,
   });
+
+  // 同步 ref 和 state
+  useEffect(() => {
+    conversationIdRef.current = conversationId;
+  }, [conversationId]);
 
   // 从工具状态中筛选需要确认的工具
   const toolStates = chat.pendingConfirmations;
@@ -34,22 +42,6 @@ export function ChatPage() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [chat.messages.length]);
 
-  // 当发送第一条消息时，创建新会话
-  useEffect(() => {
-    if (chat.messages.length > 0 && !conversationId) {
-      const hasUserMessage = chat.messages.some((msg) => msg.role === 'user');
-      if (hasUserMessage) {
-        createConversation({})
-          .then((newConversation) => {
-            setConversationId(newConversation.id);
-          })
-          .catch((error) => {
-            console.error('Failed to create conversation:', error);
-          });
-      }
-    }
-  }, [chat.messages.length, conversationId, createConversation]);
-
   // 当有新消息时，更新会话列表
   useEffect(() => {
     if (conversationId && chat.messages.length > 0) {
@@ -61,17 +53,35 @@ export function ChatPage() {
   }, [chat.messages.length, conversationId, reloadConversations]);
 
   // 发送消息
-  const handleSendMessage = (message: string) => {
+  const handleSendMessage = async (message: string) => {
+    // 如果没有会话ID，先创建会话
+    let currentConversationId = conversationIdRef.current;
+    if (!currentConversationId) {
+      try {
+        const newConversation = await createConversation({});
+        currentConversationId = newConversation.id;
+        conversationIdRef.current = currentConversationId;
+        setConversationId(currentConversationId);
+        // 等待状态更新完成（使用微任务确保状态已更新）
+        await new Promise(resolve => setTimeout(resolve, 0));
+      } catch (error) {
+        console.error('Failed to create conversation:', error);
+        // 即使创建失败，也尝试发送消息（可能会失败，但至少给用户反馈）
+      }
+    }
+    
+    // 发送消息（此时 conversationId 应该已经存在）
     chat.sendMessage(message);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!input.trim() || chat.isLoading) {
       return;
     }
-    handleSendMessage(input);
-    setInput('');
+    const messageToSend = input;
+    setInput(''); // 先清空输入框，提供即时反馈
+    await handleSendMessage(messageToSend);
   };
 
   return (
@@ -106,28 +116,29 @@ export function ChatPage() {
             </div>
           ) : (
             <div className="flex flex-col gap-4">
-              {chat.messages.map((message) => (
-                <div
-                  key={message.id}
-                  className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
-                >
+              {sortMessagesByCreatedAt([...chat.messages])
+                .map((message) => (
                   <div
-                    className={`max-w-[80%] rounded-2xl px-4 py-3 ${
-                      message.role === 'user'
-                        ? 'bg-primary text-white'
-                        : 'bg-bg-card text-text-primary'
-                    }`}
+                    key={message.id}
+                    className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
                   >
-                    {message.role === 'assistant' ? (
-                      <CustomMessageRenderer message={message} />
-                    ) : (
-                      <p className="text-[15px] font-primary whitespace-pre-wrap">
-                        {message.content}
-                      </p>
-                    )}
+                    <div
+                      className={`max-w-[80%] rounded-2xl px-4 py-3 ${
+                        message.role === 'user'
+                          ? 'bg-primary text-white'
+                          : 'bg-bg-card text-text-primary'
+                      }`}
+                    >
+                      {message.role === 'assistant' ? (
+                        <CustomMessageRenderer message={message} />
+                      ) : (
+                        <p className="text-[15px] font-primary whitespace-pre-wrap">
+                          {message.content}
+                        </p>
+                      )}
+                    </div>
                   </div>
-                </div>
-              ))}
+                ))}
               <div ref={messagesEndRef} />
             </div>
           )}
