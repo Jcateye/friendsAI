@@ -4,6 +4,7 @@ import { AgentOrchestrator } from './agent.orchestrator';
 import { AgentMessageStore } from './agent-message.store';
 import type { AgentChatRequest, AgentStreamEvent } from './agent.types';
 import type { AgentError, AgentRunEnd, AgentSseEvent } from './client-types';
+import { VercelAiStreamAdapter } from './adapters/vercel-ai-stream.adapter';
 
 @Controller('agent')
 export class AgentController {
@@ -17,7 +18,8 @@ export class AgentController {
   async chat(
     @Req() req: Request,
     @Res() res: Response,
-    @Body() body: AgentChatRequest
+    @Body() body: AgentChatRequest,
+    @Query('format') format: 'sse' | 'vercel-ai' = 'sse',
   ): Promise<void> {
     const hasMessages = Array.isArray(body?.messages) && body.messages.length > 0;
     const hasPrompt = typeof body?.prompt === 'string' && body.prompt.trim().length > 0;
@@ -28,11 +30,22 @@ export class AgentController {
     }
 
     res.status(200);
-    res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
+    
+    // 根据 format 设置响应头
+    if (format === 'vercel-ai') {
+      res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+      res.setHeader('X-Vercel-AI-Data-Stream', 'v1');
+    } else {
+      res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
+    }
+    
     res.setHeader('Cache-Control', 'no-cache, no-transform');
     res.setHeader('Connection', 'keep-alive');
     res.setHeader('X-Accel-Buffering', 'no');
     res.flushHeaders?.();
+
+    // 根据 format 选择适配器
+    const adapter = format === 'vercel-ai' ? new VercelAiStreamAdapter() : null;
 
     const abortController = new AbortController();
     const handleClose = () => abortController.abort();
@@ -68,7 +81,16 @@ export class AgentController {
         if (event.event === 'agent.end') {
           runCompleted = true;
         }
-        this.writeEvent(res, event);
+        
+        // 根据 format 选择写入方式
+        if (adapter) {
+          const transformed = adapter.transform(event);
+          if (transformed) {
+            res.write(transformed);
+          }
+        } else {
+          this.writeEvent(res, event);
+        }
       }
     } catch (error) {
       if (!res.writableEnded) {
