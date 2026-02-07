@@ -14,16 +14,23 @@ AI-powered relationship management app - 智能社交关系管理应用
 ## 主线说明（NestJS v2）
 
 - 后端主线：`packages/server-nestjs`（NestJS，API 前缀 `/v1`）
-- 新数据库：`friendsai_v2`（通过 `DATABASE_URL` 指向）
-- Express 旧主线已移除（如需回滚请回退到删除前的 git commit/tag）
+- 前端主线：`packages/web`（Vite React + Assistant-UI）
+- 数据库：`friendsai_v2`（通过 `DATABASE_URL` 指向）
 
 ## 2. 项目结构
 
 ```
 friendsAI/
 ├── packages/
-│   ├── client/              # 前端应用 (Taro 跨平台)
+│   ├── web/                 # [MAIN] 前端应用 (Vite React)
 │   │   ├── src/
+│   │   │   ├── app/         # 应用入口与路由
+│   │   │   ├── components/  # 通用组件 (layout, chat, a2ui)
+│   │   │   ├── pages/       # 页面组件
+│   │   │   ├── runtime/     # 聊天运行时 (AI SDK transport)
+│   │   │   ├── api/         # API 客户端
+│   │   │   ├── schemas/     # zod 校验 schema
+│   │   │   └── styles/      # 全局样式 (Tailwind)
 │   │   └── ...
 │   │
 │   ├── server-nestjs/       # [MAIN] AI 原生后端服务 (NestJS, /v1)
@@ -47,12 +54,22 @@ friendsAI/
 
 ## 3. 技术栈
 
-### 前端 (packages/client)
-- **框架**: Taro 3.6 (跨平台小程序框架)
-- **UI**: React 18 + taro-ui
-- **语言**: TypeScript
+### 前端 (packages/web)
 
-### 后端 (packages/server-nestjs) - 新版 AI Native 后端
+| 技术 | 说明 |
+|------|------|
+| **构建** | Vite 5 + TypeScript |
+| **框架** | React 18 |
+| **路由** | React Router v6 |
+| **聊天 UI** | Assistant-UI（React 组件库，集成 Vercel AI SDK） |
+| **AI 流式** | Vercel AI SDK（前端 hooks + stream protocol） |
+| **状态管理** | React Context + hooks（复杂场景可上 Zustand） |
+| **样式** | Tailwind CSS |
+| **校验** | zod（A2UI/ToolTrace schema 运行时校验） |
+| **测试** | Vitest + Testing Library（E2E 可选 Playwright） |
+| **产品形态** | Web-first 移动端（优先手机浏览器；可选 PWA/Capacitor 打包） |
+
+### 后端 (packages/server-nestjs) - AI Native 后端
 - **框架**: NestJS (Node.js + TypeScript)
 - **数据库**: PostgreSQL 15
 - **向量扩展**: PGVector (用于存储和检索 Embedding)
@@ -111,7 +128,7 @@ friendsAI/
     *   启动 PostgreSQL (端口 5434) 和 PGVector。
 
 2.  **配置后端环境**
-    进入 `packages/server-nestjs` 并创建 `.env` 文件（主线数据库为 `friendsai_v2`）：
+    进入 `packages/server-nestjs` 并创建 `.env` 文件：
     ```env
     DATABASE_URL=postgres://friendsai:friendsai@localhost:5434/friendsai_v2
     JWT_SECRET=dev-smoke-secret
@@ -131,10 +148,13 @@ friendsAI/
     ```
     服务将运行在 `http://localhost:3000`，健康检查：`http://localhost:3000/v1/health`。
 
-5.  **运行最小 e2e 测试**
+5.  **启动前端**
     ```bash
-    npm run test:e2e
+    cd packages/web
+    npm install
+    npm run dev
     ```
+    前端将运行在 `http://localhost:10086`。
 
 ### Smoke 测试（NestJS 主线）
 
@@ -147,18 +167,11 @@ node scripts/smoke-v2.js
 
 > 注意：聊天与简报依赖 `OPENAI_API_KEY`。
 
-### 回滚说明
-
-- **主线后端**：`packages/server-nestjs`（默认 `/v1`）
-- **主线数据库**：`friendsai_v2`
-- **回滚方式**：回退到删除 Express 之前的 git commit/tag，并按当时的 README 启动旧版。
-
 ### 使用 bun 脚本（主线）
 
 ```bash
 bun run dev              # 同时启动前后端
-bun run client:dev       # 前端 H5 开发
-bun run client:dev:weapp # 微信小程序开发
+bun run web:dev          # 前端开发模式
 bun run server:dev       # 后端开发
 bun run build            # 构建前后端
 ```
@@ -169,56 +182,62 @@ bun run build            # 构建前后端
 |------|------|
 | `bun run dev` | 同时启动前后端开发服务 |
 | `bun run build` | 构建前后端 |
-| `bun run client:dev` | 前端 H5 开发模式 |
-| `bun run client:dev:weapp` | 前端微信小程序开发模式 |
-| `bun run client:build` | 构建前端 H5 |
-| `bun run client:build:weapp` | 构建微信小程序 |
+| `bun run web:dev` | 前端 Vite 开发模式 |
+| `bun run web:build` | 构建前端 |
+| `bun run web:preview` | 预览前端构建产物 |
 | `bun run server:dev` | 后端开发模式 |
 | `bun run server:build` | 构建后端 |
 | `bun run server:start` | 启动后端生产服务 |
 
+### 使用 project.sh 脚本
+
+```bash
+./project.sh start           # 启动前后端
+./project.sh start web       # 仅启动前端
+./project.sh start server    # 仅启动后端
+./project.sh start:mvp       # 启动 MVP（DB + 迁移 + 前后端）
+./project.sh stop            # 停止所有服务
+./project.sh logs web        # 查看前端日志
+./project.sh logs server     # 查看后端日志
+./project.sh status          # 查看服务状态
+```
+
 ## 6. 项目模块说明
 
-### packages/client - 前端模块
+### packages/web - 前端模块
 
 | 目录/文件 | 说明 |
 |-----------|------|
-| `src/components/` | 可复用 UI 组件 (TabBar, Header, ContactCard 等) |
-| `src/pages/` | 页面组件 (login, contacts, conversation 等) |
-| `src/services/api.ts` | API 接口封装 |
-| `src/types/` | TypeScript 类型定义 |
-| `src/utils/` | 工具函数 |
-| `config/` | 环境配置 (dev.ts, prod.ts) |
+| `src/app/` | 应用入口、路由配置、Provider |
+| `src/pages/` | 页面组件 (LoginPage, ChatPage, ContactsPage 等) |
+| `src/components/layout/` | 布局组件 (AppShell, Header, TabBar, GlobalDrawer) |
+| `src/components/chat/` | 聊天相关组件 (Assistant-UI wrappers) |
+| `src/components/a2ui/` | A2UI 渲染器 (ArchiveReviewCard, ConfirmBar 等) |
+| `src/runtime/` | 聊天运行时 (AI SDK transport, stream parser) |
+| `src/api/` | API 客户端封装 |
+| `src/schemas/` | zod 校验 schema (A2UI, ToolTrace, DTOs) |
+| `src/styles/` | 全局样式 (Tailwind CSS 变量) |
 
 ### designs/ - 设计文件
 
 | 文件 | 说明 |
 |------|------|
 | `pencil-friendsAI.pen` | FriendsAI 主设计文件 |
-| `pencil-codex.pen` | Codex 相关设计 |
-| `pencil-gemini.pen` | Gemini 相关设计 |
-
-### docs/ - 项目文档
-
-| 文件 | 说明 |
-|------|------|
-| `AGENTS.md` | AI 助手使用指南 |
-| `CLAUDE.md` | Claude 配置说明 |
 
 ### logs/ - 运行日志
 
 | 文件 | 说明 |
 |------|------|
-| `client.log` | 前端服务日志 |
+| `web.log` | 前端服务日志 |
 | `server.log` | 后端服务日志 |
 
 ## 7. 注意事项
 
 ### 前端开发
-1. 前端代码位于 `packages/client/src`
-2. 路径别名 `@/*` 映射到 `packages/client/src/*`
-3. 小程序开发需要配置微信开发者工具，指向 `packages/client/dist` 目录
-4. 修改 `packages/client/project.config.json` 中的 `appid` 为你的小程序 ID
+1. 前端代码位于 `packages/web/src`
+2. 路径别名 `@/*` 映射到 `packages/web/src/*`
+3. 使用 Tailwind CSS，设计令牌定义在 `src/styles/globals.css`
+4. 图标使用 Lucide React
 
 ### 后端开发
 1. 后端代码位于 `packages/server-nestjs/src`
@@ -226,29 +245,18 @@ bun run build            # 构建前后端
 3. 端口通过 `PORT` 配置（开发默认 3000）
 
 ### 前端配置
-1. 前端环境文件位于 `packages/client/.env.development` / `packages/client/.env.production`
-2. H5 端口通过 `CLIENT_PORT` 配置（开发默认 10086）
-3. API 基地址通过 `TARO_APP_API_BASE_URL` 配置
+1. 前端环境文件位于 `packages/web/.env.development` / `packages/web/.env.production`
+2. 开发端口通过 `WEB_PORT` 配置（默认 10086）
+3. API 代理已配置，`/v1/*` 请求会转发到后端
 
 ### Monorepo 结构
 1. 使用 npm workspaces 管理多包
 2. 共享依赖会提升到根目录 `node_modules`
 3. 各包的专属依赖在各自的 `package.json` 中声明
-4. 使用 `-w` 参数可以在根目录运行子包脚本
 
 ### 设计文件
 1. 所有 `.pen` 设计文件统一存放在 `designs/` 目录
 2. 使用 Pencil MCP 工具编辑设计文件
-
-## 8. 遗留问题与技术债务
-
-### ⚠️ Task 12: `ConversationProcessorService` 单元测试
-*   **状态**：核心业务逻辑已实现并经过代码审查，但对应的单元测试文件 (`conversation-processor.service.spec.ts`) 目前无法通过。
-*   **原因**：
-    *   NestJS 测试模块中复杂的依赖注入（特别是 `ConfigService` 和 `AiService` 的交互）。
-    *   Jest `spyOn` 与 TypeScript 类型推断在模拟对象状态传递时的冲突。
-    *   需要精确匹配多行 AI Prompt 字符串。
-*   **建议**：在后续迭代中，建议人工介入重构此测试，或补充端到端 (E2E) 测试以覆盖此核心路径。
 
 ## License
 

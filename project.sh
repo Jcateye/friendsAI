@@ -10,9 +10,9 @@ LOG_DIR="$ROOT_DIR/logs"
 mkdir -p "$LOG_DIR"
 
 # 日志和 PID 文件
-CLIENT_LOG="$LOG_DIR/client.log"
+WEB_LOG="$LOG_DIR/web.log"
 SERVER_LOG="$LOG_DIR/server.log"
-CLIENT_PID_FILE="$ROOT_DIR/.client.pid"
+WEB_PID_FILE="$ROOT_DIR/.web.pid"
 SERVER_PID_FILE="$ROOT_DIR/.server.pid"
 DB_PID_FILE="$ROOT_DIR/.db.pid"
 
@@ -28,9 +28,9 @@ load_env() {
   local node_env="${NODE_ENV:-development}"
   local nest_env_file="$ROOT_DIR/packages/server-nestjs/.env.${node_env}"
   local nest_env_fallback="$ROOT_DIR/packages/server-nestjs/.env"
-  local client_env_file="$ROOT_DIR/packages/client/.env.${node_env}"
+  local web_env_file="$ROOT_DIR/packages/web/.env.${node_env}"
   local existing_port="${PORT-}"
-  local existing_client_port="${CLIENT_PORT-}"
+  local existing_web_port="${WEB_PORT-}"
   local existing_database_url="${DATABASE_URL-}"
   local existing_jwt_secret="${JWT_SECRET-}"
   local existing_openai_api_key="${OPENAI_API_KEY-}"
@@ -47,18 +47,18 @@ load_env() {
     set +a
   fi
 
-  if [[ -f "$client_env_file" ]]; then
+  if [[ -f "$web_env_file" ]]; then
     # shellcheck disable=SC1090
     set -a
-    source "$client_env_file"
+    source "$web_env_file"
     set +a
   fi
 
   if [[ -n "$existing_port" ]]; then
     export PORT="$existing_port"
   fi
-  if [[ -n "$existing_client_port" ]]; then
-    export CLIENT_PORT="$existing_client_port"
+  if [[ -n "$existing_web_port" ]]; then
+    export WEB_PORT="$existing_web_port"
   fi
   if [[ -n "$existing_database_url" ]]; then
     export DATABASE_URL="$existing_database_url"
@@ -73,7 +73,7 @@ load_env() {
   export DATABASE_URL="${DATABASE_URL:-postgres://friendsai:friendsai@localhost:5434/friendsai_v2}"
   export JWT_SECRET="${JWT_SECRET:-dev-smoke-secret}"
   export PORT="${PORT:-3000}"
-  export CLIENT_PORT="${CLIENT_PORT:-10086}"
+  export WEB_PORT="${WEB_PORT:-10086}"
 }
 
 get_lan_ip() {
@@ -131,10 +131,8 @@ check_service_status() {
         if echo "$port_pids" | tr ' ' '\n' | grep -qx "$pid"; then
           break
         fi
-        # 检查是否是我们进程的后代（子进程、孙进程等）
         local descendant_match=0
         for port_pid in $port_pids; do
-          # 递归向上查找，检查是否是 $pid 的后代
           local check_pid="$port_pid"
           while [[ -n "$check_pid" && "$check_pid" != "1" && "$check_pid" != "0" ]]; do
             local ppid
@@ -193,30 +191,30 @@ FriendsAI 项目管理脚本
   ./project.sh <命令> [服务]
 
 命令:
-  start [client|server|all]   启动服务 (默认 all)
-  start:mvp                   启动 MVP：DB + 迁移 + API + 前端
-  stop [client|server|all]    停止服务 (默认 all)
-  stop:mvp                    停止 MVP：API + 前端（不关闭 DB）
-  restart [client|server|all] 重启服务 (默认 all)
-  build [client|server|all]   构建项目 (默认 all)
-  logs [client|server] 查看日志 (默认 client)
-  status                      查看服务状态
-  clean-logs                  清理日志文件
+  start [web|server|all]    启动服务 (默认 all)
+  start:mvp                 启动 MVP：DB + 迁移 + API + 前端
+  stop [web|server|all]     停止服务 (默认 all)
+  stop:mvp                  停止 MVP：API + 前端（不关闭 DB）
+  restart [web|server|all]  重启服务 (默认 all)
+  build [web|server|all]    构建项目 (默认 all)
+  logs [web|server]         查看日志 (默认 web)
+  status                    查看服务状态
+  clean-logs                清理日志文件
 
 示例:
   ./project.sh start           # 启动前后端
-  ./project.sh start client    # 仅启动前端
+  ./project.sh start web       # 仅启动前端
   ./project.sh stop server     # 停止后端
   ./project.sh logs server     # 查看后端日志
-  ./project.sh build client    # 构建前端 H5
+  ./project.sh build web       # 构建前端
   ./project.sh start:mvp       # 启动 MVP 全量（含 DB+迁移+前后端）
 EOF
 }
 
-is_client_running() {
-  if [[ -f "$CLIENT_PID_FILE" ]]; then
+is_web_running() {
+  if [[ -f "$WEB_PID_FILE" ]]; then
     local pid
-    pid="$(cat "$CLIENT_PID_FILE")"
+    pid="$(cat "$WEB_PID_FILE")"
     if [[ -n "$pid" ]] && kill -0 "$pid" >/dev/null 2>&1; then
       return 0
     fi
@@ -232,7 +230,6 @@ is_server_running() {
       return 0
     fi
   fi
-  # 如果 PID 文件失效，尝试从端口监听进程恢复
   local port_pids
   port_pids=$(lsof -nP -iTCP:"${PORT:-3000}" -sTCP:LISTEN -t 2>/dev/null || true)
   if [[ -n "$port_pids" ]]; then
@@ -266,28 +263,27 @@ run_migrate() {
   $PKG_MANAGER run --cwd "$ROOT_DIR/packages/server-nestjs" migrate
 }
 
-start_client_background() {
-  if is_client_running; then
-    echo "🟢 前端服务已在运行 (PID: $(cat "$CLIENT_PID_FILE"))"
+start_web_background() {
+  if is_web_running; then
+    echo "🟢 前端服务已在运行 (PID: $(cat "$WEB_PID_FILE"))"
     return 0
   fi
 
   load_env
-  echo "🚀 启动前端 H5 开发服务..."
-  nohup "$PKG_MANAGER" run client:dev > "$CLIENT_LOG" 2>&1 &
-  echo $! > "$CLIENT_PID_FILE"
+  echo "🚀 启动前端 Vite 开发服务..."
+  nohup "$PKG_MANAGER" run web:dev > "$WEB_LOG" 2>&1 &
+  echo $! > "$WEB_PID_FILE"
 }
 
-verify_client() {
-  # 检查服务是否成功启动
-  if check_service_status "client" "$CLIENT_PID_FILE" "$CLIENT_LOG" "${CLIENT_PORT:-10086}"; then
-    echo "✅ 前端已启动，PID: $(cat "$CLIENT_PID_FILE")"
-    echo "   日志文件: $CLIENT_LOG"
-    echo "   本机访问：http://localhost:${CLIENT_PORT:-10086}"
+verify_web() {
+  if check_service_status "web" "$WEB_PID_FILE" "$WEB_LOG" "${WEB_PORT:-5173}"; then
+    echo "✅ 前端已启动，PID: $(cat "$WEB_PID_FILE")"
+    echo "   日志文件: $WEB_LOG"
+    echo "   本机访问：http://localhost:${WEB_PORT:-5173}"
     local lan_ip
     lan_ip="$(get_lan_ip)"
     if [[ -n "$lan_ip" ]]; then
-      echo "   局域网访问：http://${lan_ip}:${CLIENT_PORT:-10086}"
+      echo "   局域网访问：http://${lan_ip}:${WEB_PORT:-5173}"
     else
       echo "   局域网访问：未检测到本机局域网 IP"
     fi
@@ -297,9 +293,9 @@ verify_client() {
   fi
 }
 
-start_client() {
-  start_client_background
-  verify_client
+start_web() {
+  start_web_background
+  verify_web
 }
 
 start_server_background() {
@@ -315,7 +311,6 @@ start_server_background() {
 }
 
 verify_server() {
-  # 检查服务是否成功启动
   if check_service_status "server" "$SERVER_PID_FILE" "$SERVER_LOG" "${PORT:-3000}" "$ROOT_DIR/packages/server-nestjs/"; then
     echo "✅ 后端已启动，PID: $(cat "$SERVER_PID_FILE")"
     echo "   日志文件: $SERVER_LOG"
@@ -338,9 +333,6 @@ start_server() {
   verify_server
 }
 
-# 杀死指定 PID 及其子进程占用端口的进程
-# 参数: $1=端口, $2=PID文件路径(可选)
-# 只杀死与 PID 文件相关的进程，避免误杀其他应用
 kill_port() {
   local port="$1"
   local pid_file="${2:-}"
@@ -357,10 +349,8 @@ kill_port() {
     return 0
   fi
 
-  # 如果有 PID 文件，只杀死与我们进程相关的
   if [[ -n "$our_pid" ]]; then
     for pid in $port_pids; do
-      # 检查是否是我们的进程或其子进程
       if [[ "$pid" == "$our_pid" ]] || pgrep -P "$our_pid" 2>/dev/null | grep -qx "$pid"; then
         echo "🔪 杀死端口 $port 的进程: $pid (属于 PID $our_pid)"
         kill -9 "$pid" 2>/dev/null || true
@@ -370,8 +360,6 @@ kill_port() {
   sleep 1
 }
 
-# 清理残留的本项目进程占用端口（当 PID 文件缺失时兜底）
-# 参数: $1=端口, $2=命令行匹配关键字
 kill_orphan_port_process() {
   local port="$1"
   local match="$2"
@@ -397,21 +385,19 @@ kill_orphan_port_process() {
   done
 }
 
-stop_client() {
-  if is_client_running; then
+stop_web() {
+  if is_web_running; then
     local pid
-    pid="$(cat "$CLIENT_PID_FILE")"
+    pid="$(cat "$WEB_PID_FILE")"
     echo "⏹️  停止前端服务 (PID: $pid)..."
-    # 先杀子进程，再杀父进程（避免子进程变成孤儿进程）
     pkill -P "$pid" 2>/dev/null || true
     sleep 1
     kill "$pid" 2>/dev/null || true
-    rm -f "$CLIENT_PID_FILE"
+    rm -f "$WEB_PID_FILE"
   else
     echo "⚪ 前端服务未运行"
   fi
-  # 确保端口被释放（只杀死我们启动的进程）
-  kill_port "${CLIENT_PORT:-10086}" "$CLIENT_PID_FILE"
+  kill_port "${WEB_PORT:-5173}" "$WEB_PID_FILE"
   echo "✅ 前端已停止"
 }
 
@@ -420,7 +406,6 @@ stop_server() {
     local pid
     pid="$(cat "$SERVER_PID_FILE")"
     echo "⏹️  停止后端服务 (PID: $pid)..."
-    # 先杀子进程，再杀父进程（避免子进程变成孤儿进程）
     pkill -P "$pid" 2>/dev/null || true
     sleep 1
     kill "$pid" 2>/dev/null || true
@@ -428,27 +413,25 @@ stop_server() {
   else
     echo "⚪ 后端服务未运行"
   fi
-  # 确保端口被释放（只杀死我们启动的进程）
   kill_port "${PORT:-3000}" "$SERVER_PID_FILE"
-  # 兜底清理残留进程
   kill_orphan_port_process "${PORT:-3000}" "$ROOT_DIR/packages/server-nestjs/"
   echo "✅ 后端已停止"
 }
 
 start() {
   local target="${1:-all}"
-  local client_start_status=0
+  local web_start_status=0
   local server_start_status=0
-  
+
   case "$target" in
-    client)
-      start_client_background || client_start_status=$?
+    web)
+      start_web_background || web_start_status=$?
       ;;
     server)
       start_server_background || server_start_status=$?
       ;;
     all)
-      start_client_background || client_start_status=$?
+      start_web_background || web_start_status=$?
       start_server_background || server_start_status=$?
       ;;
     *)
@@ -457,29 +440,27 @@ start() {
       ;;
   esac
 
-  # Perform verification after all services are attempted to start
-  local client_verify_status=0
+  local web_verify_status=0
   local server_verify_status=0
 
   case "$target" in
-    client)
-      verify_client || client_verify_status=$?
+    web)
+      verify_web || web_verify_status=$?
       ;;
     server)
       verify_server || server_verify_status=$?
       ;;
     all)
-      verify_client || client_verify_status=$?
+      verify_web || web_verify_status=$?
       verify_server || server_verify_status=$?
       ;;
   esac
-  
-  # 汇总报告
+
   local has_failure=0
-  if [[ $client_start_status -ne 0 || $client_verify_status -ne 0 ]]; then
+  if [[ $web_start_status -ne 0 || $web_verify_status -ne 0 ]]; then
     echo ""
     echo "❌ 前端服务启动失败"
-    echo "   请查看日志: $CLIENT_LOG"
+    echo "   请查看日志: $WEB_LOG"
     has_failure=1
   fi
   if [[ $server_start_status -ne 0 || $server_verify_status -ne 0 ]]; then
@@ -488,37 +469,35 @@ start() {
     echo "   请查看日志: $SERVER_LOG"
     has_failure=1
   fi
-  
+
   if [[ $has_failure -eq 1 ]]; then
     echo ""
     echo "⚠️ 部分服务启动失败，请检查上述日志文件获取详细信息"
     return 1
   fi
-  
+
   return 0
 }
 
 start_mvp() {
   load_env
   export DEV_VERIFY_CODE="${DEV_VERIFY_CODE:-123456}"
-  
+
   start_db
   run_migrate
-  
+
   local server_start_status=0
   start_server_background || server_start_status=$?
-  
-  local client_start_status=0
-  start_client_background || client_start_status=$?
 
-  # Perform verification after all services are attempted to start
+  local web_start_status=0
+  start_web_background || web_start_status=$?
+
   local server_verify_status=0
   verify_server || server_verify_status=$?
-  
-  local client_verify_status=0
-  verify_client || client_verify_status=$?
-  
-  # 汇总报告
+
+  local web_verify_status=0
+  verify_web || web_verify_status=$?
+
   local has_failure=0
   if [[ $server_start_status -ne 0 || $server_verify_status -ne 0 ]]; then
     echo ""
@@ -526,27 +505,27 @@ start_mvp() {
     echo "   请查看日志: $SERVER_LOG"
     has_failure=1
   fi
-  if [[ $client_start_status -ne 0 || $client_verify_status -ne 0 ]]; then
+  if [[ $web_start_status -ne 0 || $web_verify_status -ne 0 ]]; then
     echo ""
     echo "❌ 前端服务启动失败"
-    echo "   请查看日志: $CLIENT_LOG"
+    echo "   请查看日志: $WEB_LOG"
     has_failure=1
   fi
-  
+
   if [[ $has_failure -eq 1 ]]; then
     echo ""
     echo "⚠️ 部分服务启动失败，请检查上述日志文件获取详细信息"
     return 1
   fi
-  
+
   echo "✅ MVP 已启动"
   echo "👉 访问提示："
-  echo "   前端地址（本机）：http://localhost:${CLIENT_PORT:-10086}"
+  echo "   前端地址（本机）：http://localhost:${WEB_PORT:-5173}"
   echo "   API 地址（本机）：http://localhost:${PORT:-3000}/v1/health"
   local lan_ip
   lan_ip="$(get_lan_ip)"
   if [[ -n "$lan_ip" ]]; then
-    echo "   前端地址（局域网）：http://${lan_ip}:${CLIENT_PORT:-10086}"
+    echo "   前端地址（局域网）：http://${lan_ip}:${WEB_PORT:-5173}"
     echo "   API 地址（局域网）：http://${lan_ip}:${PORT:-3000}/v1/health"
   else
     echo "   局域网访问：未检测到本机局域网 IP"
@@ -557,14 +536,14 @@ start_mvp() {
 stop() {
   local target="${1:-all}"
   case "$target" in
-    client)
-      stop_client
+    web)
+      stop_web
       ;;
     server)
       stop_server
       ;;
     all)
-      stop_client
+      stop_web
       stop_server
       ;;
     *)
@@ -575,7 +554,7 @@ stop() {
 }
 
 stop_mvp() {
-  stop_client
+  stop_web
   stop_server
 }
 
@@ -589,9 +568,9 @@ restart() {
 build() {
   local target="${1:-all}"
   case "$target" in
-    client)
-      echo "📦 构建前端 H5..."
-      $PKG_MANAGER run client:build
+    web)
+      echo "📦 构建前端..."
+      $PKG_MANAGER run web:build
       echo "✅ 前端构建完成"
       ;;
     server)
@@ -612,14 +591,14 @@ build() {
 }
 
 logs() {
-  local target="${1:-client}"
+  local target="${1:-web}"
   case "$target" in
-    client)
-      if [[ -f "$CLIENT_LOG" ]]; then
-        echo "📋 前端日志 ($CLIENT_LOG):"
-        tail -f "$CLIENT_LOG"
+    web)
+      if [[ -f "$WEB_LOG" ]]; then
+        echo "📋 前端日志 ($WEB_LOG):"
+        tail -f "$WEB_LOG"
       else
-        echo "未找到前端日志文件: $CLIENT_LOG"
+        echo "未找到前端日志文件: $WEB_LOG"
       fi
       ;;
     server)
@@ -631,7 +610,7 @@ logs() {
       fi
       ;;
     *)
-      echo "未知服务: $target (可选: client, server)"
+      echo "未知服务: $target (可选: web, server)"
       exit 1
       ;;
   esac
@@ -640,8 +619,8 @@ logs() {
 status() {
   echo "📊 服务状态:"
   echo ""
-  if is_client_running; then
-    echo "  🟢 前端: 运行中 (PID: $(cat "$CLIENT_PID_FILE"))"
+  if is_web_running; then
+    echo "  🟢 前端: 运行中 (PID: $(cat "$WEB_PID_FILE"))"
   else
     echo "  ⚪ 前端: 未运行"
   fi
@@ -680,7 +659,7 @@ case "${1:-}" in
     build "${2:-all}"
     ;;
   logs)
-    logs "${2:-client}"
+    logs "${2:-web}"
     ;;
   status)
     status
