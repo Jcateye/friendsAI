@@ -5,7 +5,14 @@ FriendsAI 是一个 **AI 原生的人脉/关系情报管理** 应用：以“对
 
 ## Tech Stack
 - Monorepo: Bun workspaces
-- Client: Taro 3.6 + React 18 + TypeScript（当前主要运行 H5）
+- Web (packages/web): Vite 5 + React 18 + TypeScript + React Router v6
+  - 聊天 UI：Assistant-UI（React 组件库，集成 Vercel AI SDK）
+  - AI 流式：Vercel AI SDK（前端 hooks + stream protocol）
+  - 状态：React Context + hooks（复杂场景可上 Zustand）
+  - 样式：Tailwind CSS
+  - 校验：zod（A2UI/ToolTrace schema 运行时校验）
+  - 测试：Vitest + Testing Library（E2E 可选 Playwright）
+  - 产品形态：Web-first 移动端（优先手机浏览器；可选 PWA/Capacitor 打包）
 - Server (mainline): NestJS 11 + TypeScript + TypeORM
 - DB: PostgreSQL + pgvector
 - AI: OpenAI-compatible（模型/供应商可替换；以接口/适配器隔离）

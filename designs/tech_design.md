@@ -32,13 +32,19 @@
 
 ## 2. 技术栈
 
-### 前端 (packages/client)
+### 前端 (packages/web)
 
-* 框架：Taro 3.6
-* UI：React 18 + taro-ui
-* 语言：TypeScript
-* 样式：SCSS
-* 构建：Webpack 5
+* **产品形态**：Web-first 移动端（优先手机浏览器体验，可选 PWA；后续可用 Capacitor 打包 WebView 壳包）
+* **构建**：Vite 5 + TypeScript
+* **框架**：React 18
+* **路由**：React Router v6
+* **聊天 UI**：Assistant-UI（React 组件库，已集成 Vercel AI SDK）
+* **AI 流式/对话协议**：Vercel AI SDK（前端 hooks + stream protocol）
+* **状态管理**：React Context + hooks（复杂场景可上 Zustand）
+* **数据请求**：fetch + 自封装 client（或 TanStack Query）
+* **样式**：Tailwind CSS
+* **校验**：zod（A2UI payload、tool trace schema 运行时校验）
+* **测试**：Vitest + Testing Library（E2E 可选 Playwright）
 
 ### 后端 (packages/server)
 
@@ -59,10 +65,12 @@
 
 ### 3.1 分层结构（面向接口）
 
-**Client（Taro）**
+**Client（Vite React + Assistant-UI）**
 
-* 渲染消息流、A2UI、tool trace
-* 触发“确认执行”、“归档会话”等用户动作
+* **UI Layer**：页面、布局、Assistant-UI Chat 组件、A2UI 渲染器（ArchiveReviewCard/ConfirmBar/ToolTraceCard 等）
+* **Runtime Layer**：流式 SSE 响应转消息流、tool trace、A2UI 指令；管理会话 thread、消息追加、失败重试
+* **Data Layer**：REST API 客户端（会话/联系人/行动/连接器）+ Chat SSE + tool-runs confirm
+* **Schema Layer**：A2UI/ToolTrace JSON schema（zod）+ DTO types
 
 **Express API（BFF）**
 
