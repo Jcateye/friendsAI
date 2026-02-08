@@ -17,7 +17,12 @@
     "dev": "concurrently \"bun run web:dev\" \"bun run server:dev\"",
     "build": "bun run web:build && bun run server:build",
     "user-stories:verify": "node scripts/verify-user-stories.js",
-    "ralph": "bun run scripts/ralph/runner.ts"
+    "ralph": "bun run scripts/ralph/runner.ts",
+    "test": "bun run --cwd packages/server-nestjs test",
+    "test:watch": "bun run --cwd packages/server-nestjs test:watch",
+    "test:coverage": "bun run --cwd packages/server-nestjs test:cov",
+    "test:e2e": "bun run --cwd packages/server-nestjs test:e2e",
+    "test:ci": "bun run test && bun run test:e2e"
   },
   "devDependencies": {
     "ajv": "^8.17.1",
