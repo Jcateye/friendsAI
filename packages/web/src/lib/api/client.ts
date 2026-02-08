@@ -91,15 +91,7 @@ async function fetchWithAuth(
  */
 async function handleResponse<T>(response: Response): Promise<T> {
   if (!response.ok) {
-    // 401 未授权，清除 token 并重定向到登录页
-    if (response.status === 401) {
-      clearAuthToken();
-      // 如果不在登录页，重定向到登录页
-      if (window.location.pathname !== '/login') {
-        window.location.href = '/login';
-      }
-    }
-    
+    // 先读取错误信息（响应体只能读取一次）
     const errorText = await response.text();
     let errorMessage = `Request failed: ${response.status} ${response.statusText}`;
     try {
@@ -108,6 +100,20 @@ async function handleResponse<T>(response: Response): Promise<T> {
     } catch {
       errorMessage = errorText || errorMessage;
     }
+    
+    // 401 未授权，清除 token 并重定向到登录页
+    if (response.status === 401) {
+      clearAuthToken();
+      // 如果不在登录页，重定向到登录页并传递错误信息
+      if (window.location.pathname !== '/login') {
+        // 使用更友好的错误信息
+        const friendlyMessage = errorMessage || '登录已过期，请重新登录';
+        // 通过 URL 参数传递错误信息
+        const errorParam = encodeURIComponent(friendlyMessage);
+        window.location.href = `/login?error=${errorParam}`;
+      }
+    }
+    
     throw new Error(errorMessage);
   }
   

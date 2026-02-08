@@ -166,3 +166,4 @@ export function DraftPreview({ node, onAction }: A2UIComponentProps) {
     </div>
   );
 }
+

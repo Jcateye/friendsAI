@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { StatusBar } from '../../components/layout/StatusBar'
 import { api } from '../../lib/api/client'
 
@@ -14,6 +14,7 @@ const REMEMBERED_EMAIL_KEY = 'remembered_email'
 
 export function LoginPage() {
   const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
   const [email, setEmail] = useState('')
   const [code, setCode] = useState('')
   const [isLoading, setIsLoading] = useState(false)
@@ -27,13 +28,22 @@ export function LoginPage() {
     }
   }, [navigate])
 
-  // 页面加载时，从 localStorage 读取保存的账号
+  // 页面加载时，从 URL 参数中读取错误信息，从 localStorage 读取保存的账号
   useEffect(() => {
+    // 检查 URL 参数中是否有错误信息
+    const errorParam = searchParams.get('error')
+    if (errorParam) {
+      setError(decodeURIComponent(errorParam))
+      // 清除 URL 参数，避免刷新页面时重复显示
+      setSearchParams({}, { replace: true })
+    }
+    
+    // 从 localStorage 读取保存的账号
     const rememberedEmail = localStorage.getItem(REMEMBERED_EMAIL_KEY)
     if (rememberedEmail) {
       setEmail(rememberedEmail)
     }
-  }, [])
+  }, [searchParams, setSearchParams])
 
   const handleLogin = async () => {
     setError(null)
