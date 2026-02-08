@@ -1,9 +1,10 @@
 import { useParams, useLocation, useNavigate } from 'react-router-dom';
-import { useEffect, useRef, useMemo, useCallback } from 'react';
+import { useEffect, useRef, useMemo, useCallback, useState } from 'react';
 import { Header } from '../../components/layout/Header';
 import { CustomMessageRenderer } from '../../components/chat/CustomMessageRenderer';
 import { ToolConfirmationOverlay } from '../../components/chat/ToolConfirmationOverlay';
 import { ChatInputBox, type AttachedFile } from '../../components/chat/ChatInputBox';
+import { SkillPanel } from '../../components/chat/SkillPanel';
 import { useConversationHistory } from '../../hooks/useConversationHistory';
 import { useAgentChat } from '../../hooks/useAgentChat';
 import { useToolConfirmations } from '../../hooks/useToolConfirmations';
@@ -66,6 +67,9 @@ export function ConversationDetailPage() {
   });
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // 技能选择状态
+  const [activeSkillId, setActiveSkillId] = useState<string | null>(null);
 
   // 使用 ref 保存所有用户消息，防止 stop 时被移除
   const userMessagesBackupRef = useRef<Map<string, MessageWithMs>>(new Map());
@@ -222,6 +226,13 @@ export function ConversationDetailPage() {
     chat.stop();
   }, [chat]);
 
+  // 处理技能选择
+  const handleSkillSelect = useCallback((skillId: string, operation?: string) => {
+    setActiveSkillId(skillId);
+    // TODO: 调用对应的 Agent 能力
+    console.log('Skill selected:', skillId, 'Operation:', operation);
+  }, []);
+
   return (
     <div className="flex flex-col h-full bg-bg-page">
       <Header
@@ -285,6 +296,12 @@ export function ConversationDetailPage() {
           </div>
         )}
       </div>
+
+      {/* Skill Panel */}
+      <SkillPanel
+        activeSkillId={activeSkillId ?? undefined}
+        onSkillSelect={handleSkillSelect}
+      />
 
       {/* Chat Input Box */}
       <ChatInputBox
