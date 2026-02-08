@@ -52,7 +52,7 @@ export const router = createBrowserRouter([
     path: '/settings',
     element: (
       <ProtectedRoute>
-        <AppShell showStatusBar showTabBar={false}>
+        <AppShell showTabBar={false}>
           <SettingsPage />
         </AppShell>
       </ProtectedRoute>

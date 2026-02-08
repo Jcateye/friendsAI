@@ -66,11 +66,14 @@ export class AuthService {
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
+    const now = new Date();
     const user = this.userRepository.create({
       email: email ?? null,
       phone: phone ?? null,
       password: hashedPassword,
       name,
+      createdAt: now,
+      updatedAt: now,
     });
 
     const savedUser = await this.userRepository.save(user);
@@ -160,10 +163,13 @@ export class AuthService {
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + this.refreshTokenExpiresInDays);
 
+    const now = new Date();
     const session = this.authSessionRepository.create({
       userId: user.id,
       refreshToken,
       expiresAt,
+      createdAt: now,
+      updatedAt: now,
     });
     await this.authSessionRepository.save(session);
 

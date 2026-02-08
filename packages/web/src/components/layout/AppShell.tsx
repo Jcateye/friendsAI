@@ -9,7 +9,7 @@ interface AppShellProps {
 }
 
 export function AppShell({
-  showStatusBar = true,
+  showStatusBar = false,
   showTabBar = true,
   children,
 }: AppShellProps) {
