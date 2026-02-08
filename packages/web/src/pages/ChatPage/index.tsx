@@ -4,18 +4,7 @@ import { Header } from '../../components/layout/Header';
 import { GlobalDrawer } from '../../components/layout/GlobalDrawer';
 import { useConversations } from '../../hooks/useConversations';
 import { ChevronRight, Send } from 'lucide-react';
-
-// Helper function to get relative time display
-const getRelativeTime = (date: Date): string => {
-  const now = new Date();
-  const diff = now.getTime() - date.getTime();
-  const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-
-  if (days === 0) return '今天';
-  if (days === 1) return '昨天';
-  if (days < 7) return `${days}天前`;
-  return date.toLocaleDateString('zh-CN', { month: '2-digit', day: '2-digit' });
-};
+import { formatRelativeTime } from '../../lib/time/timestamp';
 
 export function ChatPage() {
   const navigate = useNavigate();
@@ -59,7 +48,7 @@ export function ChatPage() {
         date: conv.createdAt
           ? new Date(conv.createdAt).toLocaleDateString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit' })
           : '',
-        timeDisplay: conv.createdAt ? getRelativeTime(new Date(conv.createdAt)) : '',
+        timeDisplay: conv.createdAt ? formatRelativeTime(conv.createdAt) : '',
         status: conv.isArchived ? ('archived' as const) : ('pending' as const),
       };
     });
@@ -154,6 +143,11 @@ export function ChatPage() {
                     <p className="text-[14px] font-medium text-text-primary font-primary truncate">
                       {conversation.title || '新对话'}
                     </p>
+                  </div>
+                  <div className="shrink-0">
+                    <span className="text-[12px] text-text-muted font-primary">
+                      {formatRelativeTime(conversation.updatedAt || conversation.createdAt)}
+                    </span>
                   </div>
                 </button>
               ))}
