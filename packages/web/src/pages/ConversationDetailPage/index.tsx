@@ -71,30 +71,71 @@ export function ConversationDetailPage() {
   const sortedMessages = useMemo(() => {
     const allMessages = new Map<string, MessageWithMs>();
 
+    // 首先添加 initialMessages（来自数据库，ID 更稳定）
     initialMessages.forEach((message) => {
       allMessages.set(message.id, message);
     });
 
+    // 然后处理 chat.messages（可能包含临时 ID 的消息）
     chat.messages.forEach((message) => {
       const existingMessage = allMessages.get(message.id);
-      const mergedMessage: MessageWithMs = {
-        ...(existingMessage ?? {}),
-        ...(message as MessageWithMs),
-      };
+      
+      // 如果 ID 已存在，直接合并
+      if (existingMessage) {
+        const mergedMessage: MessageWithMs = {
+          ...existingMessage,
+          ...(message as MessageWithMs),
+        };
 
-      const createdAtMs = resolveEpochMs(
-        (message as MessageWithMs).createdAtMs,
-        existingMessage?.createdAtMs,
-        message.createdAt,
-        existingMessage?.createdAt,
-      );
+        const createdAtMs = resolveEpochMs(
+          (message as MessageWithMs).createdAtMs,
+          existingMessage?.createdAtMs,
+          message.createdAt,
+          existingMessage?.createdAt,
+        );
 
-      if (createdAtMs !== null) {
-        mergedMessage.createdAtMs = createdAtMs;
-        mergedMessage.createdAt = new Date(createdAtMs);
+        if (createdAtMs !== null) {
+          mergedMessage.createdAtMs = createdAtMs;
+          mergedMessage.createdAt = new Date(createdAtMs);
+        }
+
+        allMessages.set(message.id, mergedMessage);
+      } else {
+        // 如果 ID 不存在，检查是否有相同内容和角色的消息（去重）
+        const messageContent = message.content;
+        const messageRole = message.role;
+        const messageTime = resolveEpochMs(
+          (message as MessageWithMs).createdAtMs,
+          undefined,
+          message.createdAt,
+          undefined,
+        ) ?? Date.now();
+
+        let foundDuplicate = false;
+        for (const [existingId, existingMsg] of allMessages.entries()) {
+          if (
+            existingMsg.role === messageRole &&
+            existingMsg.content === messageContent
+          ) {
+            const existingTime = existingMsg.createdAtMs ?? existingMsg.createdAt?.getTime() ?? Date.now();
+            // 如果时间戳在 5 秒内，认为是同一条消息，跳过这条新消息
+            if (Math.abs(messageTime - existingTime) < 5000) {
+              foundDuplicate = true;
+              break;
+            }
+          }
+        }
+
+        // 如果没有找到重复，添加新消息
+        if (!foundDuplicate) {
+          const newMessage: MessageWithMs = {
+            ...(message as MessageWithMs),
+            createdAtMs: messageTime,
+            createdAt: new Date(messageTime),
+          };
+          allMessages.set(message.id, newMessage);
+        }
       }
-
-      allMessages.set(message.id, mergedMessage);
     });
 
     return sortMessagesByCreatedAt(Array.from(allMessages.values()));
@@ -104,24 +145,39 @@ export function ConversationDetailPage() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [sortedMessages.length, chat.isLoading]);
 
-  // 如果有初始消息且历史消息为空，自动发送
-  const hasSentInitialMessage = useRef(false);
+  // 如果有初始消息且历史消息为空，自动发送（包括新会话的情况）
+  const hasSentInitialMessage = useRef<string | null>(null);
   useEffect(() => {
-    if (
+    // 新会话（id === 'new'）或已有会话但历史消息为空时，如果有初始消息则自动发送
+    const isNewConversation = id === 'new';
+    // 检查是否已经为这个会话发送过这条初始消息
+    const hasSentForThisMessage = hasSentInitialMessage.current === initialMessage;
+    // 检查 chat.messages 中是否已经包含了相同内容的用户消息
+    const hasMessageInChat = chat.messages.some(
+      (msg) => msg.role === 'user' && msg.content === initialMessage
+    );
+    // 检查 sortedMessages 中是否已经包含了相同内容的用户消息
+    const hasMessageInSorted = sortedMessages.some(
+      (msg) => msg.role === 'user' && msg.content === initialMessage
+    );
+    
+    const shouldAutoSend = 
       initialMessage &&
       !historyLoading &&
       historyMessages.length === 0 &&
-      sortedMessages.length === 0 &&
-      !hasSentInitialMessage.current &&
-      conversationId
-    ) {
-      hasSentInitialMessage.current = true;
+      !hasSentForThisMessage &&
+      !hasMessageInChat &&
+      !hasMessageInSorted &&
+      (isNewConversation || conversationId);
+    
+    if (shouldAutoSend) {
+      hasSentInitialMessage.current = initialMessage;
       // 使用 setTimeout 确保 chat 对象已完全初始化
       setTimeout(() => {
         chat.sendMessage(initialMessage);
       }, 100);
     }
-  }, [initialMessage, historyLoading, historyMessages.length, sortedMessages.length, conversationId, chat]);
+  }, [initialMessage, historyLoading, historyMessages.length, sortedMessages, chat.messages, conversationId, id, chat]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
