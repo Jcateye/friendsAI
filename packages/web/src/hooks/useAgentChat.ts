@@ -7,7 +7,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useChat } from 'ai/react';
 import type { Message as AISDKMessage } from 'ai';
 import type { ToolState } from '../lib/api/types';
-import { api } from '../lib/api/client';
+import { api, clearAuthToken } from '../lib/api/client';
 
 export interface UseAgentChatOptions {
   /**
@@ -120,7 +120,7 @@ function extractToolStates(messages: AISDKMessage[]): ToolState[] {
 }
 
 /**
- * 自定义 fetch 函数，添加认证头
+ * 自定义 fetch 函数，添加认证头并处理 401 错误
  */
 async function fetchWithAuth(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
   const token = getAuthToken();
@@ -139,6 +139,19 @@ async function fetchWithAuth(input: RequestInfo | URL, init?: RequestInit): Prom
       ...init,
       headers,
     });
+    
+    // 检查 401 错误（在返回响应前检查，避免流式响应被破坏）
+    if (response.status === 401) {
+      clearAuthToken();
+      // 如果不在登录页，重定向到登录页并传递错误信息
+      if (window.location.pathname !== '/login') {
+        // 对于流式响应，我们不能读取响应体，所以使用默认错误信息
+        const errorMessage = '登录已过期，请重新登录';
+        const errorParam = encodeURIComponent(errorMessage);
+        window.location.href = `/login?error=${errorParam}`;
+      }
+    }
+    
     return response;
   } catch (error) {
     throw error;
@@ -427,9 +440,56 @@ export function useAgentChat(
     });
   }, [chat]);
 
+  // 使用 ref 保存所有用户消息，防止 stop 时被移除
+  const userMessagesRef = useRef<Map<string, AISDKMessage>>(new Map());
+  
+  // 监听消息变化，保存所有用户消息
+  useEffect(() => {
+    chat.messages.forEach((msg) => {
+      if (msg.role === 'user') {
+        userMessagesRef.current.set(msg.id, msg);
+      }
+    });
+  }, [chat.messages]);
+
+  // 包装 stop 方法，确保用户消息不会被移除
+  const stop = useCallback(() => {
+    // 调用原始的 stop 方法
+    chat.stop();
+    
+    // 在下一个渲染周期后，检查并恢复被移除的用户消息
+    setTimeout(() => {
+      // 检查保存的用户消息是否还在 chat.messages 中
+      const currentUserMessageIds = new Set(
+        chat.messages.filter((msg) => msg.role === 'user').map((msg) => msg.id)
+      );
+      
+      // 恢复所有被移除的用户消息
+      userMessagesRef.current.forEach((savedMsg, savedId) => {
+        if (!currentUserMessageIds.has(savedId)) {
+          // 检查是否已经有相同内容的消息（通过内容匹配）
+          const hasSameContent = chat.messages.some(
+            (msg) => msg.role === 'user' && msg.content === savedMsg.content
+          );
+          
+          // 如果没有相同内容的消息，重新添加
+          if (!hasSameContent) {
+            chat.append({
+              role: 'user',
+              content: savedMsg.content,
+              createdAt: savedMsg.createdAt || new Date(),
+              id: savedMsg.id, // 保持相同的 ID
+            });
+          }
+        }
+      });
+    }, 0);
+  }, [chat]);
+
   return {
     ...chat,
     sendMessage,
+    stop,
     pendingConfirmations,
     confirmTool,
     rejectTool,

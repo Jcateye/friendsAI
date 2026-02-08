@@ -67,6 +67,9 @@ export function ConversationDetailPage() {
 
   const [input, setInput] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  
+  // 使用 ref 保存所有用户消息，防止 stop 时被移除
+  const userMessagesBackupRef = useRef<Map<string, MessageWithMs>>(new Map());
 
   const sortedMessages = useMemo(() => {
     const allMessages = new Map<string, MessageWithMs>();
@@ -74,10 +77,19 @@ export function ConversationDetailPage() {
     // 首先添加 initialMessages（来自数据库，ID 更稳定）
     initialMessages.forEach((message) => {
       allMessages.set(message.id, message);
+      // 如果是用户消息，也保存到备份中
+      if (message.role === 'user') {
+        userMessagesBackupRef.current.set(message.id, message);
+      }
     });
 
     // 然后处理 chat.messages（可能包含临时 ID 的消息）
     chat.messages.forEach((message) => {
+      // 如果是用户消息，保存到备份中
+      if (message.role === 'user') {
+        const messageWithMs = message as MessageWithMs;
+        userMessagesBackupRef.current.set(message.id, messageWithMs);
+      }
       const existingMessage = allMessages.get(message.id);
       
       // 如果 ID 已存在，直接合并
@@ -134,6 +146,26 @@ export function ConversationDetailPage() {
             createdAt: new Date(messageTime),
           };
           allMessages.set(message.id, newMessage);
+        }
+      }
+    });
+    
+    // 最后，确保所有备份的用户消息都在最终列表中（防止 stop 时被移除）
+    userMessagesBackupRef.current.forEach((backupMsg, backupId) => {
+      // 如果备份的消息不在 allMessages 中，添加它
+      if (!allMessages.has(backupId)) {
+        // 检查是否已经有相同内容的消息（通过内容和时间戳匹配）
+        const hasSameContent = Array.from(allMessages.values()).some(
+          (msg) => 
+            msg.role === 'user' && 
+            msg.content === backupMsg.content &&
+            Math.abs((msg.createdAtMs ?? msg.createdAt?.getTime() ?? 0) - 
+                     (backupMsg.createdAtMs ?? backupMsg.createdAt?.getTime() ?? 0)) < 5000
+        );
+        
+        // 如果没有相同内容的消息，添加备份的消息
+        if (!hasSameContent) {
+          allMessages.set(backupId, backupMsg);
         }
       }
     });
