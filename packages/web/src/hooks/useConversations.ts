@@ -76,12 +76,21 @@ export function useConversations(
    */
   const createConversation = useCallback(
     async (data: CreateConversationRequest = {}): Promise<Conversation> => {
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/93473240-e68c-4772-898a-d197a5820b45',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'useConversations.ts:77',message:'createConversation entry',data:{data:JSON.stringify(data)},timestamp:Date.now(),runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+      // #endregion
       try {
         const newConversation = await api.conversations.create(data);
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/93473240-e68c-4772-898a-d197a5820b45',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'useConversations.ts:81',message:'createConversation success',data:{conversationId:newConversation.id},timestamp:Date.now(),runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+        // #endregion
         // 将新会话添加到列表开头
         setConversations((prev) => [newConversation, ...prev]);
         return newConversation;
       } catch (err) {
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/93473240-e68c-4772-898a-d197a5820b45',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'useConversations.ts:87',message:'createConversation error',data:{errorMessage:err instanceof Error?err.message:String(err)},timestamp:Date.now(),runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+        // #endregion
         const error =
           err instanceof Error
             ? err

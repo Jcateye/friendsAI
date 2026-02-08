@@ -1,4 +1,4 @@
-import { useParams } from 'react-router-dom';
+import { useParams, useLocation } from 'react-router-dom';
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { Header } from '../../components/layout/Header';
 import { CustomMessageRenderer } from '../../components/chat/CustomMessageRenderer';
@@ -17,7 +17,9 @@ type MessageWithMs = AISDKMessage & {
 
 export function ConversationDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const location = useLocation();
   const conversationId = id;
+  const initialMessage = (location.state as { initialMessage?: string })?.initialMessage;
 
   const { messages: historyMessages, loading: historyLoading } = useConversationHistory({
     conversationId,
@@ -91,6 +93,25 @@ export function ConversationDetailPage() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [sortedMessages.length]);
 
+  // 如果有初始消息且历史消息为空，自动发送
+  const hasSentInitialMessage = useRef(false);
+  useEffect(() => {
+    if (
+      initialMessage &&
+      !historyLoading &&
+      historyMessages.length === 0 &&
+      sortedMessages.length === 0 &&
+      !hasSentInitialMessage.current &&
+      conversationId
+    ) {
+      hasSentInitialMessage.current = true;
+      // 使用 setTimeout 确保 chat 对象已完全初始化
+      setTimeout(() => {
+        chat.sendMessage(initialMessage);
+      }, 100);
+    }
+  }, [initialMessage, historyLoading, historyMessages.length, sortedMessages.length, conversationId, chat]);
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!input.trim() || chat.isLoading) {
@@ -103,7 +124,7 @@ export function ConversationDetailPage() {
   return (
     <div className="flex flex-col h-full bg-bg-page">
       <Header
-        title={historyLoading ? '加载中...' : '会话详情'}
+        title={historyLoading ? '加载中...' : '对话'}
         showBack
       />
 

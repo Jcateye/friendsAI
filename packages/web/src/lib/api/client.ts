@@ -270,10 +270,16 @@ export const api = {
      * 创建新会话
      */
     async create(request: CreateConversationRequest): Promise<Conversation> {
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/93473240-e68c-4772-898a-d197a5820b45',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'client.ts:272',message:'api.conversations.create entry',data:{request:JSON.stringify(request),hasToken:!!getAuthToken()},timestamp:Date.now(),runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+      // #endregion
       const response = await fetchWithAuth(`${API_BASE}/conversations`, {
         method: 'POST',
         body: JSON.stringify(request),
       });
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/93473240-e68c-4772-898a-d197a5820b45',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'client.ts:277',message:'after fetch response',data:{status:response.status,statusText:response.statusText,ok:response.ok},timestamp:Date.now(),runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+      // #endregion
       return handleResponse<Conversation>(response);
     },
 
