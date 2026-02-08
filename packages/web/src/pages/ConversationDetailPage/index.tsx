@@ -1,14 +1,14 @@
 import { useParams, useLocation, useNavigate } from 'react-router-dom';
-import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { useEffect, useRef, useMemo, useCallback } from 'react';
 import { Header } from '../../components/layout/Header';
 import { CustomMessageRenderer } from '../../components/chat/CustomMessageRenderer';
 import { ToolConfirmationOverlay } from '../../components/chat/ToolConfirmationOverlay';
+import { ChatInputBox, type AttachedFile } from '../../components/chat/ChatInputBox';
 import { useConversationHistory } from '../../hooks/useConversationHistory';
 import { useAgentChat } from '../../hooks/useAgentChat';
 import { useToolConfirmations } from '../../hooks/useToolConfirmations';
 import { sortMessagesByCreatedAt } from '../../lib/messages/sortMessagesByCreatedAt';
 import { resolveEpochMs } from '../../lib/time/timestamp';
-import { Send, Square } from 'lucide-react';
 import type { Message as AISDKMessage } from 'ai';
 
 type MessageWithMs = AISDKMessage & {
@@ -65,9 +65,8 @@ export function ConversationDetailPage() {
     toolStates,
   });
 
-  const [input, setInput] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  
+
   // 使用 ref 保存所有用户消息，防止 stop 时被移除
   const userMessagesBackupRef = useRef<Map<string, MessageWithMs>>(new Map());
 
@@ -211,20 +210,17 @@ export function ConversationDetailPage() {
     }
   }, [initialMessage, historyLoading, historyMessages.length, sortedMessages, chat.messages, conversationId, id, chat]);
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    // 如果正在加载，点击按钮应该停止生成
-    if (chat.isLoading) {
-      chat.stop();
-      return;
-    }
-    // 如果输入为空，不发送
-    if (!input.trim()) {
-      return;
-    }
-    chat.sendMessage(input);
-    setInput('');
-  };
+  // 处理发送消息
+  const handleSendMessage = useCallback((content: string, _files?: AttachedFile[], _tools?: string[]) => {
+    // TODO: 处理文件上传和工具选择
+    // 目前只发送文本内容
+    chat.sendMessage(content);
+  }, [chat]);
+
+  // 处理停止生成
+  const handleStop = useCallback(() => {
+    chat.stop();
+  }, [chat]);
 
   return (
     <div className="flex flex-col h-full bg-bg-page">
@@ -290,27 +286,14 @@ export function ConversationDetailPage() {
         )}
       </div>
 
-      <form onSubmit={handleSubmit} className="flex items-center gap-2 p-4 bg-bg-card border-t border-border shrink-0">
-        <input
-          type="text"
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          placeholder="输入消息..."
-          className="flex-1 px-4 py-3 bg-bg-surface rounded-full text-[15px] text-text-primary placeholder:text-text-muted outline-none focus:ring-2 focus:ring-primary font-primary"
-        />
-        <button
-          type="submit"
-          disabled={!input.trim() && !chat.isLoading}
-          className="w-12 h-12 flex items-center justify-center rounded-full bg-primary disabled:bg-text-muted disabled:opacity-50 transition-opacity shrink-0"
-          aria-label={chat.isLoading ? '停止生成' : '发送消息'}
-        >
-          {chat.isLoading ? (
-            <Square className="w-5 h-5 text-white fill-white" />
-          ) : (
-            <Send className="w-5 h-5 text-white" />
-          )}
-        </button>
-      </form>
+      {/* Chat Input Box */}
+      <ChatInputBox
+        onSendMessage={handleSendMessage}
+        onStop={handleStop}
+        isLoading={chat.isLoading}
+        placeholder="输入消息..."
+        disabled={false}
+      />
 
       {pendingConfirmations.length > 0 && (
         <ToolConfirmationOverlay
