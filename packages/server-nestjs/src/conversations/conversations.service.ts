@@ -45,4 +45,18 @@ export class ConversationsService {
       where: userId ? { id, userId } : { id },
     });
   }
+
+  async updateSummary(conversationId: string, summary: string): Promise<Conversation> {
+    const conversation = await this.conversationRepository.findOne({
+      where: { id: conversationId },
+    });
+
+    if (!conversation) {
+      throw new Error(`Conversation ${conversationId} not found`);
+    }
+
+    conversation.summary = summary;
+    conversation.updatedAt = new Date();
+    return this.conversationRepository.save(conversation);
+  }
 }

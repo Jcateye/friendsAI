@@ -164,7 +164,7 @@ async function fetchWithAuth(input: RequestInfo | URL, init?: RequestInit): Prom
 function createFetchWithConversationId(
   onConversationCreated?: (conversationId: string) => void,
   getConversationId?: () => string | undefined
-): typeof fetch {
+): (input: RequestInfo | URL, init?: RequestInit) => Promise<Response> {
   return async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
     // 在发送请求前，修改请求体以添加最新的 conversationId
     let modifiedInit = init;

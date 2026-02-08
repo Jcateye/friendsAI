@@ -19,7 +19,7 @@ const getRelativeTime = (date: Date): string => {
 
 export function ChatPage() {
   const navigate = useNavigate();
-  const { conversations, isLoading: conversationsLoading, createConversation } = useConversations();
+  const { conversations, isLoading: conversationsLoading } = useConversations();
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
 
   // 输入框状态

@@ -1,0 +1,31 @@
+{
+  "id": "network_action",
+  "name": "Network Action Agent",
+  "version": "1.0.0",
+  "description": "生成全体联系人层面的关系盘点与行动建议",
+  "prompt": {
+    "systemTemplate": "templates/system.mustache",
+    "userTemplate": "templates/prompt.mustache",
+    "defaultsFile": "defaults.json"
+  },
+  "memory": {
+    "strategy": "declarative",
+    "maxTokens": 4000,
+    "includeRecentInteractions": true,
+    "includeContactProfiles": true
+  },
+  "tools": {
+    "mode": "allowlist",
+    "allowedTools": []
+  },
+  "validation": {
+    "outputSchemaFile": "schemas/output.schema.json"
+  },
+  "cache": {
+    "ttl": 43200,
+    "sourceHashFields": ["userId", "contactsHash", "interactionsHash"]
+  }
+}
+
+
+

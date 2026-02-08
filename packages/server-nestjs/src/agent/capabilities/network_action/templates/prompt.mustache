@@ -1,0 +1,30 @@
+基于以下联系人网络数据，生成关系盘点与行动建议。
+
+## 联系人概览
+{{#contacts}}
+- {{name}}{{#company}} ({{company}}){{/company}}{{#position}} - {{position}}{{/position}}: {{lastInteractionAt}} 最后交互
+{{/contacts}}
+{{^contacts}}
+暂无联系人数据。
+{{/contacts}}
+
+## 最近交互记录（最近30天）
+{{#recentInteractions}}
+- {{date}}: {{summary}}
+{{/recentInteractions}}
+{{^recentInteractions}}
+暂无最近交互记录。
+{{/recentInteractions}}
+
+## 统计信息
+- 总联系人数量: {{metadata.totalContacts}}
+- 最近交互数量: {{metadata.totalInteractions}}
+
+请生成：
+1. **followUps**: 需要跟进的联系人列表（至少3-5个，按优先级排序）
+2. **recommendations**: 关系网络建议（至少2-3个）
+3. **synthesis**: 整体关系盘点（200-300字）
+4. **nextActions**: 可执行的下一步行动（至少3-5个）
+
+
+

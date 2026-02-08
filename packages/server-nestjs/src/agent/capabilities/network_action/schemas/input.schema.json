@@ -1,0 +1,25 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "userId": {
+      "type": "string",
+      "description": "用户 ID"
+    },
+    "limit": {
+      "type": "number",
+      "description": "可选：限制返回数量",
+      "minimum": 1,
+      "maximum": 100
+    },
+    "forceRefresh": {
+      "type": "boolean",
+      "description": "可选：强制刷新缓存",
+      "default": false
+    }
+  },
+  "required": ["userId"]
+}
+
+
+

@@ -1,0 +1,50 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "oneOf": [
+    {
+      "type": "object",
+      "properties": {
+        "operation": {
+          "const": "archive_extract"
+        },
+        "id": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string"
+        },
+        "summary": {
+          "type": "string"
+        },
+        "payload": {
+          "type": "object"
+        }
+      },
+      "required": ["operation", "id", "status", "summary", "payload"]
+    },
+    {
+      "type": "object",
+      "properties": {
+        "operation": {
+          "const": "brief_generate"
+        },
+        "id": {
+          "type": "string"
+        },
+        "contact_id": {
+          "type": "string"
+        },
+        "content": {
+          "type": "string"
+        },
+        "generated_at": {
+          "type": "string"
+        }
+      },
+      "required": ["operation", "id", "contact_id", "content", "generated_at"]
+    }
+  ]
+}
+
+
+

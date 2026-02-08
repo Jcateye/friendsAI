@@ -124,7 +124,7 @@ export function ConversationDetailPage() {
         ) ?? Date.now();
 
         let foundDuplicate = false;
-        for (const [existingId, existingMsg] of allMessages.entries()) {
+        for (const [, existingMsg] of allMessages.entries()) {
           if (
             existingMsg.role === messageRole &&
             existingMsg.content === messageContent

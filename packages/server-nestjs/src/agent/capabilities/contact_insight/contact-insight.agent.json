@@ -1,0 +1,29 @@
+{
+  "id": "contact_insight",
+  "name": "Contact Insight Agent",
+  "version": "1.0.0",
+  "description": "生成联系人洞察分析，包括关系信号、机会、风险和行动建议",
+  "prompt": {
+    "systemTemplate": "templates/system.mustache",
+    "userTemplate": "templates/prompt.mustache",
+    "defaultsFile": "defaults.json"
+  },
+  "memory": {
+    "strategy": "contact",
+    "maxTokens": 4000
+  },
+  "tools": {
+    "mode": "none"
+  },
+  "validation": {
+    "inputSchemaFile": "schemas/input.schema.json",
+    "outputSchemaFile": "schemas/output.schema.json"
+  },
+  "cache": {
+    "ttl": 21600,
+    "sourceHashFields": ["userId", "contactId", "depth"]
+  }
+}
+
+
+

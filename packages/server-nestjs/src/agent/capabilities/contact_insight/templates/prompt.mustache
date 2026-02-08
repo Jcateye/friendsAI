@@ -1,0 +1,35 @@
+请分析以下联系人信息，生成深度洞察：
+
+联系人ID: {{contactId}}
+分析深度: {{depth}}
+
+{{#contact}}
+姓名: {{name}}
+公司: {{company}}
+职位: {{position}}
+标签: {{tags}}
+{{/contact}}
+
+{{#recentInteractions}}
+最近交互记录:
+{{#.}}
+- 时间: {{timestamp}}
+- 类型: {{type}}
+- 摘要: {{summary}}
+{{/.}}
+{{/recentInteractions}}
+
+{{#relatedContacts}}
+相关联系人:
+{{#.}}
+- {{name}} ({{relationship}})
+{{/.}}
+{{/relatedContacts}}
+
+请根据分析深度（{{depth}}）生成相应的洞察内容：
+- brief: 简要分析
+- standard: 标准分析（默认）
+- deep: 深度分析
+
+
+

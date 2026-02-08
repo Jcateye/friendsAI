@@ -1,0 +1,37 @@
+{{#operation}}
+Operation: {{operation}}
+{{/operation}}
+
+{{#archive_extract}}
+Please extract and summarize the following conversation archive:
+
+Conversation ID: {{conversationId}}
+Content: {{content}}
+{{#messages}}
+{{role}}: {{content}}
+{{/messages}}
+
+Generate a structured summary with key points and insights.
+{{/archive_extract}}
+
+{{#brief_generate}}
+Please generate a comprehensive briefing for the following contact:
+
+Contact ID: {{contactId}}
+Name: {{name}}
+{{#company}}Company: {{company}}{{/company}}
+{{#position}}Position: {{position}}{{/position}}
+{{#tags}}Tags: {{tags}}{{/tags}}
+
+{{#recentInteractions}}
+Recent Interactions:
+{{#.}}
+- {{.}}
+{{/.}}
+{{/recentInteractions}}
+
+Generate a comprehensive briefing covering background, relationship status, key interactions, and recommendations.
+{{/brief_generate}}
+
+
+

@@ -1,16 +1,18 @@
-import { Body, Controller, Get, HttpCode, Post, Query, Req, Res } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Post, Query, Req, Res, NotFoundException } from '@nestjs/common';
 import type { Request, Response } from 'express';
 import { AgentOrchestrator } from './agent.orchestrator';
 import { AgentMessageStore } from './agent-message.store';
-import type { AgentChatRequest, AgentStreamEvent } from './agent.types';
+import type { AgentChatRequest, AgentRunRequest, AgentRunResponse, AgentStreamEvent } from './agent.types';
 import type { AgentError, AgentRunEnd, AgentSseEvent } from './client-types';
 import { VercelAiStreamAdapter } from './adapters/vercel-ai-stream.adapter';
+import { AgentRuntimeExecutor } from './runtime/agent-runtime-executor.service';
 
 @Controller('agent')
 export class AgentController {
   constructor(
     private readonly agentOrchestrator: AgentOrchestrator,
     private readonly messageStore: AgentMessageStore,
+    private readonly agentRuntimeExecutor: AgentRuntimeExecutor,
   ) {}
 
   @Post('chat')
@@ -119,6 +121,51 @@ export class AgentController {
         }
         res.end();
       }
+    }
+  }
+
+  @Post('run')
+  @HttpCode(200)
+  async run(
+    @Req() req: Request,
+    @Body() body: AgentRunRequest,
+  ): Promise<AgentRunResponse> {
+    const userId = (req.user as { id?: string } | undefined)?.id ?? body.userId;
+
+    try {
+      const result = await this.agentRuntimeExecutor.execute(
+        body.agentId,
+        body.operation,
+        body.input,
+        {
+          useCache: body.options?.useCache,
+          forceRefresh: body.options?.forceRefresh,
+          userId,
+          conversationId: body.conversationId,
+          sessionId: body.sessionId,
+        }
+      );
+
+      const now = new Date();
+      return {
+        runId: result.runId,
+        agentId: body.agentId,
+        operation: body.operation ?? null,
+        cached: result.cached,
+        snapshotId: result.snapshotId,
+        generatedAt: now.toISOString(),
+        generatedAtMs: now.getTime(),
+        data: result.data,
+      };
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+      // 其他错误转换为标准格式
+      throw new NotFoundException({
+        code: 'agent_execution_failed',
+        message: error instanceof Error ? error.message : 'Unknown error',
+      });
     }
   }
 

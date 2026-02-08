@@ -15,6 +15,9 @@ export class Conversation {
   @Column({ type: 'text' })
   content: string;
 
+  @Column({ type: 'text', nullable: true })
+  summary: string | null;
+
   @Column({ type: 'vector', nullable: true })
   embedding: number[] | null;
 
