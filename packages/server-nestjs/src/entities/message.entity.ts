@@ -38,6 +38,9 @@ export class Message {
   })
   createdAtMs: number;
 
+  @Column({ type: 'text', nullable: true, default: 'active' })
+  status: 'active' | 'abandoned' | null;
+
   @CreateDateColumn({ type: 'bigint', transformer: timestampMsTransformer })
   createdAt: Date;
 }

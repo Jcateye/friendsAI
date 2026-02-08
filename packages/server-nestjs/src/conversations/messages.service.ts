@@ -12,6 +12,7 @@ interface AppendMessageInput {
   metadata?: Record<string, any>;
   citations?: Record<string, any>;
   createdAtMs?: number;
+  status?: 'active' | 'abandoned';
 }
 
 @Injectable()
@@ -29,6 +30,10 @@ export class MessagesService {
   ): Promise<Message> {
     await this.getConversation(conversationId, input.userId);
 
+    const createdAtMs = Number.isFinite(input.createdAtMs)
+      ? Number(input.createdAtMs)
+      : Date.now();
+    
     const message = this.messageRepository.create({
       id: input.id ?? generateUlid(),
       role: input.role,
@@ -36,12 +41,13 @@ export class MessagesService {
       metadata: input.metadata ?? null,
       citations: input.citations ?? null,
       conversationId,
-      createdAtMs: Number.isFinite(input.createdAtMs)
-        ? Number(input.createdAtMs)
-        : Date.now(),
+      createdAtMs,
+      createdAt: new Date(createdAtMs),
+      status: input.status ?? 'active',
     });
 
     const saved = await this.messageRepository.save(message);
+
     await this.conversationRepository.update(conversationId, { updatedAt: new Date() });
     return saved;
   }
@@ -54,6 +60,7 @@ export class MessagesService {
     const limit = Math.min(Math.max(options?.limit ?? 50, 1), 200);
     const qb = this.messageRepository.createQueryBuilder('message')
       .where('message.conversationId = :conversationId', { conversationId })
+      .andWhere('(message.status IS NULL OR message.status != :abandonedStatus)', { abandonedStatus: 'abandoned' })
       .orderBy('message.createdAtMs', 'ASC')
       .addOrderBy('message.id', 'ASC')
       .limit(limit);

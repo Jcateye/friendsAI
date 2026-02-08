@@ -16,7 +16,8 @@ export const timestampMsTransformer: ValueTransformer = {
     if (value === null || value === undefined) {
       return null;
     }
-    return toNumber(value);
+    const result = toNumber(value);
+    return result;
   },
   from: (value: string | number | null | undefined): Date | null => {
     if (value === null || value === undefined) {
