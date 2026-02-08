@@ -104,7 +104,7 @@ export function SkillPanel({
 
         {skills.map((skill) => {
           const isActive = activeSkillId === skill.id;
-          const isExpanded = expandedSkillId === skillId;
+          const isExpanded = expandedSkillId === skill.id;
 
           return (
             <div key={skill.id} className="relative shrink-0">
