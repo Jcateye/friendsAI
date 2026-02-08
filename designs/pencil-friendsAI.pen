@@ -1,5 +1,5 @@
 {
-  "version": "2.6",
+  "version": "2.7",
   "children": [
     {
       "type": "frame",
@@ -15,75 +15,9 @@
       "children": [
         {
           "type": "frame",
-          "id": "AgEAl",
-          "x": 0,
-          "y": 0,
-          "name": "statusBar2",
-          "width": 375,
-          "height": 44,
-          "padding": [
-            0,
-            16
-          ],
-          "justifyContent": "space_between",
-          "alignItems": "center",
-          "children": [
-            {
-              "type": "text",
-              "id": "W6JtK",
-              "name": "timeText2",
-              "fill": "#2D2D2D",
-              "content": "9:41",
-              "fontFamily": "Plus Jakarta Sans",
-              "fontSize": 15,
-              "fontWeight": "600"
-            },
-            {
-              "type": "frame",
-              "id": "TFn0y",
-              "name": "statusIcons2",
-              "gap": 6,
-              "alignItems": "center",
-              "children": [
-                {
-                  "type": "icon_font",
-                  "id": "CgGwS",
-                  "name": "signalIcon2",
-                  "width": 16,
-                  "height": 16,
-                  "iconFontName": "signal",
-                  "iconFontFamily": "lucide",
-                  "fill": "#2D2D2D"
-                },
-                {
-                  "type": "icon_font",
-                  "id": "AL7uH",
-                  "name": "wifiIcon2",
-                  "width": 16,
-                  "height": 16,
-                  "iconFontName": "wifi",
-                  "iconFontFamily": "lucide",
-                  "fill": "#2D2D2D"
-                },
-                {
-                  "type": "icon_font",
-                  "id": "4ePZd",
-                  "name": "batteryIcon2",
-                  "width": 22,
-                  "height": 16,
-                  "iconFontName": "battery-full",
-                  "iconFontFamily": "lucide",
-                  "fill": "#2D2D2D"
-                }
-              ]
-            }
-          ]
-        },
-        {
-          "type": "frame",
           "id": "gajyQ",
           "x": 0,
-          "y": 44,
+          "y": 0,
           "name": "header2",
           "width": 375,
           "height": 56,
@@ -142,11 +76,11 @@
           "type": "frame",
           "id": "qAgWZ",
           "x": 0,
-          "y": 100,
+          "y": 56,
           "name": "scrollContent2",
           "clip": true,
           "width": 375,
-          "height": 712,
+          "height": 756,
           "fill": "#F7F6F3",
           "layout": "vertical",
           "padding": 16,
@@ -740,124 +674,13 @@
       "children": [
         {
           "type": "frame",
-          "id": "P5Fw2",
-          "x": 0,
-          "y": 0,
-          "name": "statusBar2",
-          "width": 375,
-          "height": 44,
-          "padding": [
-            0,
-            16
-          ],
-          "justifyContent": "space_between",
-          "alignItems": "center",
-          "children": [
-            {
-              "type": "text",
-              "id": "CNfO5",
-              "name": "timeText2",
-              "fill": "#2D2D2D",
-              "content": "9:41",
-              "fontFamily": "Plus Jakarta Sans",
-              "fontSize": 15,
-              "fontWeight": "600"
-            },
-            {
-              "type": "frame",
-              "id": "Kwu3u",
-              "name": "statusIcons2",
-              "gap": 6,
-              "alignItems": "center",
-              "children": [
-                {
-                  "type": "icon_font",
-                  "id": "jY0rm",
-                  "name": "signalIcon2",
-                  "width": 16,
-                  "height": 16,
-                  "iconFontName": "signal",
-                  "iconFontFamily": "lucide",
-                  "fill": "#2D2D2D"
-                },
-                {
-                  "type": "icon_font",
-                  "id": "LSyNx",
-                  "name": "wifiIcon2",
-                  "width": 16,
-                  "height": 16,
-                  "iconFontName": "wifi",
-                  "iconFontFamily": "lucide",
-                  "fill": "#2D2D2D"
-                },
-                {
-                  "type": "icon_font",
-                  "id": "13Vnw",
-                  "name": "batteryIcon2",
-                  "width": 22,
-                  "height": 16,
-                  "iconFontName": "battery-full",
-                  "iconFontFamily": "lucide",
-                  "fill": "#2D2D2D"
-                }
-              ]
-            }
-          ]
-        },
-        {
-          "type": "frame",
-          "id": "qznwn",
-          "x": 0,
-          "y": 44,
-          "name": "header2",
-          "width": 375,
-          "height": 56,
-          "fill": "#FFFFFF",
-          "padding": [
-            0,
-            16
-          ],
-          "justifyContent": "space_between",
-          "alignItems": "center",
-          "children": [
-            {
-              "type": "icon_font",
-              "id": "IlibH",
-              "name": "backBtn2",
-              "width": 24,
-              "height": 24,
-              "iconFontName": "chevron-left",
-              "iconFontFamily": "lucide",
-              "fill": "#2D2D2D"
-            },
-            {
-              "type": "text",
-              "id": "DIrhH",
-              "name": "headerTitle2",
-              "fill": "#2D2D2D",
-              "content": "对话",
-              "fontFamily": "Fraunces",
-              "fontSize": 18,
-              "fontWeight": "600"
-            },
-            {
-              "type": "frame",
-              "id": "tD9TP",
-              "name": "headerRight2",
-              "width": 24,
-              "height": 24
-            }
-          ]
-        },
-        {
-          "type": "frame",
           "id": "mdsiW",
           "x": 0,
-          "y": 100,
+          "y": 65,
           "name": "scrollContent2",
           "clip": true,
           "width": 375,
-          "height": 712,
+          "height": 747,
           "fill": "#F7F6F3",
           "layout": "vertical",
           "gap": 12,
@@ -999,12 +822,57 @@
         },
         {
           "type": "frame",
-          "id": "MSxCZ",
+          "id": "qznwn",
           "x": 0,
           "y": 0,
+          "name": "header2",
+          "width": 375,
+          "height": 56,
+          "fill": "#FFFFFF",
+          "padding": [
+            0,
+            16
+          ],
+          "justifyContent": "space_between",
+          "alignItems": "center",
+          "children": [
+            {
+              "type": "icon_font",
+              "id": "IlibH",
+              "name": "backBtn2",
+              "width": 24,
+              "height": 24,
+              "iconFontName": "chevron-left",
+              "iconFontFamily": "lucide",
+              "fill": "#2D2D2D"
+            },
+            {
+              "type": "text",
+              "id": "DIrhH",
+              "name": "headerTitle2",
+              "fill": "#2D2D2D",
+              "content": "对话",
+              "fontFamily": "Fraunces",
+              "fontSize": 18,
+              "fontWeight": "600"
+            },
+            {
+              "type": "frame",
+              "id": "tD9TP",
+              "name": "headerRight2",
+              "width": 24,
+              "height": 24
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "MSxCZ",
+          "x": 0,
+          "y": 65,
           "name": "bottomSheetOverlay",
           "width": 375,
-          "height": 812,
+          "height": 747,
           "fill": "#00000050",
           "layout": "vertical",
           "justifyContent": "end",
@@ -1796,70 +1664,6 @@
       "children": [
         {
           "type": "frame",
-          "id": "6kvpr",
-          "name": "statusBar",
-          "width": "fill_container",
-          "height": 44,
-          "padding": [
-            0,
-            16
-          ],
-          "justifyContent": "space_between",
-          "alignItems": "center",
-          "children": [
-            {
-              "type": "text",
-              "id": "bt78Z",
-              "name": "timeText",
-              "fill": "#2D2D2D",
-              "content": "9:41",
-              "fontFamily": "Plus Jakarta Sans",
-              "fontSize": 15,
-              "fontWeight": "600"
-            },
-            {
-              "type": "frame",
-              "id": "UiqpE",
-              "name": "statusIcons",
-              "gap": 6,
-              "alignItems": "center",
-              "children": [
-                {
-                  "type": "icon_font",
-                  "id": "7c2lo",
-                  "name": "signalIcon",
-                  "width": 16,
-                  "height": 16,
-                  "iconFontName": "signal",
-                  "iconFontFamily": "lucide",
-                  "fill": "#2D2D2D"
-                },
-                {
-                  "type": "icon_font",
-                  "id": "IDdkt",
-                  "name": "wifiIcon",
-                  "width": 16,
-                  "height": 16,
-                  "iconFontName": "wifi",
-                  "iconFontFamily": "lucide",
-                  "fill": "#2D2D2D"
-                },
-                {
-                  "type": "icon_font",
-                  "id": "eIsnz",
-                  "name": "batteryIcon",
-                  "width": 22,
-                  "height": 16,
-                  "iconFontName": "battery-full",
-                  "iconFontFamily": "lucide",
-                  "fill": "#2D2D2D"
-                }
-              ]
-            }
-          ]
-        },
-        {
-          "type": "frame",
           "id": "keOfn",
           "name": "header",
           "width": "fill_container",
@@ -2417,70 +2221,6 @@
       "fill": "#F7F6F3",
       "layout": "vertical",
       "children": [
-        {
-          "type": "frame",
-          "id": "10VGs",
-          "name": "statusBar3",
-          "width": "fill_container",
-          "height": 44,
-          "padding": [
-            0,
-            16
-          ],
-          "justifyContent": "space_between",
-          "alignItems": "center",
-          "children": [
-            {
-              "type": "text",
-              "id": "xj6Ck",
-              "name": "timeText3",
-              "fill": "#2D2D2D",
-              "content": "9:41",
-              "fontFamily": "Plus Jakarta Sans",
-              "fontSize": 15,
-              "fontWeight": "600"
-            },
-            {
-              "type": "frame",
-              "id": "L0fOP",
-              "name": "statusIcons3",
-              "gap": 6,
-              "alignItems": "center",
-              "children": [
-                {
-                  "type": "icon_font",
-                  "id": "ewtOQ",
-                  "name": "signalIcon3",
-                  "width": 16,
-                  "height": 16,
-                  "iconFontName": "signal",
-                  "iconFontFamily": "lucide",
-                  "fill": "#2D2D2D"
-                },
-                {
-                  "type": "icon_font",
-                  "id": "3G0Sj",
-                  "name": "wifiIcon3",
-                  "width": 16,
-                  "height": 16,
-                  "iconFontName": "wifi",
-                  "iconFontFamily": "lucide",
-                  "fill": "#2D2D2D"
-                },
-                {
-                  "type": "icon_font",
-                  "id": "sKzal",
-                  "name": "batteryIcon3",
-                  "width": 22,
-                  "height": 16,
-                  "iconFontName": "battery-full",
-                  "iconFontFamily": "lucide",
-                  "fill": "#2D2D2D"
-                }
-              ]
-            }
-          ]
-        },
         {
           "type": "frame",
           "id": "UdpGh",
@@ -3198,70 +2938,6 @@
       "children": [
         {
           "type": "frame",
-          "id": "2vVCf",
-          "name": "statusBar4",
-          "width": "fill_container",
-          "height": 44,
-          "padding": [
-            0,
-            16
-          ],
-          "justifyContent": "space_between",
-          "alignItems": "center",
-          "children": [
-            {
-              "type": "text",
-              "id": "CThth",
-              "name": "timeText4",
-              "fill": "#2D2D2D",
-              "content": "9:41",
-              "fontFamily": "Plus Jakarta Sans",
-              "fontSize": 15,
-              "fontWeight": "600"
-            },
-            {
-              "type": "frame",
-              "id": "fej8m",
-              "name": "statusIcons4",
-              "gap": 6,
-              "alignItems": "center",
-              "children": [
-                {
-                  "type": "icon_font",
-                  "id": "TySeH",
-                  "name": "signalIcon4",
-                  "width": 16,
-                  "height": 16,
-                  "iconFontName": "signal",
-                  "iconFontFamily": "lucide",
-                  "fill": "#2D2D2D"
-                },
-                {
-                  "type": "icon_font",
-                  "id": "08pqM",
-                  "name": "wifiIcon4",
-                  "width": 16,
-                  "height": 16,
-                  "iconFontName": "wifi",
-                  "iconFontFamily": "lucide",
-                  "fill": "#2D2D2D"
-                },
-                {
-                  "type": "icon_font",
-                  "id": "luOgz",
-                  "name": "batteryIcon4",
-                  "width": 22,
-                  "height": 16,
-                  "iconFontName": "battery-full",
-                  "iconFontFamily": "lucide",
-                  "fill": "#2D2D2D"
-                }
-              ]
-            }
-          ]
-        },
-        {
-          "type": "frame",
           "id": "x1Awp",
           "name": "header4",
           "width": "fill_container",
@@ -3879,70 +3555,6 @@
       "fill": "#F7F6F3",
       "layout": "vertical",
       "children": [
-        {
-          "type": "frame",
-          "id": "OJGjx",
-          "name": "statusBar5",
-          "width": "fill_container",
-          "height": 44,
-          "padding": [
-            0,
-            16
-          ],
-          "justifyContent": "space_between",
-          "alignItems": "center",
-          "children": [
-            {
-              "type": "text",
-              "id": "xhGBc",
-              "name": "timeText5",
-              "fill": "#2D2D2D",
-              "content": "9:41",
-              "fontFamily": "Plus Jakarta Sans",
-              "fontSize": 15,
-              "fontWeight": "600"
-            },
-            {
-              "type": "frame",
-              "id": "lqw0d",
-              "name": "statusIcons5",
-              "gap": 6,
-              "alignItems": "center",
-              "children": [
-                {
-                  "type": "icon_font",
-                  "id": "Qb2KQ",
-                  "name": "signalIcon5",
-                  "width": 16,
-                  "height": 16,
-                  "iconFontName": "signal",
-                  "iconFontFamily": "lucide",
-                  "fill": "#2D2D2D"
-                },
-                {
-                  "type": "icon_font",
-                  "id": "vpBjB",
-                  "name": "wifiIcon5",
-                  "width": 16,
-                  "height": 16,
-                  "iconFontName": "wifi",
-                  "iconFontFamily": "lucide",
-                  "fill": "#2D2D2D"
-                },
-                {
-                  "type": "icon_font",
-                  "id": "c66yJ",
-                  "name": "batteryIcon5",
-                  "width": 22,
-                  "height": 16,
-                  "iconFontName": "battery-full",
-                  "iconFontFamily": "lucide",
-                  "fill": "#2D2D2D"
-                }
-              ]
-            }
-          ]
-        },
         {
           "type": "frame",
           "id": "aKTen",
@@ -4729,70 +4341,6 @@
       "children": [
         {
           "type": "frame",
-          "id": "K4fGv",
-          "name": "statusBar6",
-          "width": "fill_container",
-          "height": 44,
-          "padding": [
-            0,
-            16
-          ],
-          "justifyContent": "space_between",
-          "alignItems": "center",
-          "children": [
-            {
-              "type": "text",
-              "id": "YC8ul",
-              "name": "timeText6",
-              "fill": "#2D2D2D",
-              "content": "9:41",
-              "fontFamily": "Plus Jakarta Sans",
-              "fontSize": 15,
-              "fontWeight": "600"
-            },
-            {
-              "type": "frame",
-              "id": "SJQje",
-              "name": "statusIcons6",
-              "gap": 6,
-              "alignItems": "center",
-              "children": [
-                {
-                  "type": "icon_font",
-                  "id": "5nnIx",
-                  "name": "signalIcon6",
-                  "width": 16,
-                  "height": 16,
-                  "iconFontName": "signal",
-                  "iconFontFamily": "lucide",
-                  "fill": "#2D2D2D"
-                },
-                {
-                  "type": "icon_font",
-                  "id": "nWLDW",
-                  "name": "wifiIcon6",
-                  "width": 16,
-                  "height": 16,
-                  "iconFontName": "wifi",
-                  "iconFontFamily": "lucide",
-                  "fill": "#2D2D2D"
-                },
-                {
-                  "type": "icon_font",
-                  "id": "Uu3kL",
-                  "name": "batteryIcon6",
-                  "width": 22,
-                  "height": 16,
-                  "iconFontName": "battery-full",
-                  "iconFontFamily": "lucide",
-                  "fill": "#2D2D2D"
-                }
-              ]
-            }
-          ]
-        },
-        {
-          "type": "frame",
           "id": "8mokr",
           "name": "header6",
           "width": "fill_container",
@@ -5488,70 +5036,6 @@
       "children": [
         {
           "type": "frame",
-          "id": "PsE45",
-          "name": "statusBar7",
-          "width": "fill_container",
-          "height": 44,
-          "padding": [
-            0,
-            16
-          ],
-          "justifyContent": "space_between",
-          "alignItems": "center",
-          "children": [
-            {
-              "type": "text",
-              "id": "5v0V4",
-              "name": "timeText7",
-              "fill": "#2D2D2D",
-              "content": "9:41",
-              "fontFamily": "Plus Jakarta Sans",
-              "fontSize": 15,
-              "fontWeight": "600"
-            },
-            {
-              "type": "frame",
-              "id": "HRRRi",
-              "name": "statusIcons7",
-              "gap": 6,
-              "alignItems": "center",
-              "children": [
-                {
-                  "type": "icon_font",
-                  "id": "GTnuG",
-                  "name": "signalIcon7",
-                  "width": 16,
-                  "height": 16,
-                  "iconFontName": "signal",
-                  "iconFontFamily": "lucide",
-                  "fill": "#2D2D2D"
-                },
-                {
-                  "type": "icon_font",
-                  "id": "opXX1",
-                  "name": "wifiIcon7",
-                  "width": 16,
-                  "height": 16,
-                  "iconFontName": "wifi",
-                  "iconFontFamily": "lucide",
-                  "fill": "#2D2D2D"
-                },
-                {
-                  "type": "icon_font",
-                  "id": "htz0Z",
-                  "name": "batteryIcon7",
-                  "width": 22,
-                  "height": 16,
-                  "iconFontName": "battery-full",
-                  "iconFontFamily": "lucide",
-                  "fill": "#2D2D2D"
-                }
-              ]
-            }
-          ]
-        },
-        {
-          "type": "frame",
           "id": "WlWID",
           "name": "header7",
           "width": "fill_container",
@@ -6153,7 +5637,8 @@
               "type": "frame",
               "id": "F7OHH",
               "name": "drawerTop",
-              "width": "fill_container",
+              "width": 301,
+              "height": 206,
               "layout": "vertical",
               "gap": 16,
               "padding": [
@@ -6660,70 +6145,6 @@
       "children": [
         {
           "type": "frame",
-          "id": "Pefzk",
-          "name": "statusBar",
-          "width": "fill_container",
-          "height": 44,
-          "padding": [
-            0,
-            16
-          ],
-          "justifyContent": "space_between",
-          "alignItems": "center",
-          "children": [
-            {
-              "type": "text",
-              "id": "fWHTK",
-              "name": "timeText",
-              "fill": "#2D2D2D",
-              "content": "9:41",
-              "fontFamily": "Plus Jakarta Sans",
-              "fontSize": 15,
-              "fontWeight": "600"
-            },
-            {
-              "type": "frame",
-              "id": "KYbbO",
-              "name": "statusIcons",
-              "gap": 6,
-              "alignItems": "center",
-              "children": [
-                {
-                  "type": "icon_font",
-                  "id": "pY7wi",
-                  "name": "signalIcon",
-                  "width": 16,
-                  "height": 16,
-                  "iconFontName": "signal",
-                  "iconFontFamily": "lucide",
-                  "fill": "#2D2D2D"
-                },
-                {
-                  "type": "icon_font",
-                  "id": "UWwqA",
-                  "name": "wifiIcon",
-                  "width": 16,
-                  "height": 16,
-                  "iconFontName": "wifi",
-                  "iconFontFamily": "lucide",
-                  "fill": "#2D2D2D"
-                },
-                {
-                  "type": "icon_font",
-                  "id": "5PaFZ",
-                  "name": "batteryIcon",
-                  "width": 22,
-                  "height": 16,
-                  "iconFontName": "battery-full",
-                  "iconFontFamily": "lucide",
-                  "fill": "#2D2D2D"
-                }
-              ]
-            }
-          ]
-        },
-        {
-          "type": "frame",
           "id": "oakoE",
           "name": "header",
           "width": "fill_container",
@@ -7213,70 +6634,6 @@
       "layout": "vertical",
       "justifyContent": "space_between",
       "children": [
-        {
-          "type": "frame",
-          "id": "VDnQp",
-          "name": "statusBar",
-          "width": "fill_container",
-          "height": 44,
-          "padding": [
-            0,
-            16
-          ],
-          "justifyContent": "space_between",
-          "alignItems": "center",
-          "children": [
-            {
-              "type": "text",
-              "id": "dii8Z",
-              "name": "timeText",
-              "fill": "#2D2D2D",
-              "content": "9:41",
-              "fontFamily": "Plus Jakarta Sans",
-              "fontSize": 15,
-              "fontWeight": "600"
-            },
-            {
-              "type": "frame",
-              "id": "U67d3",
-              "name": "statusIcons",
-              "gap": 6,
-              "alignItems": "center",
-              "children": [
-                {
-                  "type": "icon_font",
-                  "id": "VyLQn",
-                  "name": "signalIcon",
-                  "width": 16,
-                  "height": 16,
-                  "iconFontName": "signal",
-                  "iconFontFamily": "lucide",
-                  "fill": "#2D2D2D"
-                },
-                {
-                  "type": "icon_font",
-                  "id": "jsOpm",
-                  "name": "wifiIcon",
-                  "width": 16,
-                  "height": 16,
-                  "iconFontName": "wifi",
-                  "iconFontFamily": "lucide",
-                  "fill": "#2D2D2D"
-                },
-                {
-                  "type": "icon_font",
-                  "id": "N0U92",
-                  "name": "batteryIcon",
-                  "width": 22,
-                  "height": 16,
-                  "iconFontName": "battery-full",
-                  "iconFontFamily": "lucide",
-                  "fill": "#2D2D2D"
-                }
-              ]
-            }
-          ]
-        },
         {
           "type": "frame",
           "id": "ACFrv",
