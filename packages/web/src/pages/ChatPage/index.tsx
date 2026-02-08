@@ -27,18 +27,11 @@ export function ChatPage() {
 
   // 发送消息
   const handleSendMessage = async (message: string) => {
-    try {
-      // 先创建会话
-      const newConversation = await createConversation({});
-      const currentConversationId = newConversation.id;
-      
-      // 导航到会话详情页面，消息会在详情页发送
-      navigate(`/conversation/${currentConversationId}`, {
-        state: { initialMessage: message }
-      });
-    } catch (error) {
-      console.error('Failed to create conversation:', error);
-    }
+    // 直接导航到新会话页面，后端会自动创建会话
+    // 使用 'new' 作为临时 ID，后端会在第一条消息时自动创建会话
+    navigate('/conversation/new', {
+      state: { initialMessage: message }
+    });
   };
 
   const handleSubmit = async (e: React.FormEvent) => {

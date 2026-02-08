@@ -7,6 +7,7 @@ import { AgentMessageStore } from './agent-message.store';
 import { AgentChatRequest, AgentStreamEvent } from './agent.types';
 import { ContextBuilder } from './context-builder';
 import { MessagesService } from '../conversations/messages.service';
+import { ConversationsService } from '../conversations/conversations.service';
 import { generateUlid } from '../utils/ulid';
 import type {
   AgentError,
@@ -31,6 +32,7 @@ export class AgentOrchestrator {
     private readonly toolRegistry: ToolRegistry,
     private readonly messageStore: AgentMessageStore,
     private readonly messagesService: MessagesService,
+    private readonly conversationsService: ConversationsService,
   ) {}
 
   async *streamChat(
@@ -47,29 +49,79 @@ export class AgentOrchestrator {
     };
     yield { event: 'agent.start', data: startEvent };
 
-    const conversationId = request.conversationId ?? request.sessionId;
+    // 如果没有 conversationId，自动创建新会话（仅在第一条消息时）
+    let conversationId = request.conversationId;
+    if (!conversationId && request.userId) {
+      try {
+        const userMessage = this.buildUserMessage(request);
+        const firstMessageContent = userMessage?.content || this.extractInput(request) || '';
+        const newConversation = await this.conversationsService.create(
+          { content: firstMessageContent },
+          request.userId,
+        );
+        conversationId = newConversation.id;
+        this.logger.debug(`Auto-created conversation: conversationId=${conversationId}, userId=${request.userId}`);
+        
+        // 通过 context.patch 事件将 conversationId 返回给前端
+        yield {
+          event: 'context.patch',
+          data: {
+            layer: 'session',
+            patch: { conversationId },
+          },
+        };
+      } catch (error) {
+        this.logger.error(`Failed to create conversation: ${error instanceof Error ? error.message : String(error)}`);
+        // 如果创建失败，继续处理但不保存到数据库
+      }
+    }
+
+    // 使用 conversationId 或 sessionId 作为 storeKey，但只有 conversationId 才用于数据库保存
+    const sessionId = conversationId ?? request.sessionId;
     const storeKey = this.messageStore.buildKey(
       request.userId,
-      conversationId,
+      sessionId,
     );
+    
+    this.logger.debug(`Stream chat started: conversationId=${conversationId}, sessionId=${sessionId}, userId=${request.userId}`);
+    
     const userMessage = this.buildUserMessage(request);
     if (userMessage) {
       let storedMessage = userMessage;
+      // 只有在 conversationId 存在时才保存到数据库（sessionId 不是有效的 conversation ID）
       if (conversationId) {
-        const persisted = await this.messagesService.appendMessage(conversationId, {
-          id: userMessage.id,
-          role: userMessage.role,
-          content: userMessage.content,
-          metadata: userMessage.metadata as Record<string, any> | undefined,
-          createdAtMs: userMessage.createdAtMs,
-          userId: request.userId,
-        });
-        storedMessage = {
-          ...userMessage,
-          id: persisted.id,
-          createdAt: persisted.createdAt.toISOString(),
-          createdAtMs: persisted.createdAtMs,
-        };
+        try {
+          this.logger.debug(`Saving user message to database: conversationId=${conversationId}, messageId=${userMessage.id}`);
+          const persisted = await this.messagesService.appendMessage(conversationId, {
+            id: userMessage.id,
+            role: userMessage.role,
+            content: userMessage.content,
+            metadata: userMessage.metadata as Record<string, any> | undefined,
+            createdAtMs: userMessage.createdAtMs,
+            userId: request.userId,
+          });
+          this.logger.debug(`User message saved successfully: messageId=${persisted.id}`);
+          storedMessage = {
+            ...userMessage,
+            id: persisted.id,
+            createdAt: persisted.createdAt.toISOString(),
+            createdAtMs: persisted.createdAtMs,
+          };
+        } catch (error) {
+          // 如果保存失败，记录错误但继续处理（消息仍然会在内存中）
+          this.logger.error(
+            `Failed to save user message to database`,
+            {
+              conversationId,
+              messageId: userMessage.id,
+              userId: request.userId,
+              error: error instanceof Error ? error.message : String(error),
+              stack: error instanceof Error ? error.stack : undefined,
+            }
+          );
+        }
+      } else {
+        this.logger.debug(`Skipping database save for user message: conversationId is undefined`);
       }
       this.messageStore.appendMessage(storeKey, storedMessage);
     }
@@ -95,65 +147,117 @@ export class AgentOrchestrator {
       let finishReason: string | undefined;
 
       // 流式处理 AI 响应
-      for await (const chunk of stream) {
-        const choice = chunk.choices?.[0];
+      try {
+        for await (const chunk of stream) {
+          const choice = chunk.choices?.[0];
 
-        // 处理文本内容
-        const delta = choice?.delta?.content;
-        if (delta) {
-          assistantMessage += delta;
-          const deltaEvent: AgentMessageDelta = {
-            id: assistantMessageId,
-            delta,
-            role: 'assistant',
-          };
-          yield { event: 'agent.delta', data: deltaEvent };
-        }
+          // 处理文本内容
+          const delta = choice?.delta?.content;
+          if (delta) {
+            assistantMessage += delta;
+            const deltaEvent: AgentMessageDelta = {
+              id: assistantMessageId,
+              delta,
+              role: 'assistant',
+            };
+            yield { event: 'agent.delta', data: deltaEvent };
+          }
 
-        // 处理工具调用
-        if (choice?.delta?.tool_calls) {
-          for (const toolCall of choice.delta.tool_calls) {
-            if (toolCall.type && toolCall.type !== 'function') {
-              continue;
-            }
-            if (!toolCall.function) {
-              continue;
-            }
-            const index = toolCall.index ?? 0;
+          // 处理工具调用
+          if (choice?.delta?.tool_calls) {
+            for (const toolCall of choice.delta.tool_calls) {
+              if (toolCall.type && toolCall.type !== 'function') {
+                continue;
+              }
+              if (!toolCall.function) {
+                continue;
+              }
+              const index = toolCall.index ?? 0;
 
-            if (!toolCalls[index]) {
-              toolCalls[index] = {
-                id: toolCall.id ?? '',
-                type: 'function',
-                function: {
-                  name: toolCall.function.name ?? '',
-                  arguments: toolCall.function.arguments ?? '',
-                },
-              };
-            } else if (toolCall.function.arguments) {
-              toolCalls[index].function.arguments += toolCall.function.arguments;
+              if (!toolCalls[index]) {
+                toolCalls[index] = {
+                  id: toolCall.id ?? '',
+                  type: 'function',
+                  function: {
+                    name: toolCall.function.name ?? '',
+                    arguments: toolCall.function.arguments ?? '',
+                  },
+                };
+              } else if (toolCall.function.arguments) {
+                toolCalls[index].function.arguments += toolCall.function.arguments;
+              }
             }
           }
-        }
 
-        // 处理完成原因
-        if (choice?.finish_reason) {
-          finishReason = choice.finish_reason;
+          // 处理完成原因
+          if (choice?.finish_reason) {
+            finishReason = choice.finish_reason;
+          }
         }
+      } catch (error) {
+        // 检查是否是中断错误
+        const isAborted = error instanceof Error && (
+          error.name === 'AbortError' ||
+          error.message.includes('aborted') ||
+          error.message.includes('canceled') ||
+          options?.signal?.aborted === true
+        );
+
+        if (isAborted) {
+          // 如果已经有部分内容，保存为废弃状态（只有在 conversationId 存在时）
+          if (assistantMessage.trim().length > 0 && conversationId) {
+            try {
+              await this.messagesService.appendMessage(conversationId, {
+                id: assistantMessageId,
+                role: 'assistant',
+                content: assistantMessage,
+                createdAtMs: Date.now(),
+                status: 'abandoned',
+                userId: request.userId,
+              });
+              this.logger.debug(`Saved abandoned message ${assistantMessageId} for conversation ${conversationId}`);
+            } catch (saveError) {
+              this.logger.error(`Failed to save abandoned message: ${saveError instanceof Error ? saveError.message : String(saveError)}`);
+            }
+          }
+          // 抛出错误以便上层处理
+          throw error;
+        }
+        // 其他错误也抛出
+        throw error;
       }
 
       // 如果没有工具调用，返回完成事件
       if (!toolCalls.length || finishReason === 'stop') {
         let persistedCreatedAtMs: number | undefined;
+        // 只有在 conversationId 存在时才保存到数据库
         if (conversationId) {
-          const persisted = await this.messagesService.appendMessage(conversationId, {
-            id: assistantMessageId,
-            role: 'assistant',
-            content: assistantMessage,
-            createdAtMs: Date.now(),
-            userId: request.userId,
-          });
-          persistedCreatedAtMs = persisted.createdAtMs;
+          try {
+            this.logger.debug(`Saving assistant message to database: conversationId=${conversationId}, messageId=${assistantMessageId}`);
+            const persisted = await this.messagesService.appendMessage(conversationId, {
+              id: assistantMessageId,
+              role: 'assistant',
+              content: assistantMessage,
+              createdAtMs: Date.now(),
+              userId: request.userId,
+            });
+            this.logger.debug(`Assistant message saved successfully: messageId=${persisted.id}`);
+            persistedCreatedAtMs = persisted.createdAtMs;
+          } catch (error) {
+            // 如果保存失败，记录错误但继续处理（消息仍然会在内存中）
+            this.logger.error(
+              `Failed to save assistant message to database`,
+              {
+                conversationId,
+                messageId: assistantMessageId,
+                userId: request.userId,
+                error: error instanceof Error ? error.message : String(error),
+                stack: error instanceof Error ? error.stack : undefined,
+              }
+            );
+          }
+        } else {
+          this.logger.debug(`Skipping database save for assistant message: conversationId is undefined`);
         }
 
         const finalMessage = this.messageStore.createMessage({
@@ -181,7 +285,7 @@ export class AgentOrchestrator {
 
         // 执行所有工具调用
         let requiresConfirmation = false;
-        for await (const event of this.executeToolCalls(toolCalls, request, messages)) {
+        for await (const event of this.executeToolCalls(toolCalls, request, messages, conversationId)) {
           yield event;
           if (event.event === 'tool.state' && event.data.status === 'awaiting_input') {
             requiresConfirmation = true;
@@ -240,7 +344,8 @@ export class AgentOrchestrator {
   private async *executeToolCalls(
     toolCalls: OpenAI.Chat.Completions.ChatCompletionMessageFunctionToolCall[],
     request: AgentChatRequest,
-    messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[]
+    messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[],
+    conversationId?: string
   ): AsyncGenerator<AgentStreamEvent> {
     for (const toolCall of toolCalls) {
       if (toolCall.type && toolCall.type !== 'function') {
@@ -276,6 +381,7 @@ export class AgentOrchestrator {
         yield { event: 'tool.state', data: runningEvent };
 
         // 执行工具
+        const resolvedConversationId = conversationId ?? request.sessionId;
         const executionResult = await this.toolExecutionStrategy.execute(
           {
             id: callId,
@@ -284,7 +390,7 @@ export class AgentOrchestrator {
           },
           {
             userId: request.userId,
-            conversationId: request.conversationId ?? request.sessionId,
+            conversationId: resolvedConversationId,
           }
         );
 

@@ -11,6 +11,6 @@ import { AiModule } from '../ai/ai.module';
   imports: [AiModule, TypeOrmModule.forFeature([Conversation, Contact, User, Event, Message])],
   controllers: [ConversationsController],
   providers: [ConversationsService, ConversationProcessorService, MessagesService],
-  exports: [MessagesService],
+  exports: [MessagesService, ConversationsService],
 })
 export class ConversationsModule {}

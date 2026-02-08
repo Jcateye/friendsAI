@@ -4,6 +4,7 @@ import type {
   AgentMessage,
   AgentMessageDelta,
   ToolStateUpdate,
+  AgentContextPatch,
 } from '../client-types';
 
 /**
@@ -41,10 +42,12 @@ export class VercelAiStreamAdapter {
       case 'error':
         return this.transformError(event.data);
       
+      case 'context.patch':
+        return this.transformContextPatch(event.data);
+      
       // 以下事件在 Vercel AI SDK 中不需要或通过其他方式处理
       case 'agent.start':
       case 'agent.end':
-      case 'context.patch':
       case 'ping':
         return null;
       
@@ -133,6 +136,23 @@ export class VercelAiStreamAdapter {
    */
   private transformError(error: AgentError): string {
     return `3:${JSON.stringify(error.message)}\n`;
+  }
+
+  /**
+   * 转换上下文补丁: context.patch -> 2: (自定义数据)
+   * 格式: 2:${JSON.stringify([{type: 'conversation.created', conversationId: '...'}])}\n
+   * 
+   * 用于传递 conversationId 等上下文信息给前端
+   */
+  private transformContextPatch(patch: AgentContextPatch): string | null {
+    // 只处理 session 层的 conversationId 更新
+    if (patch.layer === 'session' && patch.patch.conversationId) {
+      return `2:${JSON.stringify([{
+        type: 'conversation.created',
+        conversationId: patch.patch.conversationId,
+      }])}\n`;
+    }
+    return null;
   }
 }
 

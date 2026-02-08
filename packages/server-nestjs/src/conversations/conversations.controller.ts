@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Body, Param, Query, Request, HttpCode, HttpStatus } from '@nestjs/common';
+import { Controller, Post, Get, Body, Param, Query, Request, HttpCode, HttpStatus, Header } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiParam, ApiQuery, ApiBearerAuth } from '@nestjs/swagger';
 import { ConversationsService } from './conversations.service';
 import { MessagesService } from './messages.service';
@@ -52,6 +52,9 @@ export class ConversationsController {
   }
 
   @Get(':id/messages')
+  @Header('Cache-Control', 'no-cache, no-store, must-revalidate')
+  @Header('Pragma', 'no-cache')
+  @Header('Expires', '0')
   @ApiOperation({ summary: 'Get messages for a conversation' })
   @ApiParam({ name: 'id', description: 'Conversation ID', type: String })
   @ApiQuery({ name: 'limit', required: false, type: Number, description: 'Maximum number of messages to return' })

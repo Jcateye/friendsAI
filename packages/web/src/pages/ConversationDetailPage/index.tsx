@@ -1,5 +1,5 @@
-import { useParams, useLocation } from 'react-router-dom';
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useParams, useLocation, useNavigate } from 'react-router-dom';
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { Header } from '../../components/layout/Header';
 import { CustomMessageRenderer } from '../../components/chat/CustomMessageRenderer';
 import { ToolConfirmationOverlay } from '../../components/chat/ToolConfirmationOverlay';
@@ -8,7 +8,7 @@ import { useAgentChat } from '../../hooks/useAgentChat';
 import { useToolConfirmations } from '../../hooks/useToolConfirmations';
 import { sortMessagesByCreatedAt } from '../../lib/messages/sortMessagesByCreatedAt';
 import { resolveEpochMs } from '../../lib/time/timestamp';
-import { Send } from 'lucide-react';
+import { Send, Square } from 'lucide-react';
 import type { Message as AISDKMessage } from 'ai';
 
 type MessageWithMs = AISDKMessage & {
@@ -18,12 +18,14 @@ type MessageWithMs = AISDKMessage & {
 export function ConversationDetailPage() {
   const { id } = useParams<{ id: string }>();
   const location = useLocation();
-  const conversationId = id;
+  const navigate = useNavigate();
+  // 如果 id 是 'new'，表示新会话，不传递 conversationId
+  const conversationId = id === 'new' ? undefined : id;
   const initialMessage = (location.state as { initialMessage?: string })?.initialMessage;
 
   const { messages: historyMessages, loading: historyLoading } = useConversationHistory({
     conversationId,
-    enabled: !!conversationId,
+    enabled: !!conversationId && conversationId !== 'new',
   });
 
   const initialMessages = useMemo<MessageWithMs[]>(() => {
@@ -44,9 +46,18 @@ export function ConversationDetailPage() {
     });
   }, [historyMessages]);
 
+  // 处理后端返回的 conversationId
+  const handleConversationCreated = useCallback((newConversationId: string) => {
+    // 如果当前没有 conversationId（包括 'new' 的情况），且后端返回了新的 conversationId，更新 URL
+    if ((!conversationId || id === 'new') && newConversationId) {
+      navigate(`/conversation/${newConversationId}`, { replace: true });
+    }
+  }, [conversationId, id, navigate]);
+
   const chat = useAgentChat({
     conversationId,
     initialMessages,
+    onConversationCreated: handleConversationCreated,
   });
 
   const toolStates = chat.pendingConfirmations;
@@ -91,7 +102,7 @@ export function ConversationDetailPage() {
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [sortedMessages.length]);
+  }, [sortedMessages.length, chat.isLoading]);
 
   // 如果有初始消息且历史消息为空，自动发送
   const hasSentInitialMessage = useRef(false);
@@ -114,7 +125,13 @@ export function ConversationDetailPage() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!input.trim() || chat.isLoading) {
+    // 如果正在加载，点击按钮应该停止生成
+    if (chat.isLoading) {
+      chat.stop();
+      return;
+    }
+    // 如果输入为空，不发送
+    if (!input.trim()) {
       return;
     }
     chat.sendMessage(input);
@@ -165,6 +182,21 @@ export function ConversationDetailPage() {
                 </div>
               </div>
             ))}
+            {/* Thinking 状态：当助手正在生成回复时显示 */}
+            {chat.isLoading && (
+              <div className="flex justify-start">
+                <div className="max-w-[80%] rounded-2xl px-4 py-3 bg-bg-card text-text-primary">
+                  <div className="flex items-center gap-2">
+                    <div className="flex gap-1">
+                      <div className="w-2 h-2 bg-text-muted rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                      <div className="w-2 h-2 bg-text-muted rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                      <div className="w-2 h-2 bg-text-muted rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                    </div>
+                    <span className="text-[13px] text-text-muted font-primary">思考中...</span>
+                  </div>
+                </div>
+              </div>
+            )}
             <div ref={messagesEndRef} />
           </div>
         )}
@@ -177,14 +209,18 @@ export function ConversationDetailPage() {
           onChange={(e) => setInput(e.target.value)}
           placeholder="输入消息..."
           className="flex-1 px-4 py-3 bg-bg-surface rounded-full text-[15px] text-text-primary placeholder:text-text-muted outline-none focus:ring-2 focus:ring-primary font-primary"
-          disabled={chat.isLoading}
         />
         <button
           type="submit"
-          disabled={!input.trim() || chat.isLoading}
+          disabled={!input.trim() && !chat.isLoading}
           className="w-12 h-12 flex items-center justify-center rounded-full bg-primary disabled:bg-text-muted disabled:opacity-50 transition-opacity shrink-0"
+          aria-label={chat.isLoading ? '停止生成' : '发送消息'}
         >
-          <Send className="w-5 h-5 text-white" />
+          {chat.isLoading ? (
+            <Square className="w-5 h-5 text-white fill-white" />
+          ) : (
+            <Send className="w-5 h-5 text-white" />
+          )}
         </button>
       </form>
 
