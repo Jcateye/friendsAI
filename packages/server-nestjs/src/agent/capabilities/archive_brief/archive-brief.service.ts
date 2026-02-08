@@ -1,4 +1,4 @@
-import { Injectable, Logger, NotFoundException, Inject, forwardRef } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, MoreThanOrEqual } from 'typeorm';
 import { Conversation } from '../../../entities/conversation.entity';
@@ -55,7 +55,6 @@ export class ArchiveBriefService {
     private readonly conversationRepository: Repository<Conversation>,
     @InjectRepository(Contact)
     private readonly contactRepository: Repository<Contact>,
-    @Inject(forwardRef(() => AgentRuntimeExecutor))
     private readonly runtimeExecutor: AgentRuntimeExecutor,
     private readonly snapshotService: SnapshotService,
   ) {}
