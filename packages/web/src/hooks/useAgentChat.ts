@@ -26,6 +26,10 @@ export interface UseAgentChatOptions {
    * 工具确认回调
    */
   onToolConfirmation?: (tool: ToolState) => void;
+  /**
+   * 会话创建回调（当后端自动创建会话时调用）
+   */
+  onConversationCreated?: (conversationId: string) => void;
 }
 
 export interface UseAgentChatReturn {
@@ -130,10 +134,114 @@ async function fetchWithAuth(input: RequestInfo | URL, init?: RequestInit): Prom
     headers.set('Content-Type', 'application/json');
   }
 
-  return fetch(input, {
-    ...init,
-    headers,
-  });
+  try {
+    const response = await fetch(input, {
+      ...init,
+      headers,
+    });
+    return response;
+  } catch (error) {
+    throw error;
+  }
+}
+
+/**
+ * 自定义 fetch 函数，拦截流数据解析 conversationId
+ */
+function createFetchWithConversationId(
+  onConversationCreated?: (conversationId: string) => void,
+  getConversationId?: () => string | undefined
+): typeof fetch {
+  return async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+    // 在发送请求前，修改请求体以添加最新的 conversationId
+    let modifiedInit = init;
+    if (getConversationId && init?.body) {
+      const currentConversationId = getConversationId();
+      
+      try {
+        // 解析现有的请求体
+        const bodyText = typeof init.body === 'string' 
+          ? init.body 
+          : init.body instanceof Blob 
+            ? await init.body.text()
+            : JSON.stringify(init.body);
+        const bodyObj = JSON.parse(bodyText);
+        
+        // 添加或更新 conversationId
+        if (currentConversationId && currentConversationId !== 'new') {
+          bodyObj.conversationId = currentConversationId;
+        } else if (currentConversationId === 'new') {
+          // 如果是 'new'，不设置 conversationId，让后端创建新会话
+          delete bodyObj.conversationId;
+        }
+        
+        // 创建新的请求体
+        modifiedInit = {
+          ...init,
+          body: JSON.stringify(bodyObj),
+        };
+      } catch (e) {
+        // 如果解析失败，使用原始请求体
+      }
+    }
+    
+    const response = await fetchWithAuth(input, modifiedInit);
+    
+    // 如果不是流式响应，直接返回
+    if (!response.body || !onConversationCreated) {
+      return response;
+    }
+    
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let conversationIdExtracted = false;
+    
+    const stream = new ReadableStream({
+      async start(controller) {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) {
+            controller.close();
+            break;
+          }
+          
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          buffer = lines.pop() || '';
+          
+          for (const line of lines) {
+            // 解析 2: 格式的自定义数据
+            if (line.startsWith('2:') && !conversationIdExtracted) {
+              try {
+                const data = JSON.parse(line.slice(2));
+                // 处理数组格式或单个对象格式
+                const events = Array.isArray(data) ? data : [data];
+                const conversationEvent = events.find(
+                  (item: any) => item.type === 'conversation.created'
+                );
+                if (conversationEvent?.conversationId) {
+                  onConversationCreated(conversationEvent.conversationId);
+                  conversationIdExtracted = true;
+                }
+              } catch (e) {
+                // 忽略解析错误，继续处理流
+              }
+            }
+            
+            // 将原始数据传递给下游
+            controller.enqueue(new TextEncoder().encode(line + '\n'));
+          }
+        }
+      }
+    });
+    
+    return new Response(stream, {
+      status: response.status,
+      statusText: response.statusText,
+      headers: response.headers,
+    });
+  };
 }
 
 /**
@@ -147,17 +255,32 @@ export function useAgentChat(
     initialMessages = [],
     loadHistory = false,
     onToolConfirmation,
+    onConversationCreated,
   } = options;
 
-  // 使用 Vercel AI SDK 的 useChat，传入自定义 fetch 来添加认证
-  // 使用函数形式的 body 来支持动态 conversationId
+  // 使用 ref 存储最新的 conversationId，确保 body 函数总是读取最新值
+  const conversationIdRef = useRef(conversationId);
+  useEffect(() => {
+    conversationIdRef.current = conversationId;
+  }, [conversationId]);
+
+  // 创建一个包装的 fetch 函数来拦截流数据并解析 conversationId
+  // 同时修改请求体以添加最新的 conversationId
+  const fetchWithConversationId = useCallback(
+    createFetchWithConversationId(
+      onConversationCreated,
+      () => conversationIdRef.current // 提供获取最新 conversationId 的函数
+    ),
+    [onConversationCreated]
+  );
+
+  // 使用 Vercel AI SDK 的 useChat，传入自定义 fetch 来添加认证和动态 conversationId
+  // 注意：Vercel AI SDK 的 body 参数不支持函数形式，所以我们在 fetch 中动态修改请求体
   const chat = useChat({
     api: '/v1/agent/chat?format=vercel-ai',
-    body: () => ({
-      conversationId,
-    }),
+    body: conversationId && conversationId !== 'new' ? { conversationId } : {},
     initialMessages,
-    fetch: fetchWithAuth as typeof globalThis.fetch,
+    fetch: fetchWithConversationId as typeof globalThis.fetch,
   });
 
   // 工具确认状态管理
