@@ -4,6 +4,7 @@ import { Copy, RefreshCw, ChevronRight, FlaskConical, Trash2 } from 'lucide-reac
 import { Header } from '../../components/layout/Header'
 import { useDemoMode } from '../../contexts/DemoModeContext'
 import { api } from '../../lib/api'
+import type { ContactInsightData } from '../../lib/api/agent-types'
 import type { Contact as ApiContact, ContactContext } from '../../lib/api/types'
 import { ContactFormModal } from '../../components/contacts/ContactFormModal'
 
@@ -92,6 +93,9 @@ export function ContactDetailPage() {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
+  const [insight, setInsight] = useState<ContactInsightData | null>(null)
+  const [insightLoading, setInsightLoading] = useState(false)
+  const [insightError, setInsightError] = useState<string | null>(null)
 
   const loadContact = () => {
     if (!isDemoMode && id) {
@@ -114,6 +118,23 @@ export function ContactDetailPage() {
   useEffect(() => {
     loadContact()
   }, [isDemoMode, id])
+
+  const handleGenerateInsight = async () => {
+    if (!id || isDemoMode) return
+    setInsightLoading(true)
+    setInsightError(null)
+    try {
+      const result = await api.agent.runContactInsight({
+        contactId: id,
+        depth: 'standard',
+      })
+      setInsight(result.data)
+    } catch (error) {
+      setInsightError(error instanceof Error ? error.message : '生成洞察失败')
+    } finally {
+      setInsightLoading(false)
+    }
+  }
 
   const handleDelete = async () => {
     if (!id || isDemoMode) return
@@ -174,6 +195,18 @@ export function ContactDetailPage() {
         rightElement={
           !isDemoMode && (
             <div className="flex items-center gap-2">
+              {/* 联系人洞察 Agent 触发按钮 */}
+              <button
+                type="button"
+                onClick={handleGenerateInsight}
+                disabled={insightLoading}
+                aria-label="生成联系人洞察"
+                className="flex items-center gap-1 px-2 py-1 rounded-md bg-primary-tint text-primary text-[11px] font-medium font-primary hover:opacity-90 disabled:opacity-60"
+                title="生成联系人洞察"
+              >
+                <FlaskConical className="w-3 h-3" />
+                <span>{insightLoading ? '分析中...' : '洞察'}</span>
+              </button>
               <button
                 onClick={() => setIsDeleteConfirmOpen(true)}
                 aria-label="删除联系人"
@@ -182,10 +215,6 @@ export function ContactDetailPage() {
               >
                 <Trash2 className="w-4 h-4" />
               </button>
-              <div className="flex items-center gap-1 px-2 py-1 bg-success-tint rounded-md">
-                <FlaskConical className="w-3 h-3 text-success" />
-                <span className="text-[10px] text-success font-medium font-primary">API</span>
-              </div>
             </div>
           )
         }
@@ -227,40 +256,122 @@ export function ContactDetailPage() {
           </div>
         </div>
 
-        {/* Briefing Card */}
+        {/* Briefing & Insight Card */}
         <div className="bg-bg-card rounded-lg shadow-sm overflow-hidden">
           {/* Briefing Header */}
           <div className="flex items-center justify-between px-5 py-4 bg-primary-tint">
-            <span className="text-[14px] font-semibold text-text-primary font-primary">会前简报</span>
+            <span className="text-[14px] font-semibold text-text-primary font-primary">
+              {insight ? '联系人洞察' : '会前简报'}
+            </span>
             <div className="flex items-center gap-3">
-              <button className="flex items-center gap-1 text-[13px] text-primary font-medium font-primary">
-                <RefreshCw className="w-4 h-4" />
-                刷新
-              </button>
-              <button className="flex items-center gap-1 text-[13px] text-primary font-medium font-primary">
-                <Copy className="w-4 h-4" />
-                复制
-              </button>
+              {!insight && (
+                <button
+                  className="flex items-center gap-1 text-[13px] text-primary font-medium font-primary"
+                  onClick={handleGenerateInsight}
+                  disabled={insightLoading}
+                >
+                  <RefreshCw className="w-4 h-4" />
+                  {insightLoading ? '分析中...' : '生成洞察'}
+                </button>
+              )}
+              {insight && (
+                <button
+                  className="flex items-center gap-1 text-[13px] text-primary font-medium font-primary"
+                  onClick={() => {
+                    const text = [
+                      insight.profileSummary,
+                      '',
+                      '机会：',
+                      ...insight.opportunities.map((o) => `- ${o.title}：${o.description}`),
+                      '',
+                      '建议行动：',
+                      ...insight.suggestedActions.map((a) => `- ${a.action}：${a.reason}`),
+                    ].join('\n')
+                    navigator.clipboard?.writeText(text).catch(() => {})
+                  }}
+                >
+                  <Copy className="w-4 h-4" />
+                  复制
+                </button>
+              )}
             </div>
           </div>
 
-          {/* Briefing Content */}
+          {/* Briefing / Insight Content */}
           <div className="flex flex-col gap-4 p-5">
-            <div>
-              <h4 className="text-[13px] font-semibold text-text-secondary font-primary mb-2">关键信息</h4>
-              <p className="text-[14px] text-text-primary font-primary leading-relaxed">
-                {displayContact.briefing?.keyInfo || '暂无关键信息'}
-              </p>
-            </div>
-            {(displayContact.briefing?.todos?.length || 0) > 0 && (
-              <div>
-                <h4 className="text-[13px] font-semibold text-text-secondary font-primary mb-2">待跟进事项</h4>
-                <ul className="list-disc list-inside text-[14px] text-text-primary font-primary">
-                  {displayContact.briefing.todos.map((todo, index) => (
-                    <li key={index}>{todo}</li>
-                  ))}
-                </ul>
+            {insightError && (
+              <div className="text-[12px] text-red-500 font-primary">
+                {insightError}
               </div>
+            )}
+
+            {insight ? (
+              <>
+                <div>
+                  <h4 className="text-[13px] font-semibold text-text-secondary font-primary mb-2">关系概览</h4>
+                  <p className="text-[14px] text-text-primary font-primary leading-relaxed">
+                    {insight.profileSummary}
+                  </p>
+                </div>
+
+                {insight.opportunities.length > 0 && (
+                  <div>
+                    <h4 className="text-[13px] font-semibold text-text-secondary font-primary mb-2">合作机会</h4>
+                    <ul className="list-disc list-inside text-[14px] text-text-primary font-primary">
+                      {insight.opportunities.map((opportunity, index) => (
+                        <li key={index}>
+                          <span className="font-medium">{opportunity.title}：</span>
+                          <span>{opportunity.description}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {insight.suggestedActions.length > 0 && (
+                  <div>
+                    <h4 className="text-[13px] font-semibold text-text-secondary font-primary mb-2">建议行动</h4>
+                    <ul className="list-disc list-inside text-[14px] text-text-primary font-primary">
+                      {insight.suggestedActions.map((action, index) => (
+                        <li key={index}>
+                          <span className="font-medium">{action.action}：</span>
+                          <span>{action.reason}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {insight.openingLines.length > 0 && (
+                  <div>
+                    <h4 className="text-[13px] font-semibold text-text-secondary font-primary mb-2">推荐开场白</h4>
+                    <ul className="list-disc list-inside text-[14px] text-text-primary font-primary">
+                      {insight.openingLines.map((line, index) => (
+                        <li key={index}>{line}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </>
+            ) : (
+              <>
+                <div>
+                  <h4 className="text-[13px] font-semibold text-text-secondary font-primary mb-2">关键信息</h4>
+                  <p className="text-[14px] text-text-primary font-primary leading-relaxed">
+                    {displayContact.briefing?.keyInfo || '暂无关键信息'}
+                  </p>
+                </div>
+                {(displayContact.briefing?.todos?.length || 0) > 0 && (
+                  <div>
+                    <h4 className="text-[13px] font-semibold text-text-secondary font-primary mb-2">待跟进事项</h4>
+                    <ul className="list-disc list-inside text-[14px] text-text-primary font-primary">
+                      {displayContact.briefing.todos.map((todo, index) => (
+                        <li key={index}>{todo}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </>
             )}
           </div>
         </div>

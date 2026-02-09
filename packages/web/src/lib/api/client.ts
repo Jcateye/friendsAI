@@ -30,6 +30,7 @@ import type {
   RejectToolRequest,
   ToolConfirmationStatus,
 } from './types';
+import type { AgentRunResponse, ContactInsightData } from './agent-types';
 
 const API_BASE = '/v1';
 
@@ -511,6 +512,33 @@ export const api = {
       });
 
       return handleResponse(response);
+    },
+
+    /**
+     * 生成联系人洞察（contact_insight）
+     * 对应后端：POST /v1/agent/run，agentId=contact_insight
+     */
+    async runContactInsight(request: {
+      contactId: string;
+      depth?: 'brief' | 'standard' | 'deep';
+    }): Promise<AgentRunResponse<ContactInsightData>> {
+      const response = await fetchWithAuth(`${API_BASE}/agent/run`, {
+        method: 'POST',
+        body: JSON.stringify({
+          agentId: 'contact_insight',
+          input: {
+            contactId: request.contactId,
+            depth: request.depth ?? 'standard',
+          },
+          options: {
+            useCache: true,
+          },
+          // 用联系人 ID 作为会话作用域，便于快照缓存
+          conversationId: `insight_${request.contactId}`,
+        }),
+      });
+
+      return handleResponse<AgentRunResponse<ContactInsightData>>(response);
     },
   },
 };
