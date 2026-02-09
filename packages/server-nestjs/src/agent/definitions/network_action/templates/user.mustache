@@ -1,0 +1,41 @@
+## Contact Network Context
+
+**User ID:** {{userId}}
+**Total Contacts:** {{metadata.totalContacts}}
+**Recent Interactions (Last 30 Days):** {{metadata.totalInteractions}}
+
+## Contacts Overview
+
+{{#contacts}}
+### [{{index}}] {{name}}
+{{#company}}**Company:** {{company}}{{/company}}
+{{#position}}**Position:** {{position}}{{/position}}
+{{#lastInteractionAt}}**Last Interaction:** {{lastInteractionAt}}{{/lastInteractionAt}}
+{{#tags}}**Tags:** {{#tags}}{{.}} {{/tags}}{{/tags}}
+
+{{/contacts}}
+{{^contacts}}
+No contacts available.
+
+{{/contacts}}
+
+## Recent Interactions (Last 30 Days)
+
+{{#recentInteractions}}
+### [{{index}}] {{#date}}{{date}}{{/date}}
+{{#summary}}{{summary}}{{/summary}}{{^summary}}No summary available{{/summary}}
+
+{{/recentInteractions}}
+{{^recentInteractions}}
+No recent interactions available.
+
+{{/recentInteractions}}
+
+## Task
+
+Based on the contact network data above, generate relationship insights and action recommendations following the output format specified in the system prompt.
+
+Output in **Chinese** unless the contact data is clearly English-only.
+
+
+

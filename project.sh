@@ -276,14 +276,16 @@ start_web_background() {
 }
 
 verify_web() {
-  if check_service_status "web" "$WEB_PID_FILE" "$WEB_LOG" "${WEB_PORT:-5173}"; then
+  # 确保 WEB_PORT 已加载
+  load_env
+  if check_service_status "web" "$WEB_PID_FILE" "$WEB_LOG" "${WEB_PORT}"; then
     echo "✅ 前端已启动，PID: $(cat "$WEB_PID_FILE")"
     echo "   日志文件: $WEB_LOG"
-    echo "   本机访问：http://localhost:${WEB_PORT:-5173}"
+    echo "   本机访问：http://localhost:${WEB_PORT}"
     local lan_ip
     lan_ip="$(get_lan_ip)"
     if [[ -n "$lan_ip" ]]; then
-      echo "   局域网访问：http://${lan_ip}:${WEB_PORT:-5173}"
+      echo "   局域网访问：http://${lan_ip}:${WEB_PORT}"
     else
       echo "   局域网访问：未检测到本机局域网 IP"
     fi
@@ -386,6 +388,8 @@ kill_orphan_port_process() {
 }
 
 stop_web() {
+  # 加载环境变量以获取正确的 WEB_PORT
+  load_env
   if is_web_running; then
     local pid
     pid="$(cat "$WEB_PID_FILE")"
@@ -397,7 +401,7 @@ stop_web() {
   else
     echo "⚪ 前端服务未运行"
   fi
-  kill_port "${WEB_PORT:-5173}" "$WEB_PID_FILE"
+  kill_port "${WEB_PORT}" "$WEB_PID_FILE"
   echo "✅ 前端已停止"
 }
 
@@ -520,13 +524,13 @@ start_mvp() {
 
   echo "✅ MVP 已启动"
   echo "👉 访问提示："
-  echo "   前端地址（本机）：http://localhost:${WEB_PORT:-5173}"
-  echo "   API 地址（本机）：http://localhost:${PORT:-3000}/v1/health"
+  echo "   前端地址（本机）：http://localhost:${WEB_PORT}"
+  echo "   API 地址（本机）：http://localhost:${PORT}/v1/health"
   local lan_ip
   lan_ip="$(get_lan_ip)"
   if [[ -n "$lan_ip" ]]; then
-    echo "   前端地址（局域网）：http://${lan_ip}:${WEB_PORT:-5173}"
-    echo "   API 地址（局域网）：http://${lan_ip}:${PORT:-3000}/v1/health"
+    echo "   前端地址（局域网）：http://${lan_ip}:${WEB_PORT}"
+    echo "   API 地址（局域网）：http://${lan_ip}:${PORT}/v1/health"
   else
     echo "   局域网访问：未检测到本机局域网 IP"
   fi

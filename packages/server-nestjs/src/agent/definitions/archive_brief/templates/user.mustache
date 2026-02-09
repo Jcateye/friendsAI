@@ -3,12 +3,12 @@
 ---
 
 {{#archive_extract}}
-## Archive Extraction
+## Archive Extraction Context
 
 **Conversation ID:** {{conversationId}}
-**Content Preview:** {{#content}}{{content}}{{/content}}{{^content}}No content available{{/content}}
+{{#content}}**Content Preview:** {{content}}{{/content}}
 
-### Messages ({{messages.length}})
+**Message Count:** {{messages.length}}
 
 {{#messages}}
 ### [{{index}}] {{role}}
@@ -20,17 +20,19 @@ No messages available.
 
 {{/messages}}
 
-### Task
+## Task
 
-Extract and summarize this conversation archive into a structured format including:
+Extract and summarize this conversation archive into a structured format following the output format specified in the system prompt. Include:
 - Key points discussed
 - Decisions made
 - Action items identified
 - Participants involved
+
+Output in **Chinese** unless the conversation is clearly English-only.
 {{/archive_extract}}
 
 {{#brief_generate}}
-## Contact Briefing
+## Contact Briefing Context
 
 **Contact ID:** {{contactId}}
 **Name:** {{name}}
@@ -38,19 +40,21 @@ Extract and summarize this conversation archive into a structured format includi
 {{#position}}**Position:** {{position}}{{/position}}
 {{#tags}}**Tags:** {{tags}}{{/tags}}
 
-### Recent Interactions ({{recentInteractions.length}})
+**Recent Interactions Count:** {{recentInteractions.length}}
 
 {{#recentInteractions}}
-- {{.}}
+### [{{index}}] {{#summary}}{{summary}}{{/summary}}{{^summary}}No summary available{{/summary}}
+{{#createdAt}}**Date:** {{createdAt}}{{/createdAt}}
+
 {{/recentInteractions}}
 {{^recentInteractions}}
 No recent interactions available.
 
 {{/recentInteractions}}
 
-### Task
+## Task
 
-Generate a comprehensive briefing including:
+Generate a comprehensive briefing following the output format specified in the system prompt. Include:
 - Relationship background and context
 - Recent interaction summary
 - Key topics and interests

@@ -1,0 +1,73 @@
+## Contact Context
+
+**Contact ID:** {{contactId}}
+**Name:** {{contact.name}}
+{{#contact.email}}**Email:** {{contact.email}}{{/contact.email}}
+{{#contact.company}}**Company:** {{contact.company}}{{/contact.company}}
+{{#contact.position}}**Position:** {{contact.position}}{{/contact.position}}
+{{#contact.tags}}**Tags:** {{#contact.tags}}{{.}} {{/contact.tags}}{{/contact.tags}}
+{{#contact.note}}**Note:** {{contact.note}}{{/contact.note}}
+{{#contact.lastInteractionAt}}**Last Interaction:** {{contact.lastInteractionAt}}{{/contact.lastInteractionAt}}
+
+**Analysis Depth:** {{depth}}
+
+## Recent Interactions
+
+**Count:** {{recentInteractions.length}}
+
+{{#recentInteractions}}
+### [{{index}}] {{#createdAt}}{{createdAt}}{{/createdAt}}
+{{#summary}}{{summary}}{{/summary}}{{^summary}}No summary available{{/summary}}
+
+{{/recentInteractions}}
+{{^recentInteractions}}
+No recent interactions found.
+
+{{/recentInteractions}}
+
+## Archived Data
+
+### Events
+
+**Count:** {{archivedData.events.length}}
+
+{{#archivedData.events}}
+### [{{index}}] {{title}}
+{{#eventDate}}**Date:** {{eventDate}}{{/eventDate}}
+{{#description}}{{description}}{{/description}}
+
+{{/archivedData.events}}
+{{^archivedData.events}}
+No events recorded.
+
+{{/archivedData.events}}
+
+### Facts
+
+**Count:** {{archivedData.facts.length}}
+
+{{#archivedData.facts}}
+- {{content}}
+{{/archivedData.facts}}
+{{^archivedData.facts}}
+No facts recorded.
+
+{{/archivedData.facts}}
+
+### Todos
+
+**Count:** {{archivedData.todos.length}}
+
+{{#archivedData.todos}}
+- [{{status}}] {{content}}
+{{/archivedData.todos}}
+{{^archivedData.todos}}
+No todos recorded.
+
+{{/archivedData.todos}}
+
+## Task
+
+Generate comprehensive insights with depth level **{{depth}}** following the output format specified in the system prompt. Ensure all insights are evidence-based and reference specific interactions, events, or facts from the data above.
+
+Output in **Chinese** unless the contact data is clearly English-only.

@@ -1,5 +1,5 @@
 {
-  "id": "contact_insight",
+  "id": "network_action",
   "version": "1.0.0",
   "prompt": {
     "systemTemplate": "templates/system.mustache",
@@ -7,21 +7,23 @@
     "defaultsFile": "defaults.json"
   },
   "memory": {
-    "strategy": "sliding_window",
-    "maxTokens": 2000
+    "strategy": "declarative",
+    "maxTokens": 4000,
+    "includeRecentInteractions": true,
+    "includeContactProfiles": true
   },
   "tools": {
     "mode": "allowlist",
-    "allowedTools": ["get_contact_info", "search_contacts"]
+    "allowedTools": []
   },
   "validation": {
     "outputSchema": "schemas/output.schema.json"
   },
   "cache": {
-    "ttl": 3600
+    "ttl": 43200,
+    "sourceHashFields": ["userId", "contactsHash", "interactionsHash"]
   }
 }
-
 
 
 

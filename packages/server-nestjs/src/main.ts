@@ -1,11 +1,18 @@
 import { NestFactory } from '@nestjs/core';
+import { Logger } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
+  const logger = new Logger('Bootstrap');
   const port = process.env.PORT ?? 3000;
 
-  const app = await NestFactory.create(AppModule);
+  const isDev = !process.env.NODE_ENV || process.env.NODE_ENV === 'dev' || process.env.NODE_ENV === 'development';
+
+  const app = await NestFactory.create(AppModule, {
+    // 开发环境打开 debug 日志，生产环境默认到 log 级别
+    logger: isDev ? ['error', 'warn', 'log', 'debug'] : ['error', 'warn', 'log'],
+  });
 
   // 生产级 CORS 配置
   app.enableCors({
@@ -18,7 +25,6 @@ async function bootstrap() {
       }
 
       // 开发环境允许 localhost 和局域网 IP（NODE_ENV 未设置时默认为开发环境）
-      const isDev = !process.env.NODE_ENV || process.env.NODE_ENV === 'dev';
       if (isDev) {
         if (
           origin.includes('localhost') ||
@@ -47,7 +53,7 @@ async function bootstrap() {
 
   app.setGlobalPrefix('v1');
 
-  // Swagger configuration
+  // Swagger / OpenAPI configuration
   const config = new DocumentBuilder()
     .setTitle('FriendsAI API')
     .setDescription('FriendsAI Backend API Documentation')
@@ -55,13 +61,19 @@ async function bootstrap() {
     .addBearerAuth()
     .build();
   const document = SwaggerModule.createDocument(app, config);
-  SwaggerModule.setup('api', app, document);
+
+  SwaggerModule.setup('api', app, document, {
+    // 让 Postman 等客户端可以直接通过 URL 导入 OpenAPI 3 规范
+    // 示例： http://localhost:3000/api/openapi.json
+    jsonDocumentUrl: 'openapi.json',
+  });
 
   await app.listen(port);
-  console.log(`🚀 Server is running on http://localhost:${port}`);
-  console.log(`📚 Swagger docs available at http://localhost:${port}/api`);
+  logger.log(`🚀 Server is running on http://localhost:${port}`);
+  logger.log(`📚 Swagger docs available at http://localhost:${port}/api`);
 }
 bootstrap().catch((error) => {
-  console.error('❌ Bootstrap failed:', error);
+  const logger = new Logger('Bootstrap');
+  logger.error('❌ Bootstrap failed', error instanceof Error ? error.stack : JSON.stringify(error));
   process.exit(1);
 });

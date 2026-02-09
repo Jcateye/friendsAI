@@ -1,7 +1,7 @@
-import { Module } from '@nestjs/common';
-import { APP_GUARD } from '@nestjs/core';
-import { APP_INTERCEPTOR } from '@nestjs/core';
-import { TypeOrmModule } from '@nestjs/typeorm';
+import { Logger, Module } from '@nestjs/common';
+import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
+import { TypeOrmModule, type TypeOrmModuleOptions } from '@nestjs/typeorm';
+import type { LoggerOptions } from 'typeorm';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import path from 'path';
 import { AppController } from './app.controller';
@@ -34,6 +34,7 @@ import { ToolsModule } from './tools/tools.module';
 import { ToolConfirmationsModule } from './tool-confirmations/tool-confirmations.module';
 import { ConversationArchivesModule } from './conversation-archives/conversation-archives.module';
 import { TimestampMsInterceptor } from './common/interceptors/timestamp-ms.interceptor';
+import { HttpLoggingInterceptor } from './common/interceptors/http-logging.interceptor';
 
 @Module({
   imports: [
@@ -62,20 +63,31 @@ import { TimestampMsInterceptor } from './common/interceptors/timestamp-ms.inter
     }),
     TypeOrmModule.forRootAsync({
       inject: [ConfigService],
-      useFactory: (configService: ConfigService) => {
+      useFactory: (configService: ConfigService): TypeOrmModuleOptions => {
         const databaseUrl = configService.get<string>('DATABASE_URL');
         if (!databaseUrl) {
           throw new Error('DATABASE_URL is required');
         }
         const synchronize = false;
-        console.log(`[TypeOrm] synchronize=${synchronize}`);
+
+        // 通过环境变量控制是否打开 TypeORM 的 query 级别调试日志
+        const dbDebugFlag = configService.get<string>('DB_DEBUG_LOG') ?? '';
+        const enableDbDebug = ['1', 'true', 'TRUE', 'yes', 'YES'].includes(dbDebugFlag);
+
+        const logging: LoggerOptions = enableDbDebug ? ['query', 'error', 'warn'] : ['error', 'warn'];
+
+        const logger = new Logger('TypeOrmConfig');
+        logger.log(
+          `[TypeOrm] synchronize=${synchronize}, logging=${Array.isArray(logging) ? logging.join(',') : logging}`,
+        );
+
         return {
           type: 'postgres',
           url: databaseUrl,
           autoLoadEntities: true,
           synchronize,
           migrationsRun: false,
-          logging: ['error', 'warn'], // Enable TypeORM error logging
+          logging,
         };
       },
     }),
@@ -112,6 +124,11 @@ import { TimestampMsInterceptor } from './common/interceptors/timestamp-ms.inter
     {
       provide: APP_GUARD,
       useClass: JwtAuthGuard,
+    },
+    {
+      // 统一 HTTP 请求/响应日志拦截器（debug 级别）
+      provide: APP_INTERCEPTOR,
+      useClass: HttpLoggingInterceptor,
     },
     {
       provide: APP_INTERCEPTOR,
