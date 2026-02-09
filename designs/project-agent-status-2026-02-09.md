@@ -485,11 +485,34 @@ curl -X POST http://localhost:3000/v1/agent/run \
 
 ### API 验收
 
-- [ ] Step 6: 服务成功启动，Swagger 可访问
-- [ ] Step 7: title_summary Agent 正常返回
-- [ ] Step 8: contact_insight Agent 正常返回
-- [ ] Step 9: archive_brief Agent 正常返回
-- [ ] Step 10: 流式 Chat 正常输出
+- [x] Step 6: 服务成功启动，Swagger 可访问 ✅
+- [x] Step 7: title_summary Agent 正常返回 ✅
+- [x] Step 8: contact_insight Agent 正常返回 ✅
+- [x] Step 9: archive_brief Agent 正常返回 ✅
+- [x] Step 10: 流式 Chat 正常输出 ⚠️ **速度比原流式实现慢**
+- [x] Step 11: network_action Agent 正常返回 ✅
+
+**network_action 响应示例**（空联系人网络场景）：
+```json
+{
+  "runId": "01KH1CFS5ZRWJKV1DDHEYKYAZ2",
+  "agentId": "network_action",
+  "cached": false,
+  "data": {
+    "followUps": [],
+    "recommendations": [
+      {"type": "connection", "description": "建议同步通讯录...", "confidence": 1},
+      {"type": "followup", "description": "回顾会议记录...", "confidence": 0.9},
+      {"type": "introduction", "description": "明确职业目标...", "confidence": 0.8}
+    ],
+    "synthesis": "当前联系人网络处于空白状态...",
+    "nextActions": [
+      {"action": "同步手机通讯录...", "priority": "high", "estimatedTime": "10-15 分钟"},
+      {"action": "手动录入核心合作伙伴...", "priority": "high", "estimatedTime": "5 分钟"}
+    ]
+  }
+}
+```
 
 ### 缓存验收
 
@@ -559,6 +582,80 @@ psql postgres://friendsai:friendsai@192.168.1.69:5434/friendsai_v2 \
 
 1. **路径解析** - 确保在不同环境（dev/test）下都能正确找到定义文件
 2. **循环依赖** - AgentRuntimeExecutor 与 capability 服务之间已有 `skipServiceRouting` 参数避免
+
+---
+
+## 验收完成总结
+
+### ✅ 已完成的验收项
+
+| 验收项 | 状态 | 说明 |
+|--------|------|------|
+| **核心测试** | ✅ 全部通过 | 125 个 agent 核心测试通过 |
+| **title_summary** | ✅ 通过 | API 返回正常，OpenSpec 已更新为 done |
+| **contact_insight** | ✅ 通过 | API 返回正常，OpenSpec 已更新为 done |
+| **archive_brief** | ✅ 通过 | API 返回正常，OpenSpec 已更新为 done |
+| **network_action** | ✅ 通过 | API 返回正常，OpenSpec 已更新为 done |
+| **流式 Chat** | ⚠️ 通过但较慢 | 功能正常但速度慢于原流式实现 |
+
+### 📊 OpenSpec 任务状态
+
+| Change | 任务完成度 | 状态 |
+|--------|-----------|------|
+| agent-capability-title-summary | 5/5 (100%) | ✅ done |
+| agent-capability-contact-insight | 5/5 (100%) | ✅ done |
+| agent-capability-archive-brief | 5/5 (100%) | ✅ done |
+| agent-capability-network-action | 5/5 (100%) | ✅ done |
+
+### ⚠️ 已知问题
+
+**流式 Chat API 性能问题** - `/v1/agent/chat` 响应比原流式实现慢
+
+可能原因：
+1. 新架构使用了 AgentOrchestrator 作为中间层
+2. 额外的模板渲染和验证步骤
+3. SSE 流式处理的实现方式可能存在缓冲问题
+
+---
+
+## 测试账号信息
+
+**用于 API 鉴权测试**
+
+```bash
+# 登录获取 Token
+curl -X POST http://192.168.1.69:3000/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{
+    "emailOrPhone": "haoqijian@outlook.com",
+    "password": "123456"
+  }'
+```
+
+**响应示例**：
+```json
+{
+  "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "refreshToken": "ed374ee6eec82a885e98c3050b8f3c9bd1f528e785ab49f21502d6f06507572a",
+  "expiresIn": 900,
+  "user": {
+    "id": "e87e6330-1d2c-4d85-857b-e532933ff112",
+    "email": "haoqijian@outlook.com",
+    "phone": null,
+    "name": "degen"
+  }
+}
+```
+
+**使用 Token 访问 API**：
+```bash
+export TOKEN="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+
+curl -X POST http://192.168.1.69:3000/v1/agent/run \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $TOKEN" \
+  -d '{"agentId":"network_action",...}'
+```
 
 ---
 
