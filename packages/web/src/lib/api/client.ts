@@ -30,7 +30,12 @@ import type {
   RejectToolRequest,
   ToolConfirmationStatus,
 } from './types';
-import type { AgentRunResponse, ContactInsightData } from './agent-types';
+import type {
+  AgentRunResponse,
+  ContactInsightData,
+  ArchiveBriefData,
+  NetworkActionData,
+} from './agent-types';
 
 const API_BASE = '/v1';
 
@@ -539,6 +544,80 @@ export const api = {
       });
 
       return handleResponse<AgentRunResponse<ContactInsightData>>(response);
+    },
+
+    /**
+     * 归档提取和简报生成（archive_brief）
+     * 对应后端：POST /v1/agent/run，agentId=archive_brief
+     */
+    async runArchiveExtract(request: {
+      conversationId: string;
+    }): Promise<AgentRunResponse<ArchiveBriefData>> {
+      const response = await fetchWithAuth(`${API_BASE}/agent/run`, {
+        method: 'POST',
+        body: JSON.stringify({
+          agentId: 'archive_brief',
+          operation: 'archive_extract',
+          input: {
+            conversationId: request.conversationId,
+          },
+          options: {
+            useCache: true,
+          },
+          conversationId: request.conversationId,
+        }),
+      });
+
+      return handleResponse<AgentRunResponse<ArchiveBriefData>>(response);
+    },
+
+    /**
+     * 生成联系人简报（archive_brief - brief_generate 操作）
+     * 对应后端：POST /v1/agent/run，agentId=archive_brief, operation=brief_generate
+     */
+    async runBriefGenerate(request: {
+      contactId: string;
+    }): Promise<AgentRunResponse<ArchiveBriefData>> {
+      const response = await fetchWithAuth(`${API_BASE}/agent/run`, {
+        method: 'POST',
+        body: JSON.stringify({
+          agentId: 'archive_brief',
+          operation: 'brief_generate',
+          input: {
+            contactId: request.contactId,
+          },
+          options: {
+            useCache: true,
+          },
+          conversationId: `brief_${request.contactId}`,
+        }),
+      });
+
+      return handleResponse<AgentRunResponse<ArchiveBriefData>>(response);
+    },
+
+    /**
+     * 生成网络行动建议（network_action）
+     * 对应后端：POST /v1/agent/run，agentId=network_action
+     */
+    async runNetworkAction(request: {
+      limit?: number;
+    }): Promise<AgentRunResponse<NetworkActionData>> {
+      const response = await fetchWithAuth(`${API_BASE}/agent/run`, {
+        method: 'POST',
+        body: JSON.stringify({
+          agentId: 'network_action',
+          input: {
+            limit: request.limit,
+          },
+          options: {
+            useCache: true,
+          },
+          conversationId: 'network_action',
+        }),
+      });
+
+      return handleResponse<AgentRunResponse<NetworkActionData>>(response);
     },
   },
 };

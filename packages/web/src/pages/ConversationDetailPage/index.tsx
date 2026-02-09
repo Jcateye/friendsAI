@@ -256,12 +256,48 @@ export function ConversationDetailPage() {
     chat.stop();
   }, [chat]);
 
+  // 技能执行状态
+  const [skillLoading, setSkillLoading] = useState(false);
+  const [skillResult, setSkillResult] = useState<string | null>(null);
+
   // 处理技能选择
-  const handleSkillSelect = useCallback((skillId: string, operation?: string) => {
+  const handleSkillSelect = useCallback(async (skillId: string, operation?: string) => {
     setActiveSkillId(skillId);
-    // TODO: 调用对应的 Agent 能力
-    console.log('Skill selected:', skillId, 'Operation:', operation);
-  }, []);
+    setSkillLoading(true);
+    setSkillResult(null);
+
+    try {
+      if (skillId === 'archive_brief' && operation === 'archive_extract' && conversationId) {
+        const result = await api.agent.runArchiveExtract({ conversationId });
+        const data = result.data as any;
+        if (data.operation === 'archive_extract') {
+          setSkillResult(
+            `归档提取完成！\n\n摘要：${data.summary}\n\n` +
+            `关键点：\n${data.payload.keyPoints?.map((p: string) => `• ${p}`).join('\n') || '无'}\n\n` +
+            `决策：\n${data.payload.decisions?.map((d: string) => `• ${d}`).join('\n') || '无'}\n\n` +
+            `行动项：\n${data.payload.actionItems?.map((a: string) => `• ${a}`).join('\n') || '无'}`
+          );
+        }
+      } else if (skillId === 'archive_brief' && operation === 'brief_generate' && conversationId) {
+        // brief_generate 需要 contactId，从当前会话获取
+        // 这里简化处理，发送一条消息提示用户
+        setSkillResult('生成简报功能需要在联系人详情页使用。');
+      } else if (skillId === 'contact_insight') {
+        setSkillResult('联系人洞察功能需要在联系人详情页使用。');
+      } else {
+        setSkillResult(`技能 "${skillId}" 操作 "${operation || '默认'}" 触发成功`);
+      }
+    } catch (error) {
+      setSkillResult(`执行失败：${error instanceof Error ? error.message : String(error)}`);
+    } finally {
+      setSkillLoading(false);
+      // 3秒后清除结果
+      setTimeout(() => {
+        setSkillResult(null);
+        setActiveSkillId(null);
+      }, 5000);
+    }
+  }, [conversationId]);
 
   return (
     <div className="flex flex-col h-full bg-bg-page">
@@ -318,6 +354,31 @@ export function ConversationDetailPage() {
                       <div className="w-2 h-2 bg-text-muted rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
                     </div>
                     <span className="text-[13px] text-text-muted font-primary">思考中...</span>
+                  </div>
+                </div>
+              </div>
+            )}
+            {/* 技能执行结果 */}
+            {skillResult && (
+              <div className="flex justify-start">
+                <div className="max-w-[80%] rounded-2xl px-4 py-3 bg-accent/10 border border-accent/30 text-text-primary">
+                  <div className="flex items-start gap-2">
+                    <span className="text-[13px] font-primary whitespace-pre-wrap">{skillResult}</span>
+                  </div>
+                </div>
+              </div>
+            )}
+            {/* 技能加载状态 */}
+            {skillLoading && (
+              <div className="flex justify-start">
+                <div className="max-w-[80%] rounded-2xl px-4 py-3 bg-bg-card text-text-primary">
+                  <div className="flex items-center gap-2">
+                    <div className="flex gap-1">
+                      <div className="w-2 h-2 bg-accent rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                      <div className="w-2 h-2 bg-accent rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                      <div className="w-2 h-2 bg-accent rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                    </div>
+                    <span className="text-[13px] text-accent font-primary">执行技能中...</span>
                   </div>
                 </div>
               </div>

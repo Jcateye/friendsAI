@@ -40,6 +40,72 @@ export interface ContactInsightData {
 }
 
 /**
+ * archive_brief Agent 输出数据结构
+ * 参考后端定义：packages/server-nestjs/src/agent/definitions/archive_brief/API_USAGE.md
+ */
+export type ArchiveBriefData = ArchiveExtractData | BriefGenerateData;
+
+/**
+ * archive_extract 操作输出
+ */
+export interface ArchiveExtractData {
+  operation: 'archive_extract';
+  id: string;
+  status: string;
+  summary: string;
+  payload: {
+    keyPoints?: string[];
+    decisions?: string[];
+    actionItems?: string[];
+    participants?: string[];
+    [key: string]: unknown;
+  };
+}
+
+/**
+ * brief_generate 操作输出
+ */
+export interface BriefGenerateData {
+  operation: 'brief_generate';
+  id: string;
+  contact_id: string;
+  content: string;
+  generated_at: string;
+  source_hash: string;
+}
+
+/**
+ * network_action Agent 输出数据结构
+ * 参考后端定义：packages/server-nestjs/src/agent/definitions/network_action/API_USAGE.md
+ */
+export interface NetworkActionData {
+  followUps: Array<{
+    contactId: string;
+    contactName: string;
+    reason: string;
+    priority: 'high' | 'medium' | 'low';
+    suggestedAction: string;
+  }>;
+  recommendations: Array<{
+    type: 'connection' | 'followup' | 'introduction';
+    description: string;
+    contacts: string[];
+    confidence: number;
+  }>;
+  synthesis: string;
+  nextActions: Array<{
+    action: string;
+    priority: 'high' | 'medium' | 'low';
+    estimatedTime?: string;
+  }>;
+  metadata?: {
+    cached: boolean;
+    sourceHash: string;
+    generatedAt: number;
+  };
+}
+
+/**
  * 通用 Agent 运行响应结构
  */
 export interface AgentRunResponse<TData> {
