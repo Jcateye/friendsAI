@@ -20,7 +20,7 @@ import { ContextBuilderService } from './context-builder.service';
 import { SnapshotService } from './snapshots/snapshot.service';
 import { SnapshotRepository } from './snapshots/snapshot.repository';
 // Runtime Core services
-import { AgentDefinitionRegistry } from './contracts/agent-definition-registry.service';
+import { AgentDefinitionRegistry } from './runtime/agent-definition-registry.service';
 import { PromptTemplateRenderer } from './runtime/prompt-template-renderer.service';
 import { TemplateContextBuilder } from './runtime/template-context-builder.service';
 import { MemoryRuntime } from './runtime/memory-runtime.service';
@@ -38,6 +38,8 @@ import { NetworkActionContextBuilder } from './capabilities/network_action/netwo
 import { NetworkActionService } from './capabilities/network_action/network-action.service';
 // Runtime Executor
 import { AgentRuntimeExecutor } from './runtime/agent-runtime-executor.service';
+// Agent List Service
+import { AgentListService } from './agent-list.service';
 
 @Module({
   imports: [
@@ -81,6 +83,8 @@ import { AgentRuntimeExecutor } from './runtime/agent-runtime-executor.service';
     NetworkActionService,
     // Runtime Executor
     AgentRuntimeExecutor,
+    // Agent List Service
+    AgentListService,
   ],
   exports: [
     AgentOrchestrator,
