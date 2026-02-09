@@ -1,6 +1,6 @@
 import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import { AgentRuntimeExecutor } from '../../runtime/agent-runtime-executor.service';
-import { AgentDefinitionRegistry } from '../../contracts/agent-definition-registry.service';
+import { AgentDefinitionRegistry } from '../../runtime/agent-definition-registry.service';
 import { SnapshotService } from '../../snapshots/snapshot.service';
 import { NetworkActionContextBuilder } from './network-action.context';
 import type {

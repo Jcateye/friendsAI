@@ -1,7 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { NotFoundException, BadRequestException } from '@nestjs/common';
 import { AgentRuntimeExecutor } from './agent-runtime-executor.service';
-import { AgentDefinitionRegistry } from '../contracts/agent-definition-registry.service';
+import { AgentDefinitionRegistry } from './agent-definition-registry.service';
 import { PromptTemplateRenderer } from './prompt-template-renderer.service';
 import { OutputValidator } from './output-validator.service';
 import { SnapshotService } from '../snapshots/snapshot.service';

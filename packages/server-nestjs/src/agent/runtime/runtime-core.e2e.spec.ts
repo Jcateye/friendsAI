@@ -1,5 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { AgentDefinitionRegistry } from '../contracts/agent-definition-registry.service';
+import { AgentDefinitionRegistry } from './agent-definition-registry.service';
 import { PromptTemplateRenderer } from './prompt-template-renderer.service';
 import { TemplateContextBuilder } from './template-context-builder.service';
 import { OutputValidator } from './output-validator.service';
@@ -97,13 +97,16 @@ describe('Runtime Core E2E', () => {
   it('should detect validation errors', async () => {
     const bundle = await registry.loadDefinition('example_agent');
 
-    // 无效的输出（缺少必需字段）
+    // 无效的输出（缺少必需字段 response）
     const invalidOutput = {
       // response 字段缺失
       confidence: 0.5,
     };
 
-    expect(() => validator.validate(bundle, invalidOutput)).toThrow();
+    const validationResult = validator.validate(bundle, invalidOutput);
+    // validate 方法返回 ValidationResult，不抛异常
+    expect(validationResult.valid).toBe(false);
+    expect(validationResult.errors).toBeDefined();
   });
 });
 

@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException, BadRequestException, Inject, forwardRef, Logger } from '@nestjs/common';
-import { AgentDefinitionRegistry } from '../contracts/agent-definition-registry.service';
+import { AgentDefinitionRegistry } from './agent-definition-registry.service';
 import { PromptTemplateRenderer } from './prompt-template-renderer.service';
 import { OutputValidator } from './output-validator.service';
 import { SnapshotService } from '../snapshots/snapshot.service';

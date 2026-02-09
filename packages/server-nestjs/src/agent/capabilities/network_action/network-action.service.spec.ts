@@ -5,13 +5,34 @@ import { NetworkActionService } from './network-action.service';
 import { NetworkActionContextBuilder } from './network-action.context';
 import { AgentRuntimeExecutor } from '../../runtime/agent-runtime-executor.service';
 import { SnapshotService } from '../../snapshots/snapshot.service';
+import { AgentDefinitionRegistry } from '../../runtime/agent-definition-registry.service';
 import { Contact, Conversation } from '../../../entities';
+
+// Mock bundle for loadDefinition
+const mockBundle = {
+  definition: {
+    id: 'network_action',
+    version: '1.0.0',
+    prompt: {
+      systemTemplate: 'system.mustache',
+      userTemplate: 'user.mustache',
+    },
+    validation: {
+      outputSchema: {},
+    },
+  },
+  systemTemplate: 'You are a helpful assistant.',
+  userTemplate: 'User input: {{input}}',
+  outputSchema: {},
+  inputSchema: undefined,
+};
 
 describe('NetworkActionService', () => {
   let service: NetworkActionService;
   let contextBuilder: NetworkActionContextBuilder;
   let runtimeExecutor: AgentRuntimeExecutor;
   let snapshotService: SnapshotService;
+  let definitionRegistry: AgentDefinitionRegistry;
   let contactRepository: Repository<Contact>;
   let conversationRepository: Repository<Conversation>;
 
@@ -23,7 +44,16 @@ describe('NetworkActionService', () => {
         {
           provide: AgentRuntimeExecutor,
           useValue: {
-            execute: jest.fn(),
+            execute: jest.fn().mockResolvedValue({
+              runId: 'test-run-id',
+              cached: false,
+              data: {
+                followUps: [],
+                recommendations: [],
+                synthesis: 'AI generated synthesis',
+                nextActions: [],
+              },
+            }),
           },
         },
         {
@@ -31,6 +61,13 @@ describe('NetworkActionService', () => {
           useValue: {
             findSnapshot: jest.fn(),
             createSnapshot: jest.fn(),
+          },
+        },
+        {
+          provide: AgentDefinitionRegistry,
+          useValue: {
+            loadDefinition: jest.fn().mockResolvedValue(mockBundle),
+            getDefinitionPath: jest.fn(),
           },
         },
         {
@@ -51,6 +88,7 @@ describe('NetworkActionService', () => {
     service = module.get<NetworkActionService>(NetworkActionService);
     contextBuilder = module.get<NetworkActionContextBuilder>(NetworkActionContextBuilder);
     runtimeExecutor = module.get<AgentRuntimeExecutor>(AgentRuntimeExecutor);
+    definitionRegistry = module.get<AgentDefinitionRegistry>(AgentDefinitionRegistry);
     snapshotService = module.get<SnapshotService>(SnapshotService);
     contactRepository = module.get<Repository<Contact>>(getRepositoryToken(Contact));
     conversationRepository = module.get<Repository<Conversation>>(getRepositoryToken(Conversation));
@@ -70,6 +108,7 @@ describe('NetworkActionService', () => {
         nextActions: [],
       };
 
+      jest.spyOn(definitionRegistry, 'loadDefinition').mockResolvedValue(mockBundle);
       jest.spyOn(contextBuilder, 'build').mockResolvedValue({
         contacts: [],
         recentInteractions: [],
@@ -94,6 +133,7 @@ describe('NetworkActionService', () => {
     it('should return empty response when no contacts', async () => {
       const userId = 'test-user-id';
 
+      jest.spyOn(definitionRegistry, 'loadDefinition').mockResolvedValue(mockBundle);
       jest.spyOn(contextBuilder, 'build').mockResolvedValue({
         contacts: [],
         recentInteractions: [],
@@ -104,6 +144,18 @@ describe('NetworkActionService', () => {
         snapshot: null,
         cached: false,
       });
+
+      // Mock execute 返回空数据
+      jest.spyOn(runtimeExecutor, 'execute').mockResolvedValue({
+        runId: 'test-run-id',
+        cached: false,
+        data: {
+          followUps: [],
+          recommendations: [],
+          synthesis: '暂无联系人数据',
+          nextActions: [],
+        },
+      } as any);
 
       const result = await service.run({ userId });
 
