@@ -7,7 +7,53 @@
         "id": { "type": "string" },
         "status": { "type": "string" },
         "summary": { "type": "string" },
-        "payload": { "type": "object" }
+        "payload": {
+          "type": "object",
+          "properties": {
+            "keyPoints": { "type": "array", "items": { "type": "string" } },
+            "decisions": { "type": "array", "items": { "type": "string" } },
+            "actionItems": { "type": "array", "items": { "type": "string" } },
+            "participants": { "type": "array", "items": { "type": "string" } },
+            "contacts": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "name": { "type": "string" },
+                  "company": { "type": "string" },
+                  "position": { "type": "string" },
+                  "email": { "type": "string" },
+                  "role": { "type": "string" }
+                },
+                "required": ["name"]
+              }
+            },
+            "facts": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "content": { "type": "string" },
+                  "category": { "type": "string" }
+                },
+                "required": ["content"]
+              }
+            },
+            "tags": { "type": "array", "items": { "type": "string" } },
+            "dates": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "description": { "type": "string" },
+                  "date": { "type": "string" },
+                  "type": { "type": "string", "enum": ["deadline", "meeting", "milestone", "other"] }
+                },
+                "required": ["description"]
+              }
+            }
+          }
+        }
       },
       "required": ["operation", "id", "status", "summary", "payload"]
     },
@@ -24,7 +70,5 @@
     }
   ]
 }
-
-
 
 

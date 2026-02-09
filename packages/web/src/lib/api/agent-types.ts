@@ -58,6 +58,27 @@ export interface ArchiveExtractData {
     decisions?: string[];
     actionItems?: string[];
     participants?: string[];
+    // 扩展字段：联系人提取
+    contacts?: Array<{
+      name: string;
+      company?: string;
+      position?: string;
+      email?: string;
+      role?: string; // 在对话中的角色
+    }>;
+    // 扩展字段：事实/信息点
+    facts?: Array<{
+      content: string;
+      category?: string; // 如：项目、技术、商务等
+    }>;
+    // 扩展字段：标签/主题
+    tags?: string[];
+    // 扩展字段：时间相关
+    dates?: Array<{
+      description: string;
+      date?: string;
+      type?: 'deadline' | 'meeting' | 'milestone' | 'other';
+    }>;
     [key: string]: unknown;
   };
 }

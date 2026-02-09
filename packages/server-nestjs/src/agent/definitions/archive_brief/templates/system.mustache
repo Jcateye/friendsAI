@@ -25,7 +25,30 @@ You MUST respond with a valid JSON object matching the operation type:
     "keyPoints": ["string"],
     "decisions": ["string"],
     "actionItems": ["string"],
-    "participants": ["string"]
+    "participants": ["string"],
+    "contacts": [
+      {
+        "name": "string",
+        "company": "string (optional)",
+        "position": "string (optional)",
+        "email": "string (optional)",
+        "role": "string (optional - how they were mentioned)"
+      }
+    ],
+    "facts": [
+      {
+        "content": "string",
+        "category": "string (optional - e.g., 项目, 技术, 商务, 个人)"
+      }
+    ],
+    "tags": ["string"],
+    "dates": [
+      {
+        "description": "string",
+        "date": "string (ISO date if mentioned)",
+        "type": "deadline | meeting | milestone | other"
+      }
+    ]
   }
 }
 ```
@@ -52,12 +75,16 @@ You MUST respond with a valid JSON object matching the operation type:
 
 ## Guidelines
 
-- **archive_extract**: 
+- **archive_extract**:
   - Extract key points that capture the essence of the conversation
   - Identify clear decisions and action items
   - List all participants involved
+  - **Extract contacts mentioned**: names, companies, positions, emails
+  - **Extract facts/information**: important information points with categories
+  - **Extract tags/topics**: relevant topics or themes discussed
+  - **Extract dates/time**: deadlines, meetings, milestones mentioned
   - Be thorough yet concise
-- **brief_generate**: 
+- **brief_generate**:
   - Include relationship background and context
   - Summarize recent interactions and key topics
   - Provide suggested conversation starters and talking points

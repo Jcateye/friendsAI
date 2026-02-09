@@ -259,43 +259,67 @@ export function ConversationDetailPage() {
   // 技能执行状态
   const [skillLoading, setSkillLoading] = useState(false);
   const [skillResult, setSkillResult] = useState<string | null>(null);
+  const [archiveData, setArchiveData] = useState<any>(null);
 
   // 处理技能选择
   const handleSkillSelect = useCallback(async (skillId: string, operation?: string) => {
     setActiveSkillId(skillId);
     setSkillLoading(true);
     setSkillResult(null);
+    setArchiveData(null);
 
     try {
       if (skillId === 'archive_brief' && operation === 'archive_extract' && conversationId) {
         const result = await api.agent.runArchiveExtract({ conversationId });
         const data = result.data as any;
-        if (data.operation === 'archive_extract') {
-          setSkillResult(
-            `归档提取完成！\n\n摘要：${data.summary}\n\n` +
-            `关键点：\n${data.payload.keyPoints?.map((p: string) => `• ${p}`).join('\n') || '无'}\n\n` +
-            `决策：\n${data.payload.decisions?.map((d: string) => `• ${d}`).join('\n') || '无'}\n\n` +
-            `行动项：\n${data.payload.actionItems?.map((a: string) => `• ${a}`).join('\n') || '无'}`
-          );
+        setArchiveData(data);
+
+        // 生成展示文本
+        let resultText = `📋 归档提取完成\n\n`;
+        resultText += `摘要：${data.summary}\n\n`;
+
+        if (data.payload?.keyPoints?.length) {
+          resultText += `关键点：\n${data.payload.keyPoints.map((p: string) => `• ${p}`).join('\n')}\n\n`;
         }
+        if (data.payload?.decisions?.length) {
+          resultText += `决策：\n${data.payload.decisions.map((d: string) => `• ${d}`).join('\n')}\n\n`;
+        }
+        if (data.payload?.actionItems?.length) {
+          resultText += `行动项：\n${data.payload.actionItems.map((a: string) => `• ${a}`).join('\n')}\n\n`;
+        }
+        if (data.payload?.contacts?.length) {
+          resultText += `👥 提取的联系人：\n${data.payload.contacts.map((c: any) => {
+            let contact = `• ${c.name}`;
+            if (c.company) contact += ` (${c.company})`;
+            if (c.position) contact += ` - ${c.position}`;
+            if (c.email) contact += ` [${c.email}]`;
+            return contact;
+          }).join('\n')}\n\n`;
+        }
+        if (data.payload?.facts?.length) {
+          resultText += `📝 事实/信息：\n${data.payload.facts.map((f: any) => `• ${f.content}${f.category ? ` [${f.category}]` : ''}`).join('\n')}\n\n`;
+        }
+        if (data.payload?.tags?.length) {
+          resultText += `🏷️ 标签：\n${data.payload.tags.map((t: string) => `#${t}`).join(' ')}\n\n`;
+        }
+
+        setSkillResult(resultText);
       } else if (skillId === 'archive_brief' && operation === 'brief_generate' && conversationId) {
-        // brief_generate 需要 contactId，从当前会话获取
-        // 这里简化处理，发送一条消息提示用户
-        setSkillResult('生成简报功能需要在联系人详情页使用。');
+        setSkillResult('💡 生成简报功能需要在联系人详情页使用。\n\n打开联系人详情页后，点击「生成洞察」按钮即可生成会前简报。');
       } else if (skillId === 'contact_insight') {
-        setSkillResult('联系人洞察功能需要在联系人详情页使用。');
+        setSkillResult('👤 联系人洞察功能需要在联系人详情页使用。\n\n打开联系人详情页后，点击「洞察」按钮即可生成完整的联系人洞察分析。');
       } else {
-        setSkillResult(`技能 "${skillId}" 操作 "${operation || '默认'}" 触发成功`);
+        setSkillResult(`✅ 技能 "${skillId}" 操作 "${operation || '默认'}" 触发成功`);
       }
     } catch (error) {
-      setSkillResult(`执行失败：${error instanceof Error ? error.message : String(error)}`);
+      setSkillResult(`❌ 执行失败：${error instanceof Error ? error.message : String(error)}`);
     } finally {
       setSkillLoading(false);
-      // 3秒后清除结果
+      // 5秒后清除简单结果，保留归档数据
       setTimeout(() => {
         setSkillResult(null);
         setActiveSkillId(null);
-      }, 5000);
+      }, 8000);
     }
   }, [conversationId]);
 
