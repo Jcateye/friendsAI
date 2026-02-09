@@ -1,4 +1,4 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, ManyToOne, OneToMany, JoinColumn } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, ManyToOne, OneToMany, JoinColumn, BeforeUpdate } from 'typeorm';
 import { User } from './user.entity';
 import { Event } from './event.entity';
 import { Conversation } from './conversation.entity';
@@ -64,6 +64,11 @@ export class Contact {
   @CreateDateColumn({ type: 'bigint', transformer: timestampMsTransformer })
   createdAt: Date;
 
-  @UpdateDateColumn({ type: 'bigint', transformer: timestampMsTransformer })
+  @Column({ type: 'bigint', transformer: timestampMsTransformer })
   updatedAt: Date;
+
+  @BeforeUpdate()
+  updateTimestamp() {
+    this.updatedAt = new Date();
+  }
 }

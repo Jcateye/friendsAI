@@ -43,11 +43,13 @@ export class ContactsService {
   ) {}
 
   async create(createContactDto: CreateContactDto, userId?: string): Promise<Contact> {
-    if (!createContactDto.name) {
-      throw new BadRequestException('displayName is required');
+    const name = createContactDto.name?.trim();
+    if (!name || name.length === 0) {
+      throw new BadRequestException('name is required');
     }
     const contact = this.contactRepository.create({
       ...createContactDto,
+      name,
       userId: userId ?? null,
     });
     return this.contactRepository.save(contact);

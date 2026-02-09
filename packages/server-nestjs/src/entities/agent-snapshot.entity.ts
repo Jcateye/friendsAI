@@ -3,8 +3,8 @@ import {
   PrimaryGeneratedColumn,
   Column,
   CreateDateColumn,
-  UpdateDateColumn,
   Index,
+  BeforeUpdate,
 } from 'typeorm';
 import { timestampMsTransformer } from './timestamp-ms.transformer';
 
@@ -53,6 +53,11 @@ export class AgentSnapshot {
   @CreateDateColumn({ type: 'bigint', transformer: timestampMsTransformer })
   createdAt: Date;
 
-  @UpdateDateColumn({ type: 'bigint', transformer: timestampMsTransformer })
+  @Column({ type: 'bigint', transformer: timestampMsTransformer })
   updatedAt: Date;
+
+  @BeforeUpdate()
+  updateTimestamp() {
+    this.updatedAt = new Date();
+  }
 }

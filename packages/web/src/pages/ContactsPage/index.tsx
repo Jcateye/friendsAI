@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react'
-import { Search, ChevronRight, FlaskConical } from 'lucide-react'
+import { Search, ChevronRight, FlaskConical, Plus } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { Header } from '../../components/layout/Header'
 import { useDemoMode } from '../../contexts/DemoModeContext'
 import { api } from '../../lib/api'
 import type { Contact as ApiContact } from '../../lib/api/types'
+import { ContactFormModal } from '../../components/contacts/ContactFormModal'
 
 interface UiContact {
   id: string
@@ -76,8 +77,9 @@ export function ContactsPage() {
   const [realContacts, setRealContacts] = useState<UiContact[]>([])
   const [realLoading, setRealLoading] = useState(false)
   const [realError, setRealError] = useState<string | null>(null)
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
 
-  useEffect(() => {
+  const loadContacts = () => {
     if (!isDemoMode) {
       setRealLoading(true)
       setRealError(null)
@@ -93,6 +95,10 @@ export function ContactsPage() {
           setRealLoading(false)
         })
     }
+  }
+
+  useEffect(() => {
+    loadContacts()
   }, [isDemoMode])
 
   const contacts = isDemoMode ? demoContacts : realContacts
@@ -105,16 +111,28 @@ export function ContactsPage() {
         title="联系人"
         showMenu
         rightElement={
-          <button
-            onClick={toggleDemoMode}
-            aria-label="切换Demo模式"
-            className={`p-1 -mr-1 rounded-md transition-colors ${
-              isDemoMode ? 'bg-primary-tint text-primary' : 'text-text-muted'
-            }`}
-            title={isDemoMode ? 'Demo模式: 开启' : 'Demo模式: 关闭'}
-          >
-            <FlaskConical className="w-5 h-5" />
-          </button>
+          <div className="flex items-center gap-1">
+            {!isDemoMode && (
+              <button
+                onClick={() => setIsCreateModalOpen(true)}
+                aria-label="新建联系人"
+                className="p-1 -mr-1 rounded-md transition-colors text-text-primary hover:bg-bg-surface"
+                title="新建联系人"
+              >
+                <Plus className="w-5 h-5" />
+              </button>
+            )}
+            <button
+              onClick={toggleDemoMode}
+              aria-label="切换Demo模式"
+              className={`p-1 -mr-1 rounded-md transition-colors ${
+                isDemoMode ? 'bg-primary-tint text-primary' : 'text-text-muted'
+              }`}
+              title={isDemoMode ? 'Demo模式: 开启' : 'Demo模式: 关闭'}
+            >
+              <FlaskConical className="w-5 h-5" />
+            </button>
+          </div>
         }
       />
 
@@ -217,6 +235,18 @@ export function ContactsPage() {
           ))
         )}
       </div>
+
+      {/* Create Contact Modal */}
+      {!isDemoMode && (
+        <ContactFormModal
+          isOpen={isCreateModalOpen}
+          onClose={() => setIsCreateModalOpen(false)}
+          onSuccess={() => {
+            loadContacts()
+            setIsCreateModalOpen(false)
+          }}
+        />
+      )}
     </div>
   )
 }

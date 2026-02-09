@@ -10,6 +10,7 @@ interface HeaderProps {
   rightElement?: React.ReactNode
   onMenuClick?: () => void
   onNewChatClick?: () => void
+  onEditClick?: () => void
 }
 
 export function Header({
@@ -21,6 +22,7 @@ export function Header({
   rightElement,
   onMenuClick,
   onNewChatClick,
+  onEditClick,
 }: HeaderProps) {
   const navigate = useNavigate()
 
@@ -50,7 +52,7 @@ export function Header({
           </button>
         )}
         {showEdit && (
-          <button aria-label="编辑" className="p-1 -mr-1">
+          <button onClick={onEditClick} aria-label="编辑" className="p-1 -mr-1">
             <SquarePen className="w-6 h-6 text-text-primary" />
           </button>
         )}

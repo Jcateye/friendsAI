@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { Copy, RefreshCw, ChevronRight, FlaskConical } from 'lucide-react'
+import { Copy, RefreshCw, ChevronRight, FlaskConical, Trash2 } from 'lucide-react'
 import { Header } from '../../components/layout/Header'
 import { useDemoMode } from '../../contexts/DemoModeContext'
 import { api } from '../../lib/api'
 import type { Contact as ApiContact, ContactContext } from '../../lib/api/types'
+import { ContactFormModal } from '../../components/contacts/ContactFormModal'
 
 interface TimelineEvent {
   id: string
@@ -88,8 +89,11 @@ export function ContactDetailPage() {
   const [realContext, setRealContext] = useState<ContactContext | null>(null)
   const [realLoading, setRealLoading] = useState(false)
   const [realError, setRealError] = useState<string | null>(null)
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false)
+  const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false)
+  const [isDeleting, setIsDeleting] = useState(false)
 
-  useEffect(() => {
+  const loadContact = () => {
     if (!isDemoMode && id) {
       setRealLoading(true)
       setRealError(null)
@@ -105,7 +109,26 @@ export function ContactDetailPage() {
           setRealLoading(false)
         })
     }
+  }
+
+  useEffect(() => {
+    loadContact()
   }, [isDemoMode, id])
+
+  const handleDelete = async () => {
+    if (!id || isDemoMode) return
+
+    setIsDeleting(true)
+    try {
+      await api.contacts.delete(id)
+      navigate('/contacts')
+    } catch (error) {
+      setRealError(error instanceof Error ? error.message : '删除失败')
+      setIsDeleteConfirmOpen(false)
+    } finally {
+      setIsDeleting(false)
+    }
+  }
 
   const contact = isDemoMode ? null : (realContact ? toDemoContact(realContact, realContext) : null)
   const events = isDemoMode ? demoData.events : (realContext ? toTimelineEvents(realContext) : [])
@@ -146,12 +169,23 @@ export function ContactDetailPage() {
       <Header
         title="联系人详情"
         showBack
-        showEdit
+        showEdit={!isDemoMode}
+        onEditClick={() => setIsEditModalOpen(true)}
         rightElement={
           !isDemoMode && (
-            <div className="flex items-center gap-1 px-2 py-1 bg-success-tint rounded-md">
-              <FlaskConical className="w-3 h-3 text-success" />
-              <span className="text-[10px] text-success font-medium font-primary">API</span>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setIsDeleteConfirmOpen(true)}
+                aria-label="删除联系人"
+                className="p-1.5 rounded-md hover:bg-red-50 transition-colors text-red-500"
+                title="删除联系人"
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+              <div className="flex items-center gap-1 px-2 py-1 bg-success-tint rounded-md">
+                <FlaskConical className="w-3 h-3 text-success" />
+                <span className="text-[10px] text-success font-medium font-primary">API</span>
+              </div>
             </div>
           )
         }
@@ -252,6 +286,49 @@ export function ContactDetailPage() {
           ))}
         </div>
       </div>
+
+      {/* Edit Contact Modal */}
+      {!isDemoMode && realContact && (
+        <ContactFormModal
+          isOpen={isEditModalOpen}
+          onClose={() => setIsEditModalOpen(false)}
+          contact={realContact}
+          onSuccess={() => {
+            loadContact()
+            setIsEditModalOpen(false)
+          }}
+        />
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {!isDemoMode && isDeleteConfirmOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="w-full max-w-sm mx-4 bg-bg-card rounded-lg shadow-lg p-5">
+            <h3 className="text-lg font-semibold text-text-primary font-display mb-2">
+              确认删除
+            </h3>
+            <p className="text-[14px] text-text-secondary font-primary mb-4">
+              确定要删除联系人 "{displayContact.name}" 吗？此操作无法撤销。
+            </p>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setIsDeleteConfirmOpen(false)}
+                disabled={isDeleting}
+                className="flex-1 px-4 py-2.5 bg-bg-surface text-text-primary rounded-md font-medium font-primary hover:bg-bg-card transition-colors disabled:opacity-50"
+              >
+                取消
+              </button>
+              <button
+                onClick={handleDelete}
+                disabled={isDeleting}
+                className="flex-1 px-4 py-2.5 bg-red-500 text-white rounded-md font-medium font-primary hover:opacity-90 transition-opacity disabled:opacity-50"
+              >
+                {isDeleting ? '删除中...' : '删除'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

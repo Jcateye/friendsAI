@@ -1,4 +1,4 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, ManyToOne, JoinColumn } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, ManyToOne, JoinColumn, BeforeUpdate } from 'typeorm';
 import { User } from './user.entity';
 import { timestampMsTransformer } from './timestamp-ms.transformer';
 
@@ -46,6 +46,11 @@ export class ToolConfirmation {
   @CreateDateColumn({ type: 'bigint', transformer: timestampMsTransformer })
   createdAt: Date;
 
-  @UpdateDateColumn({ type: 'bigint', transformer: timestampMsTransformer })
+  @Column({ type: 'bigint', transformer: timestampMsTransformer })
   updatedAt: Date;
+
+  @BeforeUpdate()
+  updateTimestamp() {
+    this.updatedAt = new Date();
+  }
 }
