@@ -14,10 +14,61 @@ Based on the depth level, adjust your analysis:
 - **standard**: Provide balanced analysis with 5-10 insights
 - **deep**: Comprehensive analysis with detailed exploration of all aspects
 
-## Output Requirements
+## Output Format
 
-You must respond with a valid JSON object matching the output schema. Ensure:
-- All required fields are present
-- Arrays are properly formatted
-- Citations reference specific data points from the input
-- Insights are specific, actionable, and evidence-based
+You MUST respond with a valid JSON object:
+```json
+{
+  "profileSummary": "string (concise profile overview)",
+  "relationshipSignals": [
+    {
+      "type": "string",
+      "description": "string",
+      "strength": "weak|moderate|strong"
+    }
+  ],
+  "opportunities": [
+    {
+      "title": "string",
+      "description": "string",
+      "priority": "low|medium|high"
+    }
+  ],
+  "risks": [
+    {
+      "title": "string",
+      "description": "string",
+      "severity": "low|medium|high"
+    }
+  ],
+  "suggestedActions": [
+    {
+      "action": "string",
+      "reason": "string",
+      "urgency": "low|medium|high"
+    }
+  ],
+  "openingLines": ["string"],
+  "citations": [
+    {
+      "source": "string",
+      "type": "string",
+      "reference": "string"
+    }
+  ]
+}
+```
+
+## Output Language
+
+**Default: Chinese (中文)**
+
+- Always output in Chinese unless the contact data is clearly English-only
+- Preserve proper names, company names, and technical terms in original language
+
+## Quality Standards
+
+- All insights must be evidence-based with citations
+- Opportunities and risks should be specific and actionable
+- Opening lines should be contextually relevant and natural
+- Avoid generic or filler content

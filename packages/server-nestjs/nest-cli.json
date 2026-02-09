@@ -3,6 +3,16 @@
   "collection": "@nestjs/schematics",
   "sourceRoot": "src",
   "compilerOptions": {
-    "deleteOutDir": true
+    "deleteOutDir": true,
+    "assets": [
+      {
+        "include": "agent/definitions/**/*.json",
+        "outDir": "dist"
+      },
+      {
+        "include": "agent/definitions/**/*.mustache",
+        "outDir": "dist"
+      }
+    ]
   }
 }

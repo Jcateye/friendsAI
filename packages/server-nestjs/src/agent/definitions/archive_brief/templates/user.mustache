@@ -1,38 +1,61 @@
-{{#operation}}
-Operation: {{operation}}
-{{/operation}}
+## Operation: {{operation}}
+
+---
 
 {{#archive_extract}}
-Please extract and summarize the following conversation archive:
+## Archive Extraction
 
-Conversation ID: {{conversationId}}
-Content: {{content}}
+**Conversation ID:** {{conversationId}}
+**Content Preview:** {{#content}}{{content}}{{/content}}{{^content}}No content available{{/content}}
+
+### Messages ({{messages.length}})
+
 {{#messages}}
-{{role}}: {{content}}
+### [{{index}}] {{role}}
+{{content}}
+
+{{/messages}}
+{{^messages}}
+No messages available.
+
 {{/messages}}
 
-Generate a structured summary with key points and insights.
+### Task
+
+Extract and summarize this conversation archive into a structured format including:
+- Key points discussed
+- Decisions made
+- Action items identified
+- Participants involved
 {{/archive_extract}}
 
 {{#brief_generate}}
-Please generate a comprehensive briefing for the following contact:
+## Contact Briefing
 
-Contact ID: {{contactId}}
-Name: {{name}}
-{{#company}}Company: {{company}}{{/company}}
-{{#position}}Position: {{position}}{{/position}}
-{{#tags}}Tags: {{tags}}{{/tags}}
+**Contact ID:** {{contactId}}
+**Name:** {{name}}
+{{#company}}**Company:** {{company}}{{/company}}
+{{#position}}**Position:** {{position}}{{/position}}
+{{#tags}}**Tags:** {{tags}}{{/tags}}
+
+### Recent Interactions ({{recentInteractions.length}})
 
 {{#recentInteractions}}
-Recent Interactions:
-{{#.}}
 - {{.}}
-{{/.}}
+{{/recentInteractions}}
+{{^recentInteractions}}
+No recent interactions available.
+
 {{/recentInteractions}}
 
-Generate a comprehensive briefing covering background, relationship status, key interactions, and recommendations.
+### Task
+
+Generate a comprehensive briefing including:
+- Relationship background and context
+- Recent interaction summary
+- Key topics and interests
+- Suggested conversation starters
+- Recommended talking points
+
+Output in **Chinese** unless the contact data is clearly English-only.
 {{/brief_generate}}
-
-
-
-

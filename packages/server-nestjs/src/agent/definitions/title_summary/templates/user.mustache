@@ -1,11 +1,21 @@
-Please generate a title and summary for the following conversation:
+## Conversation Context
 
-Conversation ID: {{conversationId}}
+**Conversation ID:** {{conversationId}}
+**Message Count:** {{messages.length}}
+
 {{#messages}}
-{{role}}: {{content}}
+{{#index}}### [{{index}}] {{role}}{{/index}}{{^index}}### {{role}}{{/index}}
+{{content}}
+
+{{/messages}}
+{{^messages}}
+No messages available.
+
 {{/messages}}
 
-Generate a title and summary based on the conversation content above.
+## Task
+
+Based on the conversation above, generate a title and summary in **Chinese** following the output format specified in the system prompt.
 
 
 
