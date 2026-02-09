@@ -1,4 +1,4 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, ManyToOne, JoinColumn, BeforeUpdate } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, ManyToOne, JoinColumn, BeforeInsert, BeforeUpdate } from 'typeorm';
 import { Contact } from './contact.entity';
 import { timestampMsTransformer } from './timestamp-ms.transformer';
 
@@ -34,11 +34,18 @@ export class ContactTodo {
   @Column()
   contactId: string;
 
-  @CreateDateColumn({ type: 'bigint', transformer: timestampMsTransformer })
+  @Column({ type: 'bigint', transformer: timestampMsTransformer })
   createdAt: Date;
 
   @Column({ type: 'bigint', transformer: timestampMsTransformer })
   updatedAt: Date;
+
+  @BeforeInsert()
+  setCreatedAt() {
+    const now = new Date();
+    this.createdAt = now;
+    this.updatedAt = now;
+  }
 
   @BeforeUpdate()
   updateTimestamp() {

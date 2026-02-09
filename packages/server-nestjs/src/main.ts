@@ -56,17 +56,29 @@ async function bootstrap() {
   // Swagger / OpenAPI configuration
   const config = new DocumentBuilder()
     .setTitle('FriendsAI API')
-    .setDescription('FriendsAI Backend API Documentation')
+    .setDescription(
+      [
+        'FriendsAI Backend API Documentation',
+        '',
+        'OpenAPI JSON: http://localhost:3000/api/openapi.json',
+      ].join('\n'),
+    )
     .setVersion('1.0')
     .addBearerAuth()
     .build();
   const document = SwaggerModule.createDocument(app, config);
 
-  SwaggerModule.setup('api', app, document, {
-    // 让 Postman 等客户端可以直接通过 URL 导入 OpenAPI 3 规范
-    // 示例： http://localhost:3000/api/openapi.json
-    jsonDocumentUrl: 'openapi.json',
+  // 暴露原始 OpenAPI JSON 文档，供 Postman、外部工具或前端导入使用
+  // 访问地址： http://localhost:3000/api/openapi.json
+  const httpAdapter = app.getHttpAdapter();
+  httpAdapter.get('/api/openapi.json', (req, res) => {
+    res.setHeader('Content-Type', 'application/json');
+    res.send(JSON.stringify(document));
   });
+
+  // Swagger UI 页面： http://localhost:3000/api
+  // 在页面的描述信息中会包含 OpenAPI JSON 的链接，方便点击复制
+  SwaggerModule.setup('api', app, document);
 
   await app.listen(port);
   logger.log(`🚀 Server is running on http://localhost:${port}`);

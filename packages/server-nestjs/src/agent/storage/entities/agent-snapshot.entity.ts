@@ -4,6 +4,7 @@ import {
   Column,
   CreateDateColumn,
   Index,
+  BeforeInsert,
 } from 'typeorm';
 import { timestampMsTransformer } from '../../../entities/timestamp-ms.transformer';
 
@@ -49,7 +50,7 @@ export class AgentSnapshot {
   ttlMs: number;
 
   /** 创建时间（毫秒时间戳） */
-  @CreateDateColumn({ type: 'bigint', transformer: timestampMsTransformer })
+  @Column({ type: 'bigint' })
   createdAtMs: number;
 
   /** 过期时间（毫秒时间戳） */
@@ -59,6 +60,13 @@ export class AgentSnapshot {
   /** 元数据 */
   @Column({ type: 'jsonb', nullable: true })
   metadata: Record<string, unknown> | null;
+
+  @BeforeInsert()
+  setCreatedAtMs() {
+    if (typeof this.createdAtMs !== 'number' || !Number.isFinite(this.createdAtMs)) {
+      this.createdAtMs = Date.now();
+    }
+  }
 }
 
 

@@ -32,6 +32,17 @@ FriendsAI 是一个 **AI 原生的人脉/关系情报管理** 应用：以“对
 - 可追溯：所有 AI 提取/归档结果尽量带 citations（来源 message span 或引用 ID）。
 - API 统一前缀：/v1；流式输出使用 SSE（或明确替代方案）。
 
+### API Documentation & Swagger
+- 所有对前端或外部可见的 HTTP 接口（尤其是 `/v1/**`）必须接入 NestJS Swagger：
+  - 在 controller 上配置 tag（如 `@ApiTags('agent')`），在接口方法上添加 summary/description。
+  - 请求/响应 DTO 使用 `@nestjs/swagger` 装饰器暴露 schema，保证 OpenAPI JSON 可被前端/工具消费。
+- Swagger/OpenAPI 文档出口：
+  - Swagger UI：`/api`
+  - OpenAPI JSON：`/api/openapi.json`（作为单一 API 契约源，供 Postman/前端代码生成/调试使用）。
+- 新增或变更接口时：
+  - 必须同时更新 Swagger 描述与 openspec 规范（如在 `openspec/specs/**/spec.md` 中补充对应小节）。
+  - 接口行为、字段语义、错误码等文字说明以 openspec 为准，Swagger 主要承载结构与示例。
+
 ### Testing Strategy
 - Server: Jest（单元测试优先覆盖 orchestrator、tool 策略、归档提取/应用）
 - Client: 以 H5 为主；关键 hook/解析逻辑可用单测（已有 vitest 示例）。

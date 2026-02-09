@@ -1,8 +1,11 @@
 import { Controller, Get, Request, UseGuards, NotFoundException } from '@nestjs/common';
+import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { ActionPanelService } from './action-panel.service';
 import { NetworkActionService } from '../../agent/capabilities/network_action/network-action.service';
 // import { AuthGuard } from '../../auth/auth.guard'; // 假设认证守卫存在
 
+@ApiTags('action-panel')
+@ApiBearerAuth()
 @Controller('action-panel')
 export class ActionPanelController {
   constructor(
@@ -11,6 +14,20 @@ export class ActionPanelController {
   ) {}
 
   @Get('dashboard')
+  @ApiOperation({
+    summary: '获取当前用户的行动面板（Dashboard）',
+    description:
+      '聚合当前用户需要跟进的人、推荐联系人的列表等高优先级行动信息。' +
+      '默认通过新的 NetworkActionService 获取结果，如果失败则自动回退到旧版 ActionPanelService。',
+  })
+  @ApiResponse({
+    status: 200,
+    description: '成功返回当前用户的行动面板数据',
+  })
+  @ApiResponse({
+    status: 404,
+    description: '当前请求中未找到用户信息（User not found）',
+  })
   // @UseGuards(AuthGuard)
   async getDashboard(@Request() req: any) {
     const userId = req.user?.id;

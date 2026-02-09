@@ -1,8 +1,11 @@
 import { Controller, Get, Post, Param, Request, UseGuards, NotFoundException } from '@nestjs/common';
+import { ApiBearerAuth, ApiOperation, ApiParam, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { BriefingService, BriefSnapshot } from '../briefing/briefing.service';
 import { AgentRuntimeExecutor } from '../../agent/runtime/agent-runtime-executor.service';
 // import { AuthGuard } from '../../auth/auth.guard'; // 假设认证守卫存在
 
+@ApiTags('briefings')
+@ApiBearerAuth()
 @Controller('contacts')
 export class BriefingsController {
   constructor(
@@ -11,6 +14,20 @@ export class BriefingsController {
   ) {}
 
   @Get(':contactId/brief')
+  @ApiOperation({
+    summary: '获取某个联系人的简报（brief）',
+    description:
+      '优先通过新的 Agent Runtime 生成并获取联系人简报，如果新 runtime 失败则回退到旧版 BriefingService。',
+  })
+  @ApiParam({ name: 'contactId', description: '联系人 ID', type: String })
+  @ApiResponse({
+    status: 200,
+    description: '成功返回联系人简报（可能来自缓存或回退逻辑）',
+  })
+  @ApiResponse({
+    status: 404,
+    description: '当前请求中未找到用户信息（User not found）',
+  })
   // @UseGuards(AuthGuard)
   async getBriefing(
     @Request() req: any,
@@ -44,6 +61,20 @@ export class BriefingsController {
   }
 
   @Post(':contactId/brief')
+  @ApiOperation({
+    summary: '刷新某个联系人的简报（brief）',
+    description:
+      '强制通过新的 Agent Runtime 重新生成联系人简报，如果新 runtime 失败则回退到旧版 BriefingService 刷新逻辑。',
+  })
+  @ApiParam({ name: 'contactId', description: '联系人 ID', type: String })
+  @ApiResponse({
+    status: 200,
+    description: '成功刷新并返回联系人简报',
+  })
+  @ApiResponse({
+    status: 404,
+    description: '当前请求中未找到用户信息（User not found）',
+  })
   // @UseGuards(AuthGuard)
   async refreshBriefing(
     @Request() req: any,
@@ -76,6 +107,19 @@ export class BriefingsController {
   }
 
   @Post(':contactId/brief/refresh')
+  @ApiOperation({
+    summary: '显式刷新联系人简报（同 POST /contacts/:contactId/brief）',
+    description: '这是一个语义更明确的刷新接口，行为与 POST /contacts/:contactId/brief 保持一致。',
+  })
+  @ApiParam({ name: 'contactId', description: '联系人 ID', type: String })
+  @ApiResponse({
+    status: 200,
+    description: '成功刷新并返回联系人简报',
+  })
+  @ApiResponse({
+    status: 404,
+    description: '当前请求中未找到用户信息（User not found）',
+  })
   // @UseGuards(AuthGuard)
   async refreshBriefingExplicit(
     @Request() req: any,

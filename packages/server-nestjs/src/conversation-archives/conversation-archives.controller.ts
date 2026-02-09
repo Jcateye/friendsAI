@@ -1,7 +1,10 @@
 import { Controller, Param, Post, Request, HttpCode, HttpStatus, NotFoundException } from '@nestjs/common';
+import { ApiBearerAuth, ApiOperation, ApiParam, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { ConversationArchivesService, ConversationArchiveResponse } from './conversation-archives.service';
 import { AgentRuntimeExecutor } from '../agent/runtime/agent-runtime-executor.service';
 
+@ApiTags('conversation-archives')
+@ApiBearerAuth()
 @Controller()
 export class ConversationArchivesController {
   constructor(
@@ -10,6 +13,20 @@ export class ConversationArchivesController {
   ) {}
 
   @Post('conversations/:conversationId/archive')
+  @ApiOperation({
+    summary: '为某个会话创建归档记录',
+    description:
+      '触发归档提取流程：优先调用新的 Agent Runtime（archive_extract），如果失败则回退到旧版 ConversationArchivesService。',
+  })
+  @ApiParam({ name: 'conversationId', description: '会话 ID', type: String })
+  @ApiResponse({
+    status: 200,
+    description: '成功创建或返回会话归档记录',
+  })
+  @ApiResponse({
+    status: 404,
+    description: '当前请求中未找到用户信息（User not found）',
+  })
   @HttpCode(HttpStatus.OK)
   async create(
     @Request() req: any,
@@ -43,12 +60,30 @@ export class ConversationArchivesController {
   }
 
   @Post('conversation-archives/:archiveId/apply')
+  @ApiOperation({
+    summary: '应用某个会话归档',
+    description: '根据归档记录中的 payload，将归档内容应用回业务（具体行为由服务内部定义）。',
+  })
+  @ApiParam({ name: 'archiveId', description: '会话归档 ID', type: String })
+  @ApiResponse({
+    status: 200,
+    description: '成功应用会话归档',
+  })
   @HttpCode(HttpStatus.OK)
   apply(@Param('archiveId') archiveId: string) {
     return this.conversationArchivesService.applyArchive(archiveId);
   }
 
   @Post('conversation-archives/:archiveId/discard')
+  @ApiOperation({
+    summary: '丢弃某个会话归档',
+    description: '将归档记录标记为丢弃/无效，不再建议用户应用该归档。',
+  })
+  @ApiParam({ name: 'archiveId', description: '会话归档 ID', type: String })
+  @ApiResponse({
+    status: 200,
+    description: '成功丢弃会话归档',
+  })
   @HttpCode(HttpStatus.OK)
   discard(@Param('archiveId') archiveId: string) {
     return this.conversationArchivesService.discardArchive(archiveId);

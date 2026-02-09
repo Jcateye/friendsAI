@@ -1,4 +1,4 @@
-import { Entity, PrimaryColumn, Column, CreateDateColumn, ManyToOne, JoinColumn } from 'typeorm';
+import { Entity, PrimaryColumn, Column, CreateDateColumn, ManyToOne, JoinColumn, BeforeInsert } from 'typeorm';
 import { Conversation } from './conversation.entity';
 import { timestampMsTransformer } from './timestamp-ms.transformer';
 
@@ -41,6 +41,11 @@ export class Message {
   @Column({ type: 'text', nullable: true, default: 'active' })
   status: 'active' | 'abandoned' | null;
 
-  @CreateDateColumn({ type: 'bigint', transformer: timestampMsTransformer })
+  @Column({ type: 'bigint', transformer: timestampMsTransformer })
   createdAt: Date;
+
+  @BeforeInsert()
+  setCreatedAt() {
+    this.createdAt = new Date();
+  }
 }

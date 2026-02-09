@@ -1,4 +1,4 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, ManyToOne, JoinColumn, BeforeUpdate } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, ManyToOne, JoinColumn, BeforeInsert, BeforeUpdate } from 'typeorm';
 import { User } from './user.entity';
 import { timestampMsTransformer } from './timestamp-ms.transformer';
 
@@ -35,11 +35,18 @@ export class ConnectorToken {
   @Column()
   userId: string;
 
-  @CreateDateColumn({ type: 'bigint', transformer: timestampMsTransformer })
+  @Column({ type: 'bigint', transformer: timestampMsTransformer })
   createdAt: Date;
 
   @Column({ type: 'bigint', transformer: timestampMsTransformer })
   updatedAt: Date;
+
+  @BeforeInsert()
+  setCreatedAt() {
+    const now = new Date();
+    this.createdAt = now;
+    this.updatedAt = now;
+  }
 
   @BeforeUpdate()
   updateTimestamp() {

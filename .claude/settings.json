@@ -1,7 +1,8 @@
 {
   "permissions": {
     "allow": [
-      "Bash(bun pm ls:*)"
+      "Bash(bun pm ls:*)",
+      "Bash(grep:*)"
     ]
   }
 }

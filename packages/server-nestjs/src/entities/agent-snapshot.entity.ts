@@ -2,8 +2,8 @@ import {
   Entity,
   PrimaryGeneratedColumn,
   Column,
-  CreateDateColumn,
   Index,
+  BeforeInsert,
   BeforeUpdate,
 } from 'typeorm';
 import { timestampMsTransformer } from './timestamp-ms.transformer';
@@ -50,11 +50,17 @@ export class AgentSnapshot {
   @Column({ type: 'bigint', nullable: true, transformer: timestampMsTransformer })
   expiresAt: Date | null;
 
-  @CreateDateColumn({ type: 'bigint', transformer: timestampMsTransformer })
+  @Column({ type: 'bigint', transformer: timestampMsTransformer })
   createdAt: Date;
 
   @Column({ type: 'bigint', transformer: timestampMsTransformer })
   updatedAt: Date;
+
+  @BeforeInsert()
+  setCreatedAt() {
+    this.createdAt = new Date();
+    this.updatedAt = new Date();
+  }
 
   @BeforeUpdate()
   updateTimestamp() {

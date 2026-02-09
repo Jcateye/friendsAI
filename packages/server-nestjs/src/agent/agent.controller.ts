@@ -1,5 +1,5 @@
 import { Body, Controller, Get, HttpCode, Post, Query, Req, Res, NotFoundException } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
+import { ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
 import type { Request, Response } from 'express';
 import { AgentOrchestrator } from './agent.orchestrator';
 import { AgentMessageStore } from './agent-message.store';
@@ -21,6 +21,19 @@ export class AgentController {
   ) {}
 
   @Post('chat')
+  @ApiOperation({
+    summary: '与 Agent 进行对话（流式 / Vercel AI 适配）',
+    description:
+      '发起与多 Agent 协调的流式对话，请求体支持 messages（多轮聊天记录）或 prompt（单轮提示），二者至少提供其一；' +
+      '通过 format 查询参数选择输出流格式：sse 时返回 text/event-stream 的 Agent 事件（agent.start / agent.delta / agent.message 等），' +
+      'vercel-ai 时返回兼容 Vercel AI SDK 的纯文本增量流。常用于前端聊天框、打字机效果，以及需要实时看到工具调用进度的场景。',
+  })
+  @ApiQuery({
+    name: 'format',
+    required: false,
+    description: '响应格式：sse（默认，EventSource）或 vercel-ai（适配 Vercel AI SDK）',
+    example: 'sse',
+  })
   @HttpCode(200)
   async chat(
     @Req() req: Request,
@@ -130,6 +143,22 @@ export class AgentController {
   }
 
   @Post('run')
+  @ApiOperation({
+    summary: '直接执行某个 Agent 的一次 operation',
+    description:
+      '统一的「一次性」Agent 执行入口，面向非流式场景：调用方通过 agentId + operation + input 描述要执行的能力，' +
+      '如生成对话标题摘要（title_summary）、联系人洞察（contact_insight）、归档提取与会前简报（archive_brief）等；' +
+      'options.useCache / options.forceRefresh 控制是否命中缓存，响应中返回 runId、cached、snapshotId 以及各 Agent 自定义的 data 结果结构，' +
+      '便于前端或后端任务编排直接消费 JSON 数据。',
+  })
+  @ApiResponse({
+    status: 200,
+    description: '执行成功，返回本次运行的结果、runId、是否命中缓存等信息',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Agent 不存在或执行失败（agent_execution_failed）',
+  })
   @HttpCode(200)
   async run(
     @Req() req: Request,
@@ -175,6 +204,28 @@ export class AgentController {
   }
 
   @Get('messages')
+  @ApiOperation({
+    summary: '获取某个会话/会话 Session 的 Agent 消息缓存',
+    description:
+      '按 userId + conversationId / sessionId 维度查询 Agent 消息历史，用于前端在刷新页面或网络重连后恢复对话上下文；' +
+      '当存在鉴权中间件时，userId 默认取自登录用户，也可通过查询参数显式指定。通常在使用 /agent/chat 建立流式对话后，' +
+      '配合本接口在页面初始化阶段拉取最近一段 Agent 消息，用于填充聊天记录列表或调试 Agent 行为。',
+  })
+  @ApiQuery({
+    name: 'conversationId',
+    required: false,
+    description: '会话 ID；与 sessionId 二选一，如果都不传则取当前用户下的默认 key',
+  })
+  @ApiQuery({
+    name: 'sessionId',
+    required: false,
+    description: '临时会话 Session ID；与 conversationId 二选一',
+  })
+  @ApiQuery({
+    name: 'userId',
+    required: false,
+    description: '用户 ID；默认从请求上下文中解析',
+  })
   getMessages(
     @Req() req: Request,
     @Query('conversationId') conversationId?: string,
@@ -189,7 +240,10 @@ export class AgentController {
   @Get('list')
   @ApiOperation({
     summary: '获取所有 Agent 列表',
-    description: '返回所有可用的 Agent 信息，包括状态、配置、使用说明等，就像名片一样展示每个 Agent 的能力和用法',
+    description:
+      '返回当前服务中已注册且对外可用的所有 Agent 的列表，每个 Agent 包含基础标识、能力说明、默认配置等元信息；' +
+      '可用于前端渲染「Agent 名片」选择器，或在后台管理界面中展示系统内置能力，让调用方在不知道具体实现细节的前提下，' +
+      '按业务场景选择合适的 Agent 进行调用。',
   })
   @ApiResponse({
     status: 200,
