@@ -422,7 +422,7 @@ export const api = {
       });
       return handleResponse<ToolConfirmation>(response);
     },
-
+    
     /**
      * 获取工具确认列表（支持筛选）
      */
@@ -438,7 +438,7 @@ export const api = {
       const response = await fetchWithAuth(`${API_BASE}/tool-confirmations?${params}`);
       return handleResponse<ToolConfirmation[]>(response);
     },
-
+    
     /**
      * 获取单个工具确认
      */
@@ -446,7 +446,7 @@ export const api = {
       const response = await fetchWithAuth(`${API_BASE}/tool-confirmations/${id}`);
       return handleResponse<ToolConfirmation>(response);
     },
-
+    
     /**
      * 确认工具执行
      */
@@ -457,7 +457,7 @@ export const api = {
       });
       return handleResponse<ToolConfirmation>(response);
     },
-
+    
     /**
      * 拒绝工具执行
      */
@@ -467,6 +467,50 @@ export const api = {
         body: JSON.stringify({ reason: request.reason }),
       });
       return handleResponse<ToolConfirmation>(response);
+    },
+  },
+
+  /**
+   * Agent 相关 API（统一的 /agent/run）
+   */
+  agent: {
+    /**
+     * 生成会话标题和摘要（title_summary）
+     * 对应后端：POST /v1/agent/run，agentId=title_summary
+     */
+    async runTitleSummary(request: {
+      conversationId: string;
+      messages: Array<{ role: string; content: string }>;
+      language?: string;
+    }): Promise<{
+      runId: string;
+      agentId: string;
+      data: {
+        conversationId: string;
+        title: string;
+        summary: string;
+        sourceHash?: string;
+        generatedAt?: number;
+        generatedAtMs?: number;
+      };
+    }> {
+      const response = await fetchWithAuth(`${API_BASE}/agent/run`, {
+        method: 'POST',
+        body: JSON.stringify({
+          agentId: 'title_summary',
+          input: {
+            conversationId: request.conversationId,
+            messages: request.messages,
+            language: request.language ?? 'zh',
+          },
+          options: {
+            useCache: true,
+          },
+          conversationId: request.conversationId,
+        }),
+      });
+
+      return handleResponse(response);
     },
   },
 };

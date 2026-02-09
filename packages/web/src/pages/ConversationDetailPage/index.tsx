@@ -11,6 +11,7 @@ import { useToolConfirmations } from '../../hooks/useToolConfirmations';
 import { sortMessagesByCreatedAt } from '../../lib/messages/sortMessagesByCreatedAt';
 import { resolveEpochMs } from '../../lib/time/timestamp';
 import type { Message as AISDKMessage } from 'ai';
+import { api } from '../../lib/api/client';
 
 type MessageWithMs = AISDKMessage & {
   createdAtMs?: number;
@@ -132,12 +133,10 @@ export function ConversationDetailPage() {
             existingMsg.role === messageRole &&
             existingMsg.content === messageContent
           ) {
-            const existingTime = existingMsg.createdAtMs ?? existingMsg.createdAt?.getTime() ?? Date.now();
-            // 如果时间戳在 5 秒内，认为是同一条消息，跳过这条新消息
-            if (Math.abs(messageTime - existingTime) < 5000) {
-              foundDuplicate = true;
-              break;
-            }
+            // 这里不再依赖时间戳阈值，只要角色 + 内容相同就认为是重复
+            // 主要解决后端历史消息和流式返回重复渲染的问题
+            foundDuplicate = true;
+            break;
           }
         }
 
@@ -175,6 +174,37 @@ export function ConversationDetailPage() {
 
     return sortMessagesByCreatedAt(Array.from(allMessages.values()));
   }, [initialMessages, chat.messages]);
+
+  // 当对话消息数量达到一定阈值时，触发标题 & 摘要生成
+  const hasRequestedTitleSummaryRef = useRef(false);
+  useEffect(() => {
+    if (!conversationId) return;
+
+    // 只统计 user / assistant 消息
+    const conversationMessages = sortedMessages.filter(
+      (msg) => msg.role === 'user' || msg.role === 'assistant'
+    );
+
+    if (conversationMessages.length < 3) return;
+    if (hasRequestedTitleSummaryRef.current) return;
+
+    hasRequestedTitleSummaryRef.current = true;
+
+    // 调用后端 /v1/agent/run，agentId=title_summary
+    void api.agent
+      .runTitleSummary({
+        conversationId,
+        messages: conversationMessages.map((msg) => ({
+          role: msg.role,
+          content: typeof msg.content === 'string' ? msg.content : String(msg.content),
+        })),
+        language: 'zh',
+      })
+      .catch((error) => {
+        // 失败时只打日志，不打扰用户
+        console.error('Failed to run title_summary agent:', error);
+      });
+  }, [conversationId, sortedMessages]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
