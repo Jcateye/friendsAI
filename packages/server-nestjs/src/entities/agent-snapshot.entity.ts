@@ -1,11 +1,12 @@
 import {
   Entity,
-  PrimaryGeneratedColumn,
+  PrimaryColumn,
   Column,
   Index,
   BeforeInsert,
   BeforeUpdate,
 } from 'typeorm';
+import { uuidv7 } from 'uuidv7';
 import { timestampMsTransformer } from './timestamp-ms.transformer';
 
 export type ScopeType = 'conversation' | 'contact' | 'user' | 'global';
@@ -14,7 +15,7 @@ export type ScopeType = 'conversation' | 'contact' | 'user' | 'global';
 @Index('IDX_agent_snapshots_unique', ['agentId', 'operation', 'userId', 'scopeType', 'scopeId', 'sourceHash', 'promptVersion'], { unique: true })
 @Index('IDX_agent_snapshots_expires_at', ['expiresAt'])
 export class AgentSnapshot {
-  @PrimaryGeneratedColumn('uuid', { uuidVersion: '7' })
+  @PrimaryColumn('uuid')
   id: string;
 
   @Column({ type: 'text' })
@@ -58,6 +59,9 @@ export class AgentSnapshot {
 
   @BeforeInsert()
   setCreatedAt() {
+    if (!this.id) {
+      this.id = uuidv7();
+    }
     this.createdAt = new Date();
     this.updatedAt = new Date();
   }

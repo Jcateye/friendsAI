@@ -1,4 +1,5 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, ManyToOne, JoinColumn, Index, BeforeInsert, BeforeUpdate } from 'typeorm';
+import { Entity, PrimaryColumn, Column, CreateDateColumn, ManyToOne, JoinColumn, Index, BeforeInsert, BeforeUpdate } from 'typeorm';
+import { uuidv7 } from 'uuidv7';
 import { User } from './user.entity';
 import { timestampMsTransformer } from './timestamp-ms.transformer';
 
@@ -8,7 +9,7 @@ export type ToolConfirmationStatus = 'pending' | 'confirmed' | 'rejected' | 'fai
 @Index('IDX_tool_confirmations_userId', ['userId'])
 @Index('IDX_tool_confirmations_status', ['status'])
 export class ToolConfirmation {
-  @PrimaryGeneratedColumn('uuid', { uuidVersion: '7' })
+  @PrimaryColumn('uuid')
   id: string;
 
   @Column('varchar', { length: 100 })
@@ -53,6 +54,9 @@ export class ToolConfirmation {
 
   @BeforeInsert()
   setCreatedAt() {
+    if (!this.id) {
+      this.id = uuidv7();
+    }
     const now = new Date();
     this.createdAt = now;
     this.updatedAt = now;

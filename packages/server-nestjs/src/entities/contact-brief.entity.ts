@@ -1,11 +1,12 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, ManyToOne, JoinColumn, Index, BeforeInsert, BeforeUpdate } from 'typeorm';
+import { Entity, PrimaryColumn, Column, CreateDateColumn, ManyToOne, JoinColumn, Index, BeforeInsert, BeforeUpdate } from 'typeorm';
+import { uuidv7 } from 'uuidv7';
 import { Contact } from './contact.entity';
 import { timestampMsTransformer } from './timestamp-ms.transformer';
 
 @Entity({ name: 'contact_briefs' })
 @Index('IDX_contact_briefs_contactId', ['contactId'])
 export class ContactBrief {
-  @PrimaryGeneratedColumn('uuid', { uuidVersion: '7' })
+  @PrimaryColumn('uuid')
   id: string;
 
   @Column({ type: 'text' })
@@ -32,6 +33,9 @@ export class ContactBrief {
 
   @BeforeInsert()
   setCreatedAt() {
+    if (!this.id) {
+      this.id = uuidv7();
+    }
     const now = new Date();
     this.createdAt = now;
     this.updatedAt = now;

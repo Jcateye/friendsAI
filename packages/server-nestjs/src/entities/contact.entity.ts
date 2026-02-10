@@ -1,4 +1,5 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, ManyToOne, OneToMany, JoinColumn, Index, BeforeInsert, BeforeUpdate } from 'typeorm';
+import { Entity, PrimaryColumn, Column, CreateDateColumn, ManyToOne, OneToMany, JoinColumn, Index, BeforeInsert, BeforeUpdate } from 'typeorm';
+import { uuidv7 } from 'uuidv7';
 import { User } from './user.entity';
 import { Event } from './event.entity';
 import { Conversation } from './conversation.entity';
@@ -10,7 +11,7 @@ import { timestampMsTransformer } from './timestamp-ms.transformer';
 @Entity({ name: 'contacts' })
 @Index('IDX_contacts_userId', ['userId'])
 export class Contact {
-  @PrimaryGeneratedColumn('uuid', { uuidVersion: '7' })
+  @PrimaryColumn('uuid')
   id: string;
 
   @Column('varchar', { length: 255 })
@@ -70,6 +71,9 @@ export class Contact {
 
   @BeforeInsert()
   setCreatedAt() {
+    if (!this.id) {
+      this.id = uuidv7();
+    }
     const now = new Date();
     this.createdAt = now;
     this.updatedAt = now;

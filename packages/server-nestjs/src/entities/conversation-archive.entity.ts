@@ -1,4 +1,5 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, ManyToOne, JoinColumn, Index, BeforeInsert, BeforeUpdate } from 'typeorm';
+import { Entity, PrimaryColumn, Column, CreateDateColumn, ManyToOne, JoinColumn, Index, BeforeInsert, BeforeUpdate } from 'typeorm';
+import { uuidv7 } from 'uuidv7';
 import { Conversation } from './conversation.entity';
 import { timestampMsTransformer } from './timestamp-ms.transformer';
 
@@ -8,7 +9,7 @@ export type ConversationArchiveStatus = 'ready_for_review' | 'applied' | 'discar
 @Index('IDX_conversation_archives_conversationId', ['conversationId'])
 @Index('IDX_conversation_archives_status', ['status'])
 export class ConversationArchive {
-  @PrimaryGeneratedColumn('uuid', { uuidVersion: '7' })
+  @PrimaryColumn('uuid')
   id: string;
 
   @ManyToOne(() => Conversation, { nullable: false })
@@ -44,6 +45,9 @@ export class ConversationArchive {
 
   @BeforeInsert()
   setCreatedAt() {
+    if (!this.id) {
+      this.id = uuidv7();
+    }
     const now = new Date();
     this.createdAt = now;
     this.updatedAt = now;
