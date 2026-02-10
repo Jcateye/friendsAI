@@ -8,7 +8,7 @@ export type ToolConfirmationStatus = 'pending' | 'confirmed' | 'rejected' | 'fai
 @Index('IDX_tool_confirmations_userId', ['userId'])
 @Index('IDX_tool_confirmations_status', ['status'])
 export class ToolConfirmation {
-  @PrimaryGeneratedColumn('uuid')
+  @PrimaryGeneratedColumn('uuid', { uuidVersion: '7' })
   id: string;
 
   @Column('varchar', { length: 100 })

@@ -7,7 +7,7 @@ import { timestampMsTransformer } from './timestamp-ms.transformer';
 @Index('IDX_connector_tokens_connectorType', ['connectorType'])
 @Index('IDX_connector_tokens_expiresAt', ['expiresAt'])
 export class ConnectorToken {
-  @PrimaryGeneratedColumn('uuid')
+  @PrimaryGeneratedColumn('uuid', { uuidVersion: '7' })
   id: string;
 
   @Column('varchar', { length: 50 })

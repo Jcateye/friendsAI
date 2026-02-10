@@ -8,7 +8,7 @@ export type ConversationArchiveStatus = 'ready_for_review' | 'applied' | 'discar
 @Index('IDX_conversation_archives_conversationId', ['conversationId'])
 @Index('IDX_conversation_archives_status', ['status'])
 export class ConversationArchive {
-  @PrimaryGeneratedColumn('uuid')
+  @PrimaryGeneratedColumn('uuid', { uuidVersion: '7' })
   id: string;
 
   @ManyToOne(() => Conversation, { nullable: false })

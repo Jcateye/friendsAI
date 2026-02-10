@@ -9,7 +9,7 @@ export type ContactTodoStatus = 'pending' | 'completed' | 'canceled';
 @Index('IDX_contact_todos_status', ['status'])
 @Index('IDX_contact_todos_dueAt', ['dueAt'])
 export class ContactTodo {
-  @PrimaryGeneratedColumn('uuid')
+  @PrimaryGeneratedColumn('uuid', { uuidVersion: '7' })
   id: string;
 
   @Column({ type: 'text' })

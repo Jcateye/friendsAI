@@ -6,7 +6,7 @@ import { timestampMsTransformer } from './timestamp-ms.transformer';
 @Index('IDX_events_contactId', ['contactId'])
 @Index('IDX_events_eventDate', ['eventDate'])
 export class Event {
-  @PrimaryGeneratedColumn('uuid')
+  @PrimaryGeneratedColumn('uuid', { uuidVersion: '7' })
   id: string;
 
   @Column('varchar', { length: 500 })

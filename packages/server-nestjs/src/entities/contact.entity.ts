@@ -10,7 +10,7 @@ import { timestampMsTransformer } from './timestamp-ms.transformer';
 @Entity({ name: 'contacts' })
 @Index('IDX_contacts_userId', ['userId'])
 export class Contact {
-  @PrimaryGeneratedColumn('uuid')
+  @PrimaryGeneratedColumn('uuid', { uuidVersion: '7' })
   id: string;
 
   @Column('varchar', { length: 255 })

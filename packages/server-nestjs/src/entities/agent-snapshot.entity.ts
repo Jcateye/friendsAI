@@ -14,7 +14,7 @@ export type ScopeType = 'conversation' | 'contact' | 'user' | 'global';
 @Index('IDX_agent_snapshots_unique', ['agentId', 'operation', 'userId', 'scopeType', 'scopeId', 'sourceHash', 'promptVersion'], { unique: true })
 @Index('IDX_agent_snapshots_expires_at', ['expiresAt'])
 export class AgentSnapshot {
-  @PrimaryGeneratedColumn('uuid')
+  @PrimaryGeneratedColumn('uuid', { uuidVersion: '7' })
   id: string;
 
   @Column({ type: 'text' })

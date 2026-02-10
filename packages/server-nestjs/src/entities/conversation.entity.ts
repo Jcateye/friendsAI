@@ -8,7 +8,7 @@ import { timestampMsTransformer } from './timestamp-ms.transformer';
 @Index('IDX_conversations_userId', ['userId'])
 @Index('IDX_conversations_contactId', ['contactId'])
 export class Conversation {
-  @PrimaryGeneratedColumn('uuid')
+  @PrimaryGeneratedColumn('uuid', { uuidVersion: '7' })
   id: string;
 
   @Column('varchar', { length: 255, nullable: true })

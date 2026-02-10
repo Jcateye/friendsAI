@@ -6,7 +6,7 @@ import { timestampMsTransformer } from './timestamp-ms.transformer';
 @Index('IDX_auth_sessions_userId', ['userId'])
 @Index('IDX_auth_sessions_expiresAt', ['expiresAt'])
 export class AuthSession {
-  @PrimaryGeneratedColumn('uuid')
+  @PrimaryGeneratedColumn('uuid', { uuidVersion: '7' })
   id: string;
 
   @Column({ type: 'text' })

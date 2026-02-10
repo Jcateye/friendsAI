@@ -9,7 +9,7 @@ import { timestampMsTransformer } from './timestamp-ms.transformer';
 @Entity({ name: 'users' })
 @Index('IDX_users_email', ['email'], { unique: true })
 export class User {
-  @PrimaryGeneratedColumn('uuid')
+  @PrimaryGeneratedColumn('uuid', { uuidVersion: '7' })
   id: string;
 
   @Column('varchar', { length: 255, unique: true, nullable: true })
