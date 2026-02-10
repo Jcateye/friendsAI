@@ -38,3 +38,4 @@ packages/*/.swc/
 
 # Logs
 logs/
+packages/server-nestjs/.env.dev
