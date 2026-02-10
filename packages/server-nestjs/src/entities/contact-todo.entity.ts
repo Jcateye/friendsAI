@@ -1,10 +1,13 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, ManyToOne, JoinColumn, BeforeInsert, BeforeUpdate } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, ManyToOne, JoinColumn, Index, BeforeInsert, BeforeUpdate } from 'typeorm';
 import { Contact } from './contact.entity';
 import { timestampMsTransformer } from './timestamp-ms.transformer';
 
 export type ContactTodoStatus = 'pending' | 'completed' | 'canceled';
 
 @Entity({ name: 'contact_todos' })
+@Index('IDX_contact_todos_contactId', ['contactId'])
+@Index('IDX_contact_todos_status', ['status'])
+@Index('IDX_contact_todos_dueAt', ['dueAt'])
 export class ContactTodo {
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -12,7 +15,7 @@ export class ContactTodo {
   @Column({ type: 'text' })
   content: string;
 
-  @Column({ default: 'pending' })
+  @Column('varchar', { length: 50, default: 'pending' })
   status: ContactTodoStatus;
 
   @Column({ type: 'bigint', nullable: true, transformer: timestampMsTransformer })

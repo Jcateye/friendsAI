@@ -1,13 +1,15 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, ManyToOne, JoinColumn, BeforeInsert, BeforeUpdate } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, ManyToOne, JoinColumn, Index, BeforeInsert, BeforeUpdate } from 'typeorm';
 import { Contact } from './contact.entity';
 import { timestampMsTransformer } from './timestamp-ms.transformer';
 
 @Entity({ name: 'events' })
+@Index('IDX_events_contactId', ['contactId'])
+@Index('IDX_events_eventDate', ['eventDate'])
 export class Event {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column()
+  @Column('varchar', { length: 500 })
   title: string;
 
   @Column({ type: 'text', nullable: true })

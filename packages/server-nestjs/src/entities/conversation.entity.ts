@@ -1,21 +1,23 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, ManyToOne, JoinColumn, OneToMany, BeforeInsert, BeforeUpdate } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, ManyToOne, JoinColumn, OneToMany, Index, BeforeInsert, BeforeUpdate } from 'typeorm';
 import { User } from './user.entity';
 import { Contact } from './contact.entity';
 import { Message } from './message.entity';
 import { timestampMsTransformer } from './timestamp-ms.transformer';
 
 @Entity({ name: 'conversations' })
+@Index('IDX_conversations_userId', ['userId'])
+@Index('IDX_conversations_contactId', ['contactId'])
 export class Conversation {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ type: 'text', nullable: true })
+  @Column('varchar', { length: 255, nullable: true })
   title: string | null;
 
-  @Column({ type: 'text' })
+  @Column('text')
   content: string;
 
-  @Column({ type: 'text', nullable: true })
+  @Column('text', { nullable: true })
   summary: string | null;
 
   @Column({ type: 'vector', nullable: true })
@@ -27,12 +29,12 @@ export class Conversation {
   @Column({ default: false })
   isArchived: boolean;
 
-  @Column({ default: 'active' })
+  @Column('varchar', { length: 50, default: 'active' })
   status: string;
 
-  @ManyToOne(() => User, user => user.conversations, { nullable: true })
+  @ManyToOne(() => User, user => user.conversations)
   @JoinColumn({ name: 'userId' })
-  user: User | null;
+  user: User;
 
   @Column()
   userId: string;

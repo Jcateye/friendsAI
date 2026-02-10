@@ -1,8 +1,10 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, ManyToOne, JoinColumn, BeforeInsert, BeforeUpdate } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, ManyToOne, JoinColumn, Index, BeforeInsert, BeforeUpdate } from 'typeorm';
 import { User } from './user.entity';
 import { timestampMsTransformer } from './timestamp-ms.transformer';
 
 @Entity({ name: 'auth_sessions' })
+@Index('IDX_auth_sessions_userId', ['userId'])
+@Index('IDX_auth_sessions_expiresAt', ['expiresAt'])
 export class AuthSession {
   @PrimaryGeneratedColumn('uuid')
   id: string;

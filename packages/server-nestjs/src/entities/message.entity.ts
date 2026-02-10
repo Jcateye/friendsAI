@@ -1,6 +1,8 @@
-import { Entity, PrimaryColumn, Column, CreateDateColumn, ManyToOne, JoinColumn, BeforeInsert } from 'typeorm';
+import { Entity, PrimaryColumn, Column, CreateDateColumn, ManyToOne, JoinColumn, Index, BeforeInsert } from 'typeorm';
 import { Conversation } from './conversation.entity';
 import { timestampMsTransformer } from './timestamp-ms.transformer';
+
+export type MessageStatus = 'active' | 'abandoned';
 
 const BIGINT_TO_NUMBER = {
   to: (value: number): number => value,
@@ -8,14 +10,16 @@ const BIGINT_TO_NUMBER = {
 };
 
 @Entity({ name: 'messages' })
+@Index('IDX_messages_conversationId', ['conversationId'])
+@Index('IDX_messages_createdAtMs', ['createdAtMs'])
 export class Message {
-  @PrimaryColumn({ type: 'text' })
+  @PrimaryColumn('varchar', { length: 36 })
   id: string;
 
-  @Column({ type: 'text' })
+  @Column('varchar', { length: 50 })
   role: string;
 
-  @Column({ type: 'text' })
+  @Column('text')
   content: string;
 
   @Column({ type: 'jsonb', nullable: true })
@@ -38,8 +42,8 @@ export class Message {
   })
   createdAtMs: number;
 
-  @Column({ type: 'text', nullable: true, default: 'active' })
-  status: 'active' | 'abandoned' | null;
+  @Column('varchar', { length: 50, nullable: true, default: 'active' })
+  status: MessageStatus;
 
   @Column({ type: 'bigint', transformer: timestampMsTransformer })
   createdAt: Date;

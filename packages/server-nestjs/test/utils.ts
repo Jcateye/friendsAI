@@ -18,129 +18,145 @@ import { ContactBrief } from '../src/entities/contact-brief.entity';
 /**
  * Creates a test User with default values that can be overridden
  */
-export const createTestUser = (overrides: Partial<User> = {}): User => ({
-  id: overrides.id || crypto.randomUUID(),
-  email: overrides.email ?? 'test@example.com',
-  phone: overrides.phone ?? null,
-  password: overrides.password ?? 'hashed-password',
-  name: overrides.name ?? 'Test User',
-  contacts: [],
-  conversations: [],
-  toolConfirmations: [],
-  connectorTokens: [],
-  authSessions: [],
-  createdAt: overrides.createdAt ?? new Date(),
-  updatedAt: overrides.updatedAt ?? new Date(),
-});
+export const createTestUser = (overrides: Partial<User> = {}): User => {
+  const user = new User();
+  user.id = overrides.id || crypto.randomUUID();
+  user.email = overrides.email ?? 'test@example.com';
+  user.phone = overrides.phone ?? null;
+  user.password = overrides.password ?? 'hashed-password';
+  user.name = overrides.name ?? 'Test User';
+  user.createdAt = overrides.createdAt ?? new Date();
+  user.updatedAt = overrides.updatedAt ?? new Date();
+  return user;
+};
 
 /**
  * Creates a test Contact with default values that can be overridden
  */
-export const createTestContact = (overrides: Partial<Contact> = {}): Contact => ({
-  id: overrides.id || crypto.randomUUID(),
-  name: overrides.name ?? 'Test Contact',
-  alias: overrides.alias ?? null,
-  email: overrides.email ?? 'contact@example.com',
-  phone: overrides.phone ?? null,
-  company: overrides.company ?? null,
-  position: overrides.position ?? null,
-  profile: overrides.profile ?? { bio: 'Test profile' },
-  tags: overrides.tags ?? ['friend', 'work'],
-  note: overrides.note ?? null,
-  user: overrides.user ?? null,
-  userId: overrides.userId ?? null,
-  events: [],
-  facts: [],
-  todos: [],
-  briefs: [],
-  conversations: [],
-  createdAt: overrides.createdAt ?? new Date(),
-  updatedAt: overrides.updatedAt ?? new Date(),
-});
+export const createTestContact = (overrides: Partial<Contact> = {}): Contact => {
+  const contact = new Contact();
+  contact.id = overrides.id || crypto.randomUUID();
+  contact.name = overrides.name ?? 'Test Contact';
+  contact.alias = overrides.alias ?? null;
+  contact.email = overrides.email ?? 'contact@example.com';
+  contact.phone = overrides.phone ?? null;
+  contact.company = overrides.company ?? null;
+  contact.position = overrides.position ?? null;
+  contact.profile = overrides.profile ?? { bio: 'Test profile' };
+  contact.tags = overrides.tags ?? ['friend', 'work'];
+  contact.note = overrides.note ?? null;
+  contact.user = overrides.user ?? null;
+  contact.userId = overrides.userId ?? null;
+  contact.createdAt = overrides.createdAt ?? new Date();
+  contact.updatedAt = overrides.updatedAt ?? new Date();
+  return contact;
+};
 
 /**
  * Creates a test Conversation with default values that can be overridden
  */
-export const createTestConversation = (overrides: Partial<Conversation> = {}): Conversation => ({
-  id: overrides.id || crypto.randomUUID(),
-  title: overrides.title ?? 'Test Conversation',
-  content: overrides.content ?? 'Test content',
-  embedding: overrides.embedding ?? null,
-  parsedData: overrides.parsedData ?? {},
-  isArchived: overrides.isArchived ?? false,
-  status: overrides.status ?? 'active',
-  user: overrides.user ?? null,
-  userId: overrides.userId ?? 'test-user-id',
-  contact: overrides.contact ?? null,
-  contactId: overrides.contactId ?? null,
-  messages: [],
-  createdAt: overrides.createdAt ?? new Date(),
-  updatedAt: overrides.updatedAt ?? new Date(),
-});
+export const createTestConversation = (overrides: Partial<Conversation> & { user?: User; userId?: string } = {}): Conversation => {
+  const conversation = new Conversation();
+  conversation.id = overrides.id || crypto.randomUUID();
+  conversation.title = overrides.title ?? 'Test Conversation';
+  conversation.content = overrides.content ?? 'Test content';
+  conversation.embedding = overrides.embedding ?? null;
+  conversation.parsedData = overrides.parsedData ?? {};
+  conversation.isArchived = overrides.isArchived ?? false;
+  conversation.status = overrides.status ?? 'active';
+  conversation.user = overrides.user ?? createTestUser({ id: overrides.userId });
+  conversation.userId = overrides.userId ?? conversation.user.id;
+  conversation.contact = overrides.contact ?? null;
+  conversation.contactId = overrides.contactId ?? null;
+  conversation.createdAt = overrides.createdAt ?? new Date();
+  conversation.updatedAt = overrides.updatedAt ?? new Date();
+  return conversation;
+};
 
 /**
  * Creates a test Message with default values that can be overridden
  */
-export const createTestMessage = (overrides: Partial<Message> = {}): Message => ({
-  id: overrides.id || crypto.randomUUID(),
-  role: overrides.role ?? 'user',
-  content: overrides.content ?? 'Test message',
-  toolCalls: overrides.toolCalls ?? null,
-  toolCallId: overrides.toolCallId ?? null,
-  conversationId: overrides.conversationId ?? 'test-conversation-id',
-  createdAt: overrides.createdAt ?? new Date(),
-});
+export const createTestMessage = (overrides: Partial<Message> = {}): Message => {
+  const message = new Message();
+  message.id = overrides.id || crypto.randomUUID();
+  message.role = overrides.role ?? 'user';
+  message.content = overrides.content ?? 'Test message';
+  message.metadata = overrides.metadata ?? null;
+  message.citations = overrides.citations ?? null;
+  message.conversationId = overrides.conversationId ?? 'test-conversation-id';
+  message.createdAtMs = overrides.createdAtMs ?? Date.now();
+  message.status = overrides.status ?? 'active';
+  message.createdAt = overrides.createdAt ?? new Date();
+  return message;
+};
 
 /**
  * Creates a test Event with default values that can be overridden
  */
-export const createTestEvent = (overrides: Partial<Event> = {}): Event => ({
-  id: overrides.id || crypto.randomUUID(),
-  title: overrides.title ?? 'Test Event',
-  description: overrides.description ?? 'Test description',
-  startTime: overrides.startTime ?? new Date(),
-  endTime: overrides.endTime ?? new Date(Date.now() + 3600000),
-  location: overrides.location ?? null,
-  contactId: overrides.contactId ?? null,
-  createdAt: overrides.createdAt ?? new Date(),
-  updatedAt: overrides.updatedAt ?? new Date(),
-});
+export const createTestEvent = (overrides: Partial<Event> = {}): Event => {
+  const event = new Event();
+  event.id = overrides.id || crypto.randomUUID();
+  event.title = overrides.title ?? 'Test Event';
+  event.description = overrides.description ?? 'Test description';
+  event.details = overrides.details ?? { startTime: new Date().toISOString() };
+  event.eventDate = overrides.eventDate ?? new Date();
+  event.embedding = overrides.embedding ?? [];
+  event.sourceConversationId = overrides.sourceConversationId ?? null;
+  event.sourceMessageIds = overrides.sourceMessageIds ?? null;
+  event.contactId = overrides.contactId ?? null;
+  event.createdAt = overrides.createdAt ?? new Date();
+  event.updatedAt = overrides.updatedAt ?? new Date();
+  return event;
+};
 
 /**
  * Creates a test ContactFact with default values that can be overridden
  */
-export const createTestContactFact = (overrides: Partial<ContactFact> = {}): ContactFact => ({
-  id: overrides.id || crypto.randomUUID(),
-  fact: overrides.fact ?? 'Test fact',
-  source: overrides.source ?? 'test',
-  contactId: overrides.contactId ?? 'test-contact-id',
-  createdAt: overrides.createdAt ?? new Date(),
-  updatedAt: overrides.updatedAt ?? new Date(),
-});
+export const createTestContactFact = (overrides: Partial<ContactFact> = {}): ContactFact => {
+  const fact = new ContactFact();
+  fact.id = overrides.id || crypto.randomUUID();
+  fact.content = overrides.content ?? 'Test fact';
+  fact.metadata = overrides.metadata ?? null;
+  fact.sourceConversationId = overrides.sourceConversationId ?? null;
+  fact.sourceMessageIds = overrides.sourceMessageIds ?? null;
+  fact.contactId = overrides.contactId ?? 'test-contact-id';
+  fact.createdAt = overrides.createdAt ?? new Date();
+  fact.updatedAt = overrides.updatedAt ?? new Date();
+  return fact;
+};
 
 /**
  * Creates a test ContactTodo with default values that can be overridden
  */
-export const createTestContactTodo = (overrides: Partial<ContactTodo> = {}): ContactTodo => ({
-  id: overrides.id || crypto.randomUUID(),
-  todo: overrides.todo ?? 'Test todo',
-  status: overrides.status ?? 'pending',
-  dueDate: overrides.dueDate ?? null,
-  contactId: overrides.contactId ?? 'test-contact-id',
-  createdAt: overrides.createdAt ?? new Date(),
-  updatedAt: overrides.updatedAt ?? new Date(),
-});
+export const createTestContactTodo = (overrides: Partial<ContactTodo> = {}): ContactTodo => {
+  const todo = new ContactTodo();
+  todo.id = overrides.id || crypto.randomUUID();
+  todo.content = overrides.content ?? 'Test todo';
+  todo.status = overrides.status ?? 'pending';
+  todo.dueAt = overrides.dueAt ?? null;
+  todo.metadata = overrides.metadata ?? null;
+  todo.sourceConversationId = overrides.sourceConversationId ?? null;
+  todo.sourceMessageIds = overrides.sourceMessageIds ?? null;
+  todo.contactId = overrides.contactId ?? 'test-contact-id';
+  todo.createdAt = overrides.createdAt ?? new Date();
+  todo.updatedAt = overrides.updatedAt ?? new Date();
+  return todo;
+};
 
 /**
  * Creates a test ContactBrief with default values that can be overridden
  */
-export const createTestContactBrief = (overrides: Partial<ContactBrief> = {}): ContactBrief => ({
-  id: overrides.id || crypto.randomUUID(),
-  content: overrides.content ?? 'Test brief',
-  contactId: overrides.contactId ?? 'test-contact-id',
-  createdAt: overrides.createdAt ?? new Date(),
-  updatedAt: overrides.updatedAt ?? new Date(),
-});
+export const createTestContactBrief = (overrides: Partial<ContactBrief> = {}): ContactBrief => {
+  const brief = new ContactBrief();
+  brief.id = overrides.id || crypto.randomUUID();
+  brief.content = overrides.content ?? 'Test brief';
+  brief.citations = overrides.citations ?? null;
+  brief.generatedAt = overrides.generatedAt ?? new Date();
+  brief.contactId = overrides.contactId ?? 'test-contact-id';
+  brief.createdAt = overrides.createdAt ?? new Date();
+  brief.updatedAt = overrides.updatedAt ?? new Date();
+  return brief;
+};
 
 /**
  * Creates a mock TypeORM Repository with all common methods
@@ -196,7 +212,7 @@ export const createMockQueryBuilder = () => ({
 export const createMockExecutionContext = (user?: Partial<User>) => ({
   switchToHttp: () => ({
     getRequest: () => ({
-      user: user ? createTestUser(user) : null,
+      user: user ? createTestUser(user) : undefined,
       headers: {},
       query: {},
       body: {},

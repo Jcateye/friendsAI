@@ -1,4 +1,4 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, ManyToOne, OneToMany, JoinColumn, BeforeInsert, BeforeUpdate } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, ManyToOne, OneToMany, JoinColumn, Index, BeforeInsert, BeforeUpdate } from 'typeorm';
 import { User } from './user.entity';
 import { Event } from './event.entity';
 import { Conversation } from './conversation.entity';
@@ -8,26 +8,27 @@ import { ContactBrief } from './contact-brief.entity';
 import { timestampMsTransformer } from './timestamp-ms.transformer';
 
 @Entity({ name: 'contacts' })
+@Index('IDX_contacts_userId', ['userId'])
 export class Contact {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column()
+  @Column('varchar', { length: 255 })
   name: string;
 
-  @Column({ type: 'text', nullable: true })
+  @Column('varchar', { length: 255, nullable: true })
   alias: string | null;
 
-  @Column({ type: 'text', nullable: true })
+  @Column('varchar', { length: 255, nullable: true })
   email: string | null;
 
-  @Column({ type: 'text', nullable: true })
+  @Column('varchar', { length: 50, nullable: true })
   phone: string | null;
 
-  @Column({ type: 'text', nullable: true })
+  @Column('varchar', { length: 255, nullable: true })
   company: string | null;
 
-  @Column({ type: 'text', nullable: true })
+  @Column('varchar', { length: 255, nullable: true })
   position: string | null;
 
   @Column({ type: 'jsonb', nullable: true })

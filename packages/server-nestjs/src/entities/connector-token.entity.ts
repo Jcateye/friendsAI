@@ -1,13 +1,16 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, ManyToOne, JoinColumn, BeforeInsert, BeforeUpdate } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, ManyToOne, JoinColumn, Index, BeforeInsert, BeforeUpdate } from 'typeorm';
 import { User } from './user.entity';
 import { timestampMsTransformer } from './timestamp-ms.transformer';
 
 @Entity({ name: 'connector_tokens' })
+@Index('IDX_connector_tokens_userId', ['userId'])
+@Index('IDX_connector_tokens_connectorType', ['connectorType'])
+@Index('IDX_connector_tokens_expiresAt', ['expiresAt'])
 export class ConnectorToken {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column()
+  @Column('varchar', { length: 50 })
   connectorType: string;
 
   @Column({ type: 'text' })
@@ -16,7 +19,7 @@ export class ConnectorToken {
   @Column({ type: 'text', nullable: true })
   refreshToken: string | null;
 
-  @Column({ type: 'text', nullable: true })
+  @Column('varchar', { length: 50, nullable: true })
   tokenType: string | null;
 
   @Column({ type: 'text', nullable: true })

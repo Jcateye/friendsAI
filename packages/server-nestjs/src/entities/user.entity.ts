@@ -1,4 +1,4 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, OneToMany, BeforeInsert, BeforeUpdate } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, OneToMany, Index, BeforeInsert, BeforeUpdate } from 'typeorm';
 import { Contact } from './contact.entity';
 import { Conversation } from './conversation.entity';
 import { ToolConfirmation } from './tool-confirmation.entity';
@@ -7,21 +7,22 @@ import { AuthSession } from './auth-session.entity';
 import { timestampMsTransformer } from './timestamp-ms.transformer';
 
 @Entity({ name: 'users' })
+@Index('IDX_users_email', ['email'], { unique: true })
 export class User {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ type: 'text', unique: true, nullable: true })
+  @Column('varchar', { length: 255, unique: true, nullable: true })
   email: string | null;
 
-  @Column({ type: 'text', nullable: true })
+  @Column('varchar', { length: 50, nullable: true })
   phone: string | null;
 
-  @Column()
+  @Column('varchar', { length: 255 })
   password: string;
 
-  @Column({ nullable: true })
-  name: string;
+  @Column('varchar', { length: 255, nullable: true })
+  name: string | null;
 
   @OneToMany(() => Contact, contact => contact.user)
   contacts: Contact[];
