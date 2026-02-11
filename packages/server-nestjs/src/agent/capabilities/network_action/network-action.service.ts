@@ -32,7 +32,15 @@ export class NetworkActionService {
   async run(input: NetworkActionInput): Promise<NetworkActionOutput> {
     try {
       // 1. 构建上下文并计算 sourceHash
-      const context = await this.contextBuilder.build(input.userId, input.limit);
+      const context = await this.contextBuilder.build(
+        input.userId,
+        input.limit,
+        {
+          intent: input.intent,
+          relationshipMix: input.relationshipMix,
+          timeBudgetMinutes: input.timeBudgetMinutes,
+        }
+      );
       const sourceHash = this.contextBuilder.computeSourceHash(context, input.userId);
 
       // 2. 加载 Agent 定义以获取 version

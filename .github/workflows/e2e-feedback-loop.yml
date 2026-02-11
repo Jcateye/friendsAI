@@ -1,0 +1,112 @@
+name: E2E Feedback Loop Tests
+
+on:
+  push:
+    branches: [ main, develop ]
+    paths:
+      - 'packages/server-nestjs/src/agent/**'
+      - 'packages/server-nestjs/src/agent-feedback/**'
+      - 'packages/web/src/**'
+      - '.github/workflows/e2e-feedback-loop.yml'
+  pull_request:
+    branches: [ main, develop ]
+    paths:
+      - 'packages/server-nestjs/src/agent/**'
+      - 'packages/server-nestjs/src/agent-feedback/**'
+      - 'packages/web/src/**'
+      - '.github/workflows/e2e-feedback-loop.yml'
+
+jobs:
+  feedback-loop-e2e:
+    name: Agent Run -> Action -> Feedback Loop E2E
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: friendsai_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install backend dependencies
+        working-directory: packages/server-nestjs
+        run: npm ci
+
+      - name: Run E2E feedback loop tests
+        working-directory: packages/server-nestjs
+        env:
+          DB_HOST: localhost
+          DB_PORT: 5432
+          DB_USERNAME: test
+          DB_PASSWORD: test
+          DB_DATABASE: friendsai_test
+        run: npm run test -- test/agent-feedback-loop.e2e-spec.ts
+
+  feedback-api-integration:
+    name: Feedback API Integration Tests
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: friendsai_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install backend dependencies
+        working-directory: packages/server-nestjs
+        run: npm ci
+
+      - name: Run feedback service tests
+        working-directory: packages/server-nestjs
+        env:
+          DB_HOST: localhost
+          DB_PORT: 5432
+          DB_USERNAME: test
+          DB_PASSWORD: test
+          DB_DATABASE: friendsai_test
+        run: npm test -- agent-feedback.service.spec.ts
+
+      - name: Run feedback controller tests
+        working-directory: packages/server-nestjs
+        env:
+          DB_HOST: localhost
+          DB_PORT: 5432
+          DB_USERNAME: test
+          DB_PASSWORD: test
+          DB_DATABASE: friendsai_test
+        run: npm test -- agent-feedback.controller.spec.ts

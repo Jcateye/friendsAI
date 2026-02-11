@@ -1,4 +1,5 @@
 {
+  "$schema": "http://json-schema.org/draft-07/schema#",
   "type": "object",
   "properties": {
     "profileSummary": {
@@ -6,6 +7,16 @@
       "minLength": 50,
       "maxLength": 1000,
       "description": "A concise summary of the contact's profile and relationship context"
+    },
+    "relationshipState": {
+      "type": "string",
+      "enum": ["warming", "stable", "cooling", "at_risk"],
+      "description": "Current state of the relationship trajectory"
+    },
+    "relationshipType": {
+      "type": "string",
+      "enum": ["business", "friend", "mixed"],
+      "description": "Type of relationship"
     },
     "relationshipSignals": {
       "type": "array",
@@ -32,6 +43,41 @@
       },
       "minItems": 0,
       "description": "Signals indicating relationship dynamics"
+    },
+    "momentSignals": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": ["birthday", "anniversary", "milestone", "life_event", "seasonal", "opportunity", "risk"],
+            "description": "Type of moment signal"
+          },
+          "score": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "description": "Relevance score (0-1)"
+          },
+          "whyNow": {
+            "type": "string",
+            "minLength": 10,
+            "description": "Why this moment matters now"
+          },
+          "expiresAtMs": {
+            "type": "number",
+            "description": "Unix timestamp when this signal expires"
+          },
+          "suggestedAction": {
+            "type": "string",
+            "description": "Optional suggested action"
+          }
+        },
+        "required": ["type", "score", "whyNow", "expiresAtMs"]
+      },
+      "minItems": 0,
+      "description": "Time-sensitive opportunities and signals"
     },
     "opportunities": {
       "type": "array",
@@ -116,6 +162,94 @@
       },
       "minItems": 0,
       "description": "Suggested actions to take"
+    },
+    "actionCards": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "actionId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Unique identifier for this action card (UUID v4 format)"
+          },
+          "goal": {
+            "type": "string",
+            "enum": ["maintain", "grow", "repair"],
+            "description": "Goal/objective of this action"
+          },
+          "actionType": {
+            "type": "string",
+            "enum": ["message", "call", "meeting", "email", "social", "gift", "introduction", "other"],
+            "description": "Type of action"
+          },
+          "whyNow": {
+            "type": "string",
+            "minLength": 15,
+            "description": "Specific, data-driven reason for timing (CRITICAL FIELD)"
+          },
+          "evidence": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "enum": ["event", "fact", "conversation", "recency"],
+                  "description": "Type of evidence"
+                },
+                "source": {
+                  "type": "string",
+                  "description": "Specific source (conversation ID, event title, etc.)"
+                },
+                "reference": {
+                  "type": "string",
+                  "description": "Direct quote or reference"
+                }
+              },
+              "required": ["type", "source", "reference"]
+            },
+            "minItems": 1,
+            "description": "Array of specific data points supporting this action (CRITICAL FIELD)"
+          },
+          "draftMessage": {
+            "type": "string",
+            "description": "Optional draft message content"
+          },
+          "effortMinutes": {
+            "type": "number",
+            "minimum": 5,
+            "maximum": 120,
+            "description": "Estimated effort in minutes"
+          },
+          "confidence": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "description": "Confidence score (0-1) based on data quality"
+          },
+          "riskLevel": {
+            "type": "string",
+            "enum": ["low", "medium", "high"],
+            "description": "Risk level of taking this action"
+          },
+          "requiresConfirmation": {
+            "type": "boolean",
+            "description": "Whether action requires user confirmation before executing"
+          },
+          "timingHint": {
+            "type": "string",
+            "description": "Optional timing suggestion"
+          },
+          "notes": {
+            "type": "string",
+            "description": "Contextual notes for the user"
+          }
+        },
+        "required": ["actionId", "goal", "actionType", "whyNow", "evidence", "effortMinutes", "confidence", "riskLevel", "requiresConfirmation"]
+      },
+      "minItems": 0,
+      "description": "Enhanced actionable items with rich metadata and evidence"
     },
     "openingLines": {
       "type": "array",

@@ -3,8 +3,9 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { Copy, RefreshCw, ChevronRight, FlaskConical, Trash2 } from 'lucide-react'
 import { Header } from '../../components/layout/Header'
 import { useDemoMode } from '../../contexts/DemoModeContext'
+import { ActionCardSkeleton } from '../../components/loading'
 import { api } from '../../lib/api'
-import type { ContactInsightData } from '../../lib/api/agent-types'
+import type { ContactInsightData, ActionCard } from '../../lib/api/agent-types'
 import type { Contact as ApiContact, ContactContext } from '../../lib/api/types'
 import { ContactFormModal } from '../../components/contacts/ContactFormModal'
 
@@ -96,6 +97,7 @@ export function ContactDetailPage() {
   const [insight, setInsight] = useState<ContactInsightData | null>(null)
   const [insightLoading, setInsightLoading] = useState(false)
   const [insightError, setInsightError] = useState<string | null>(null)
+  const [feedbackSubmitting, setFeedbackSubmitting] = useState(false)
 
   const loadContact = () => {
     if (!isDemoMode && id) {
@@ -133,6 +135,34 @@ export function ContactDetailPage() {
       setInsightError(error instanceof Error ? error.message : '生成洞察失败')
     } finally {
       setInsightLoading(false)
+    }
+  }
+
+  const handleActionFeedback = async (card: ActionCard, status: string, reasonCode?: string, editedMessage?: string) => {
+    if (feedbackSubmitting || isDemoMode) return
+
+    setFeedbackSubmitting(true)
+    try {
+      await api.agent.submitFeedback({
+        runId: insight?.sourceHash || '',
+        agentId: 'contact_insight',
+        actionId: card.actionId,
+        status: status as any,
+        reasonCode: reasonCode as any,
+        editedMessage,
+      })
+
+      // Remove the action card from local state after successful feedback
+      if (insight?.actionCards) {
+        setInsight({
+          ...insight,
+          actionCards: insight.actionCards.filter((c) => c.actionId !== card.actionId),
+        })
+      }
+    } catch (error) {
+      console.error('Failed to submit feedback:', error)
+    } finally {
+      setFeedbackSubmitting(false)
     }
   }
 
@@ -307,6 +337,39 @@ export function ContactDetailPage() {
 
             {insight ? (
               <>
+                {/* Relationship State Badge (if available) */}
+                {insight.relationshipState && (
+                  <div className="flex items-center gap-2 mb-3">
+                    <span className="text-[12px] font-medium text-text-muted font-primary uppercase">
+                      关系状态
+                    </span>
+                    <span
+                      className={`px-2 py-0.5 text-[11px] font-medium rounded font-primary ${
+                        insight.relationshipState === 'warming'
+                          ? 'bg-info-tint text-info'
+                          : insight.relationshipState === 'stable'
+                            ? 'bg-primary-tint text-primary'
+                            : insight.relationshipState === 'cooling'
+                              ? 'bg-warning-tint text-warning'
+                              : 'bg-red-50 text-red-500'
+                      }`}
+                    >
+                      {insight.relationshipState === 'warming'
+                        ? '升温中'
+                        : insight.relationshipState === 'stable'
+                          ? '稳定'
+                          : insight.relationshipState === 'cooling'
+                            ? '降温中'
+                            : '风险'}
+                    </span>
+                    {insight.relationshipType && (
+                      <span className="px-2 py-0.5 bg-bg-surface text-text-muted text-[11px] font-medium rounded font-primary">
+                        {insight.relationshipType === 'business' ? '商务' : insight.relationshipType === 'friend' ? '朋友' : '混合'}
+                      </span>
+                    )}
+                  </div>
+                )}
+
                 <div>
                   <h4 className="text-[13px] font-semibold text-text-secondary font-primary mb-2">关系概览</h4>
                   <p className="text-[14px] text-text-primary font-primary leading-relaxed">
@@ -375,6 +438,42 @@ export function ContactDetailPage() {
             )}
           </div>
         </div>
+
+        {/* Action Cards Section (if available in insight) */}
+        {insightLoading ? (
+          <div className="bg-bg-card rounded-lg shadow-sm overflow-hidden">
+            <div className="flex items-center justify-between px-5 py-4 bg-primary-tint">
+              <span className="text-[14px] font-semibold text-text-primary font-primary">
+                建议行动
+              </span>
+            </div>
+            <div className="flex flex-col gap-3 p-4">
+              <ActionCardSkeleton />
+              <ActionCardSkeleton />
+            </div>
+          </div>
+        ) : insight?.actionCards && insight.actionCards.length > 0 ? (
+          <div className="bg-bg-card rounded-lg shadow-sm overflow-hidden">
+            <div className="flex items-center justify-between px-5 py-4 bg-primary-tint">
+              <span className="text-[14px] font-semibold text-text-primary font-primary">
+                建议行动
+              </span>
+              <span className="px-1.5 py-0.5 bg-primary-tint text-primary text-[11px] font-medium rounded font-primary">
+                {insight.actionCards.length}
+              </span>
+            </div>
+
+            <div className="flex flex-col gap-3 p-4">
+              {insight.actionCards.map((card) => (
+                <ActionCardItem
+                  key={card.actionId}
+                  card={card}
+                  onFeedback={handleActionFeedback}
+                />
+              ))}
+            </div>
+          </div>
+        ) : null}
 
         {/* Timeline Section */}
         <div className="flex flex-col gap-3">
@@ -479,4 +578,151 @@ function toTimelineEvents(context: ContactContext | null): TimelineEvent[] {
   })
 
   return events
+}
+
+// ActionCardItem component for displaying action cards in contact detail
+interface ActionCardItemProps {
+  card: ActionCard
+  onFeedback: (card: ActionCard, status: string, reasonCode?: string, editedMessage?: string) => void
+}
+
+function ActionCardItem({ card, onFeedback }: ActionCardItemProps) {
+  const [isEditing, setIsEditing] = useState(false)
+  const [editedMessage, setEditedMessage] = useState(card.draftMessage)
+
+  const goalLabels = {
+    maintain: '保持联系',
+    grow: '深化关系',
+    repair: '关系修复',
+  }
+
+  const riskLevelColors = {
+    low: 'text-info',
+    medium: 'text-warning',
+    high: 'text-red-500',
+  }
+
+  const riskLevelBgColors = {
+    low: 'bg-info-tint',
+    medium: 'bg-warning-tint',
+    high: 'bg-red-50',
+  }
+
+  const handleAccept = () => {
+    const finalMessage = isEditing ? editedMessage : card.draftMessage
+    const status = isEditing && finalMessage !== card.draftMessage ? 'edited' : 'accepted'
+    onFeedback(card, status, undefined, finalMessage)
+    setIsEditing(false)
+  }
+
+  const handleDismiss = (reasonCode: string) => {
+    onFeedback(card, 'dismissed', reasonCode)
+  }
+
+  const handleEdit = () => {
+    setIsEditing(true)
+  }
+
+  const handleCancelEdit = () => {
+    setEditedMessage(card.draftMessage)
+    setIsEditing(false)
+  }
+
+  return (
+    <div className="flex flex-col gap-3 p-3 bg-bg-surface rounded-md">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <span className="text-[12px] font-medium text-text-secondary font-primary uppercase">
+            {goalLabels[card.goal]}
+          </span>
+          <span
+            className={`px-2 py-0.5 text-[11px] font-medium rounded font-primary ${riskLevelBgColors[card.riskLevel]} ${riskLevelColors[card.riskLevel]}`}
+          >
+            {card.riskLevel === 'low' ? '低风险' : card.riskLevel === 'medium' ? '中风险' : '高风险'}
+          </span>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-[12px] text-text-muted font-primary">
+            {card.effortMinutes} 分钟
+          </span>
+          <span className="text-[12px] text-text-muted font-primary">
+            {Math.round(card.confidence * 100)}%
+          </span>
+        </div>
+      </div>
+
+      {/* Why Now */}
+      <div>
+        <span className="text-[12px] font-medium text-text-muted font-primary">为什么现在</span>
+        <p className="text-[13px] text-text-primary font-primary mt-1">
+          {card.whyNow}
+        </p>
+      </div>
+
+      {/* Draft Message */}
+      <div>
+        <span className="text-[12px] font-medium text-text-muted font-primary">草稿消息</span>
+        {isEditing ? (
+          <textarea
+            value={editedMessage}
+            onChange={(e) => setEditedMessage(e.target.value)}
+            className="w-full mt-1 px-3 py-2 bg-bg-card border border-border rounded-md text-[13px] text-text-primary font-primary resize-none focus:outline-none focus:ring-2 focus:ring-primary-tint focus:border-primary"
+            rows={3}
+          />
+        ) : (
+          <div className="mt-1 p-3 bg-primary-tint rounded-md">
+            <p className="text-[13px] text-text-primary font-primary whitespace-pre-wrap">
+              {card.draftMessage}
+            </p>
+          </div>
+        )}
+      </div>
+
+      {/* Actions */}
+      <div className="flex items-center justify-between">
+        {isEditing ? (
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleCancelEdit}
+              className="px-3 py-1.5 bg-bg-card text-text-primary rounded-md text-[12px] font-medium font-primary hover:bg-bg-surface transition-colors"
+            >
+              取消
+            </button>
+            <button
+              onClick={handleAccept}
+              className="px-3 py-1.5 bg-primary text-white rounded-md text-[12px] font-medium font-primary hover:opacity-90 transition-opacity"
+            >
+              接受修改
+            </button>
+          </div>
+        ) : (
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleAccept}
+              className="px-3 py-1.5 bg-primary text-white rounded-md text-[12px] font-medium font-primary hover:opacity-90 transition-opacity"
+            >
+              接受
+            </button>
+            <button
+              onClick={handleEdit}
+              className="px-3 py-1.5 bg-bg-card text-text-primary border border-border rounded-md text-[12px] font-medium font-primary hover:bg-bg-surface transition-colors"
+            >
+              编辑
+            </button>
+            <button
+              onClick={() => handleDismiss('not_relevant')}
+              className="px-3 py-1.5 bg-bg-card text-text-secondary rounded-md text-[12px] font-medium font-primary hover:bg-bg-surface transition-colors"
+            >
+              忽略
+            </button>
+          </div>
+        )}
+
+        {card.requiresConfirmation && !isEditing && (
+          <span className="text-[11px] text-warning font-primary">需确认后执行</span>
+        )}
+      </div>
+    </div>
+  )
 }

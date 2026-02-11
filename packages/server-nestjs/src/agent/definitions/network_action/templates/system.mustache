@@ -5,6 +5,8 @@ Your task is to analyze a user's entire contact network and generate:
 2. **Recommendations**: Generate network recommendations including connection suggestions, follow-up suggestions, and introduction suggestions
 3. **Synthesis**: Provide an overall relationship network summary in natural language
 4. **Next Actions**: List executable next steps with specific, actionable recommendations
+5. **Action Queues**: Organized actions by priority category (urgentRepairs, opportunityBridges, lightTouches)
+6. **Weekly Plan**: Time-distributed action plan across the week
 
 ## Output Format
 
@@ -35,9 +37,154 @@ You MUST respond with a valid JSON object:
       "priority": "high|medium|low",
       "estimatedTime": "string (optional)"
     }
+  ],
+  "queues": {
+    "urgentRepairs": [
+      {
+        "id": "uuid-v4-format",
+        "contactId": "string",
+        "contactName": "string",
+        "action": "string",
+        "priority": "high|medium|low",
+        "effortMinutes": 5-120,
+        "rationale": "Specific reason with evidence",
+        "whyNow": "Why this action matters now",
+        "evidence": [
+          {
+            "type": "event|fact|conversation|recency",
+            "source": "Specific source",
+            "reference": "Direct reference"
+          }
+        ]
+      }
+    ],
+    "opportunityBridges": [
+      {
+        "id": "uuid-v4-format",
+        "contactId": "string",
+        "contactName": "string",
+        "action": "string",
+        "priority": "high|medium|low",
+        "effortMinutes": 5-120,
+        "rationale": "Specific reason with evidence",
+        "whyNow": "Why this action matters now",
+        "evidence": [
+          {
+            "type": "event|fact|conversation|recency",
+            "source": "Specific source",
+            "reference": "Direct reference"
+          }
+        ]
+      }
+    ],
+    "lightTouches": [
+      {
+        "id": "uuid-v4-format",
+        "contactId": "string",
+        "contactName": "string",
+        "action": "string",
+        "priority": "high|medium|low",
+        "effortMinutes": 5-120,
+        "rationale": "Specific reason with evidence",
+        "whyNow": "Why this action matters now",
+        "evidence": [
+          {
+            "type": "event|fact|conversation|recency",
+            "source": "Specific source",
+            "reference": "Direct reference"
+          }
+        ]
+      }
+    ]
+  },
+  "weeklyPlan": [
+    {
+      "day": 0-6,
+      "dayName": "Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday",
+      "maxMinutes": 30-120,
+      "actions": [
+        {
+          "id": "uuid-v4-format",
+          "contactId": "string",
+          "contactName": "string",
+          "action": "string",
+          "effortMinutes": 5-60,
+          "priority": "high|medium|low"
+        }
+      ]
+    }
   ]
 }
 ```
+
+## CRITICAL: Priority Scoring Guidelines
+
+Use this formula concept to categorize actions:
+- **Urgent Repairs (score >= 75)**: Contacts at risk needing immediate attention
+  - Long time since last interaction (>60 days for VIPs, >90 days for important)
+  - One-sided communication patterns
+  - Unfinished tasks or broken promises
+  - Negative relationship signals
+
+- **Opportunity Bridges (score 45-74)**: Growth and collaboration opportunities
+  - Recent positive interactions to build upon
+  - Introduction opportunities between contacts
+  - Time-sensitive opportunities (new job, funding, etc.)
+  - Mutually beneficial connections
+
+- **Light Touches (score < 45)**: Maintenance actions
+  - Regular check-ins for stable relationships
+  - Low-effort engagement (likes, comments, brief messages)
+  - Seasonal greetings (holidays, birthdays)
+  - Passive relationship maintenance
+
+## CRITICAL: Evidence Requirements
+
+Every queued action MUST include:
+
+1. **id**: Generate a unique UUID v4 format identifier
+
+2. **whyNow**: A specific, explainable reason based on:
+   - Days since last interaction with specific number
+   - Recent conversation content or events
+   - Current opportunities or milestones
+   - Relationship state indicators
+
+3. **evidence**: Array of specific data points:
+   - **event**: Past events, meetings, milestones
+   - **fact**: Known facts about the contact
+   - **conversation**: Recent interaction summaries
+   - **recency**: Time-based data (e.g., "45 days since last contact")
+
+   Each evidence item MUST include:
+   - `type`: The evidence category
+   - `source`: Origin of evidence (contact ID, conversation ID, etc.)
+   - `reference`: Specific detail (e.g., "Last message: 2024-01-15", "Discussed project launch")
+
+4. **effortMinutes**: Realistic time estimates:
+   - Brief message/social: 5-10 minutes
+   - Email: 10-20 minutes
+   - Call: 15-30 minutes
+   - Meeting: 30-60 minutes
+   - Introduction: 20-45 minutes
+
+## Weekly Plan Guidelines
+
+Distribute actions across the week:
+
+- **Weekdays (Mon-Fri)**: Focus on business-related actions
+  - High-priority follow-ups
+  - Introduction opportunities
+  - Professional check-ins
+
+- **Weekends (Sat-Sun)**: Lighter, personal touches
+  - Social media engagement
+  - Personal messages
+  - Reading/sharing content
+
+- **Time budget**: Distribute 30-90 minutes per weekday, 15-30 minutes per weekend day
+- **Priority placement**: Put urgent repairs early in the week (Monday-Tuesday)
+- **Energy management**: Group similar actions together (e.g., all calls in one block)
 
 ## Output Language
 
@@ -49,20 +196,39 @@ You MUST respond with a valid JSON object:
 
 ## Guidelines
 
-- **Follow-ups**: Identify at least 3-5 contacts that need follow-up, sorted by priority. Base on last interaction time, unfinished tasks, and relationship importance.
-- **Recommendations**: Generate at least 2-3 network recommendations. Include connection opportunities, follow-up suggestions, and introduction opportunities.
-- **Synthesis**: Provide a comprehensive 200-300 character summary of the current relationship network status in natural language.
-- **Next Actions**: List at least 3-5 executable next steps with specific, actionable recommendations and priorities.
+- **Follow-ups**: Identify 3-10 contacts that need follow-up, sorted by priority. Base on:
+  - Last interaction time (more weight to longer gaps)
+  - Communication reciprocity (one-sided = higher priority)
+  - Contact importance tier (VIP > important > regular)
+  - Current opportunity windows
+
+- **Recommendations**: Generate 2-5 network recommendations including:
+  - Connection opportunities (shared interests, industries)
+  - Follow-up suggestions (recent events, milestones)
+  - Introduction opportunities (mutual benefits)
+
+- **Synthesis**: Provide a 200-300 character summary of:
+  - Total contacts and recent interaction count
+  - Overall network health assessment
+  - Key patterns or insights
+  - Priority focus areas
+
+- **Action Queues**: Categorize ALL suggested actions into the three queues
+  - Include only actions with solid evidence (confidence >= 0.5)
+  - Provide concrete rationale with data references
+  - Balance effort across all three categories
+
+- **Weekly Plan**: Create a balanced 7-day plan:
+  - 15-30 total actions distributed across the week
+  - Time budget: 200-400 minutes total per week
+  - Cluster by action type and energy required
 
 ## Quality Standards
 
 - All recommendations must be specific and actionable
 - Follow-ups should be prioritized based on urgency and importance
+- Every queued action MUST have a non-empty `whyNow` field
+- Every queued action MUST have at least one evidence item
 - Synthesis should be comprehensive yet concise
-- Next actions should be concrete and executable
+- Weekly plan should be realistic and balanced
 - Ensure all fields are populated, even if arrays are empty
-
-
-
-
-

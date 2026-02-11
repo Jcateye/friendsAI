@@ -2,45 +2,8 @@ import { Injectable, Logger, NotFoundException, Inject, forwardRef } from '@nest
 import { AgentRuntimeExecutor } from '../../runtime/agent-runtime-executor.service';
 import { SnapshotService } from '../../snapshots/snapshot.service';
 import { ContactInsightContextBuilder } from './contact-insight-context-builder.service';
+import type { ContactInsightInput, ContactInsightOutput } from './contact-insight.types';
 import * as crypto from 'crypto';
-
-export interface ContactInsightInput {
-  userId: string;
-  contactId: string;
-  depth?: 'brief' | 'standard' | 'deep';
-}
-
-export interface ContactInsightOutput {
-  profileSummary: string;
-  relationshipSignals: Array<{
-    type: string;
-    description: string;
-    strength: 'weak' | 'moderate' | 'strong';
-  }>;
-  opportunities: Array<{
-    title: string;
-    description: string;
-    priority: 'low' | 'medium' | 'high';
-  }>;
-  risks: Array<{
-    title: string;
-    description: string;
-    severity: 'low' | 'medium' | 'high';
-  }>;
-  suggestedActions: Array<{
-    action: string;
-    reason: string;
-    urgency: 'low' | 'medium' | 'high';
-  }>;
-  openingLines: string[];
-  citations: Array<{
-    source: string;
-    type: string;
-    reference: string;
-  }>;
-  sourceHash: string;
-  generatedAt: number;
-}
 
 /**
  * Contact Insight Service
@@ -66,13 +29,16 @@ export class ContactInsightService {
     input: ContactInsightInput,
     options: { forceRefresh?: boolean } = {}
   ): Promise<ContactInsightOutput> {
-    const { userId, contactId, depth = 'standard' } = input;
+    const { userId, contactId, depth = 'standard', intent, relationshipMix, timeBudgetMinutes } = input;
 
     // 构建输入数据用于计算 sourceHash
     const inputData = {
       userId,
       contactId,
       depth,
+      intent,
+      relationshipMix,
+      timeBudgetMinutes,
     };
 
     // 计算 sourceHash
@@ -119,6 +85,9 @@ export class ContactInsightService {
         model: 'gpt-4',
         temperature: 0.7,
         maxTokens: 4096,
+        intent,
+        relationshipMix,
+        timeBudgetMinutes,
       },
     );
 
@@ -153,12 +122,18 @@ export class ContactInsightService {
     userId: string;
     contactId: string;
     depth: string;
+    intent?: 'maintain' | 'grow' | 'repair';
+    relationshipMix?: 'business' | 'friend' | 'mixed';
+    timeBudgetMinutes?: number;
   }): string {
     const data = JSON.stringify({
       agentId: this.agentId,
       userId: input.userId,
       contactId: input.contactId,
       depth: input.depth,
+      intent: input.intent,
+      relationshipMix: input.relationshipMix,
+      timeBudgetMinutes: input.timeBudgetMinutes,
     });
     return crypto.createHash('sha256').update(data).digest('hex');
   }

@@ -23,7 +23,15 @@ export class NetworkActionContextBuilder {
   /**
    * 构建模板上下文
    */
-  async build(userId: string, limit?: number): Promise<NetworkActionTemplateContext> {
+  async build(
+    userId: string,
+    limit?: number,
+    options?: {
+      intent?: 'maintain' | 'grow' | 'repair';
+      relationshipMix?: 'business' | 'friend' | 'mixed';
+      timeBudgetMinutes?: number;
+    }
+  ): Promise<NetworkActionTemplateContext> {
     try {
       // 1. 获取用户所有联系人
       const contacts = await this.contactRepository.find({
@@ -72,6 +80,9 @@ export class NetworkActionContextBuilder {
           totalContacts: contacts.length,
           totalInteractions: recentConversations.length,
         },
+        ...(options?.intent !== undefined && { intent: options.intent }),
+        ...(options?.relationshipMix !== undefined && { relationshipMix: options.relationshipMix }),
+        ...(options?.timeBudgetMinutes !== undefined && { timeBudgetMinutes: options.timeBudgetMinutes }),
       };
     } catch (error) {
       this.logger.error(`Failed to build context for userId=${userId}: ${error}`);

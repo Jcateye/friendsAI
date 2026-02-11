@@ -8,6 +8,12 @@ export interface NetworkActionInput {
   limit?: number;
   /** 可选：强制刷新缓存 */
   forceRefresh?: boolean;
+  /** 用户意图 - optional: maintain|grow|repair */
+  intent?: 'maintain' | 'grow' | 'repair';
+  /** 关系类型偏好 - optional: business|friend|mixed */
+  relationshipMix?: 'business' | 'friend' | 'mixed';
+  /** 时间预算（分钟） - optional */
+  timeBudgetMinutes?: number;
 }
 
 /**
@@ -43,6 +49,10 @@ export interface NetworkActionOutput {
     sourceHash: string;
     generatedAt: number; // epoch milliseconds
   };
+  /** Enhanced queues (optional for backward compatibility) */
+  queues?: ActionQueues;
+  /** Weekly plan (optional for backward compatibility) */
+  weeklyPlan?: WeeklyAction[];
 }
 
 /**
@@ -64,6 +74,12 @@ export interface NetworkActionTemplateContext {
     totalContacts: number;
     totalInteractions: number;
   };
+  /** 用户意图 - optional: maintain|grow|repair */
+  intent?: 'maintain' | 'grow' | 'repair';
+  /** 关系类型偏好 - optional: business|friend|mixed */
+  relationshipMix?: 'business' | 'friend' | 'mixed';
+  /** 时间预算（分钟） - optional */
+  timeBudgetMinutes?: number;
 }
 
 /**
@@ -75,6 +91,62 @@ export enum NetworkActionErrorCode {
   CONTEXT_BUILD_FAILED = 'NETWORK_ACTION_CONTEXT_BUILD_FAILED',
 }
 
+/**
+ * Action Queues - Organized list of actions by category
+ */
+export interface ActionQueues {
+  /** Urgent repairs - relationships at risk */
+  urgentRepairs: QueuedAction[];
+  /** Opportunity bridges - potential introductions or collaborations */
+  opportunityBridges: QueuedAction[];
+  /** Light touches - low-effort relationship maintenance */
+  lightTouches: QueuedAction[];
+}
 
+/**
+ * Queued Action - Action in a queue
+ */
+export interface QueuedAction {
+  /** Unique identifier */
+  id: string;
+  /** Contact ID this action is for */
+  contactId: string;
+  /** Contact name */
+  contactName: string;
+  /** Action description */
+  action: string;
+  /** Priority level */
+  priority: 'high' | 'medium' | 'low';
+  /** Estimated effort in minutes */
+  effortMinutes: number;
+  /** Why this action matters */
+  rationale: string;
+}
 
+/**
+ * Weekly Action - Planned action for a specific day
+ */
+export interface WeeklyAction {
+  /** Day of the week (0=Sunday, 6=Saturday) */
+  day: number;
+  /** Day name (e.g., "Monday") */
+  dayName: string;
+  /** Maximum time budget in minutes */
+  maxMinutes: number;
+  /** Planned actions for this day */
+  actions: Array<{
+    /** Unique identifier */
+    id: string;
+    /** Contact ID */
+    contactId: string;
+    /** Contact name */
+    contactName: string;
+    /** Action description */
+    action: string;
+    /** Estimated effort in minutes */
+    effortMinutes: number;
+    /** Priority level */
+    priority: 'high' | 'medium' | 'low';
+  }>;
+}
 

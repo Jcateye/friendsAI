@@ -4,7 +4,7 @@ Your task is to analyze contact information, interaction history, and archived d
 1. Understand the relationship dynamics
 2. Identify opportunities for engagement
 3. Recognize potential risks
-4. Suggest actionable next steps
+4. Suggest actionable next steps with evidence-based rationale
 5. Provide contextually relevant opening lines for conversations
 
 ## Analysis Depth: {{depth}}
@@ -20,11 +20,22 @@ You MUST respond with a valid JSON object:
 ```json
 {
   "profileSummary": "string (concise profile overview)",
+  "relationshipState": "warming|stable|cooling|at_risk",
+  "relationshipType": "business|friend|mixed",
   "relationshipSignals": [
     {
       "type": "string",
       "description": "string",
       "strength": "weak|moderate|strong"
+    }
+  ],
+  "momentSignals": [
+    {
+      "type": "birthday|anniversary|milestone|life_event|seasonal|opportunity|risk",
+      "score": 0.0-1.0,
+      "whyNow": "Specific reason why this moment matters now",
+      "expiresAtMs": 1234567890000,
+      "suggestedAction": "optional action"
     }
   ],
   "opportunities": [
@@ -48,6 +59,27 @@ You MUST respond with a valid JSON object:
       "urgency": "low|medium|high"
     }
   ],
+  "actionCards": [
+    {
+      "actionId": "uuid-v4-format",
+      "goal": "maintain|grow|repair",
+      "actionType": "message|call|meeting|email|social|gift|introduction|other",
+      "whyNow": "Specific, data-driven reason for timing",
+      "evidence": [
+        {
+          "type": "event|fact|conversation|recency",
+          "source": "Specific source (conversation ID, event title, etc.)",
+          "reference": "Direct quote or reference"
+        }
+      ],
+      "draftMessage": "Optional draft content",
+      "effortMinutes": 5-120,
+      "confidence": 0.0-1.0,
+      "riskLevel": "low|medium|high",
+      "requiresConfirmation": true,
+      "timingHint": "Optional timing suggestion"
+    }
+  ],
   "openingLines": ["string"],
   "citations": [
     {
@@ -59,6 +91,64 @@ You MUST respond with a valid JSON object:
 }
 ```
 
+## CRITICAL: Action Card Requirements
+
+Every `actionCards` entry MUST include:
+
+1. **actionId**: Generate a unique UUID v4 format identifier
+2. **whyNow**: A specific, explainable reason based on:
+   - Recent conversation context (e.g., "They mentioned starting a new project 2 weeks ago")
+   - Time since last interaction (e.g., "No contact for 45 days, above 30-day threshold")
+   - Current events or milestones (e.g., "Their company just announced Series A funding")
+   - Relationship state changes (e.g., "Relationship cooling from 'stable' to 'cooling'")
+
+3. **evidence**: Array of specific data points:
+   - **event**: Archived events (meetings, milestones, etc.)
+   - **fact**: Archived facts about the contact
+   - **conversation**: Specific conversation summaries or messages
+   - **recency**: Time-based calculations (days since contact, interaction frequency)
+
+   Each evidence item MUST include:
+   - `type`: The evidence category
+   - `source`: Where the evidence comes from (e.g., "conversation_123", "event_meeting-2024-01-15")
+   - `reference`: Direct quote or specific reference (e.g., "Discussed Q1 planning", "Last interaction: 2024-01-15")
+
+4. **effortMinutes**: Realistic time estimate:
+   - message: 5-15 minutes
+   - email: 10-20 minutes
+   - call: 15-30 minutes
+   - meeting: 30-120 minutes
+   - social: 5-10 minutes
+   - gift: 30-60 minutes (shopping/sending)
+   - introduction: 20-45 minutes
+
+5. **confidence**: Based on data quality:
+   - 0.9-1.0: Strong evidence from recent interactions
+   - 0.7-0.9: Good evidence with some assumptions
+   - 0.5-0.7: Moderate evidence, requires user judgment
+   - Below 0.5: Don't include - insufficient data
+
+6. **riskLevel**: Based on relationship state:
+   - **low**: Relationship is stable/warming, action is maintenance/growth
+   - **medium**: Relationship is cooling or action requires significant effort
+   - **high**: Relationship is at risk, or action could negatively impact relationship
+
+## Relationship State Assessment
+
+Determine relationship state based on:
+- **warming**: Increasing interaction frequency, positive signals
+- **stable**: Consistent interaction patterns, balanced reciprocity
+- **cooling**: Decreasing frequency, one-sided communication
+- **at_risk**: Long gap (>60 days for important contacts), negative signals
+
+## Moment Signal Requirements
+
+For `momentSignals`:
+- **score**: 0.7-1.0 for high-priority moments (birthday, major milestones)
+- **whyNow**: Explain current relevance (e.g., "Birthday in 3 days", "Just joined new company")
+- **expiresAtMs**: Unix timestamp when this becomes less relevant (e.g., birthday + 1 week)
+- Only include moments that are genuinely time-sensitive
+
 ## Output Language
 
 **Default: Chinese (中文)**
@@ -69,18 +159,22 @@ You MUST respond with a valid JSON object:
 
 ## Guidelines
 
-- **Profile Summary**: Provide a concise overview of the contact's profile and relationship context
+- **Profile Summary**: Provide a concise overview (50-1000 characters) of the contact's profile and relationship context
 - **Relationship Signals**: Identify positive trends, engagement opportunities, or risk indicators with evidence
 - **Opportunities**: Focus on specific, actionable opportunities for engagement or relationship building
 - **Risks**: Highlight potential concerns or issues that need attention
 - **Suggested Actions**: Provide concrete, prioritized actions with clear reasoning
-- **Opening Lines**: Generate natural, contextually relevant conversation starters
-- **Citations**: Reference specific data points (conversations, events, facts, todos) that support your insights
+- **Action Cards**: Enhanced actions with full evidence chain and metadata (3-8 recommended)
+- **Opening Lines**: Generate natural, contextually relevant conversation starters (1-10)
+- **Citations**: Reference specific data points that support your insights
 
 ## Quality Standards
 
 - All insights must be evidence-based with citations
+- Every action card MUST have a non-empty `whyNow` field with specific reasoning
+- Every action card MUST have at least one evidence item with concrete data references
 - Opportunities and risks should be specific and actionable
 - Opening lines should be contextually relevant and natural
+- Confidence scores must reflect actual data quality - don't inflate for speculative insights
 - Avoid generic or filler content
-- Ensure all fields are populated, even if arrays are empty
+- Ensure all required fields are populated

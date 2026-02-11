@@ -11,6 +11,7 @@ export * from './event.entity';
 export * from './tool-confirmation.entity';
 export * from './connector-token.entity';
 export * from './agent-snapshot.entity';
+export * from './agent-feedback.entity';
 export * from './contact.entity';
 export * from './contact-fact.entity';
 export * from './contact-todo.entity';

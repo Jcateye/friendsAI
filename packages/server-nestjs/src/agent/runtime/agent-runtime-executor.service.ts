@@ -70,6 +70,9 @@ export class AgentRuntimeExecutor {
       temperature?: number;
       maxTokens?: number;
       skipServiceRouting?: boolean; // 跳过服务路由，直接使用通用流程（用于避免循环依赖）
+      intent?: 'maintain' | 'grow' | 'repair';
+      relationshipMix?: 'business' | 'friend' | 'mixed';
+      timeBudgetMinutes?: number;
     }
   ): Promise<AgentExecutionResult> {
     const runId = generateUlid();
@@ -107,6 +110,9 @@ export class AgentRuntimeExecutor {
       ...input,
       operation: operation ?? null,
       userId: options?.userId,
+      ...(options?.intent !== undefined && { intent: options.intent }),
+      ...(options?.relationshipMix !== undefined && { relationshipMix: options.relationshipMix }),
+      ...(options?.timeBudgetMinutes !== undefined && { timeBudgetMinutes: options.timeBudgetMinutes }),
     };
 
     // 3. 计算 sourceHash（用于缓存）
@@ -343,6 +349,9 @@ export class AgentRuntimeExecutor {
       useCache?: boolean;
       forceRefresh?: boolean;
       userId?: string;
+      intent?: 'maintain' | 'grow' | 'repair';
+      relationshipMix?: 'business' | 'friend' | 'mixed';
+      timeBudgetMinutes?: number;
     }
   ): Promise<AgentExecutionResult> {
     const runId = generateUlid();
@@ -363,6 +372,9 @@ export class AgentRuntimeExecutor {
         userId: (input.userId || options?.userId) as string,
         contactId: input.contactId as string,
         depth: input.depth as 'brief' | 'standard' | 'deep' | undefined,
+        intent: options?.intent,
+        relationshipMix: options?.relationshipMix,
+        timeBudgetMinutes: options?.timeBudgetMinutes,
       },
       { forceRefresh: options?.forceRefresh }
     );

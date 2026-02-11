@@ -35,6 +35,8 @@ import type {
   ContactInsightData,
   ArchiveBriefData,
   NetworkActionData,
+  AgentFeedbackRequest,
+  AgentFeedbackResponse,
 } from './agent-types';
 
 const API_BASE = '/v1';
@@ -526,6 +528,9 @@ export const api = {
     async runContactInsight(request: {
       contactId: string;
       depth?: 'brief' | 'standard' | 'deep';
+      intent?: 'maintain' | 'grow' | 'repair';
+      relationshipMix?: 'business' | 'friend' | 'mixed';
+      timeBudgetMinutes?: number;
     }): Promise<AgentRunResponse<ContactInsightData>> {
       const response = await fetchWithAuth(`${API_BASE}/agent/run`, {
         method: 'POST',
@@ -535,6 +540,9 @@ export const api = {
             contactId: request.contactId,
             depth: request.depth ?? 'standard',
           },
+          ...(request.intent !== undefined && { intent: request.intent }),
+          ...(request.relationshipMix !== undefined && { relationshipMix: request.relationshipMix }),
+          ...(request.timeBudgetMinutes !== undefined && { timeBudgetMinutes: request.timeBudgetMinutes }),
           options: {
             useCache: true,
           },
@@ -602,6 +610,9 @@ export const api = {
      */
     async runNetworkAction(request: {
       limit?: number;
+      intent?: 'maintain' | 'grow' | 'repair';
+      relationshipMix?: 'business' | 'friend' | 'mixed';
+      timeBudgetMinutes?: number;
     }): Promise<AgentRunResponse<NetworkActionData>> {
       const response = await fetchWithAuth(`${API_BASE}/agent/run`, {
         method: 'POST',
@@ -610,6 +621,9 @@ export const api = {
           input: {
             limit: request.limit,
           },
+          ...(request.intent !== undefined && { intent: request.intent }),
+          ...(request.relationshipMix !== undefined && { relationshipMix: request.relationshipMix }),
+          ...(request.timeBudgetMinutes !== undefined && { timeBudgetMinutes: request.timeBudgetMinutes }),
           options: {
             useCache: true,
           },
@@ -618,6 +632,19 @@ export const api = {
       });
 
       return handleResponse<AgentRunResponse<NetworkActionData>>(response);
+    },
+
+    /**
+     * 提交 Agent 行动反馈（agent_feedback）
+     * 对应后端：POST /v1/agent/feedback
+     */
+    async submitFeedback(request: AgentFeedbackRequest): Promise<AgentFeedbackResponse> {
+      const response = await fetchWithAuth(`${API_BASE}/agent/feedback`, {
+        method: 'POST',
+        body: JSON.stringify(request),
+      });
+
+      return handleResponse<AgentFeedbackResponse>(response);
     },
   },
 };

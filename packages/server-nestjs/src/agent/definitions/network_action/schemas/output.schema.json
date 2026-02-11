@@ -91,12 +91,291 @@
         },
         "required": ["action", "priority"]
       }
+    },
+    "queues": {
+      "type": "object",
+      "description": "按优先级分类的行动队列",
+      "properties": {
+        "urgentRepairs": {
+          "type": "array",
+          "description": "紧急修复 - 关系处于风险中的联系人",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "description": "唯一标识符 (UUID v4)"
+              },
+              "contactId": {
+                "type": "string",
+                "description": "联系人 ID"
+              },
+              "contactName": {
+                "type": "string",
+                "description": "联系人姓名"
+              },
+              "action": {
+                "type": "string",
+                "description": "行动描述"
+              },
+              "priority": {
+                "type": "string",
+                "enum": ["high", "medium", "low"],
+                "description": "优先级"
+              },
+              "effortMinutes": {
+                "type": "number",
+                "minimum": 5,
+                "maximum": 120,
+                "description": "预估耗时（分钟）"
+              },
+              "rationale": {
+                "type": "string",
+                "description": "行动理由（带证据支持）"
+              },
+              "whyNow": {
+                "type": "string",
+                "minLength": 15,
+                "description": "为什么现在这个行动重要（具体原因）"
+              },
+              "evidence": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "enum": ["event", "fact", "conversation", "recency"],
+                      "description": "证据类型"
+                    },
+                    "source": {
+                      "type": "string",
+                      "description": "具体来源"
+                    },
+                    "reference": {
+                      "type": "string",
+                      "description": "直接引用或参考"
+                    }
+                  },
+                  "required": ["type", "source", "reference"]
+                },
+                "minItems": 1,
+                "description": "支持此行动的具体数据点（CRITICAL FIELD）"
+              }
+            },
+            "required": ["id", "contactId", "contactName", "action", "priority", "effortMinutes", "rationale", "whyNow", "evidence"]
+          }
+        },
+        "opportunityBridges": {
+          "type": "array",
+          "description": "机会桥梁 - 潜在的介绍或合作机会",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "description": "唯一标识符 (UUID v4)"
+              },
+              "contactId": {
+                "type": "string",
+                "description": "联系人 ID"
+              },
+              "contactName": {
+                "type": "string",
+                "description": "联系人姓名"
+              },
+              "action": {
+                "type": "string",
+                "description": "行动描述"
+              },
+              "priority": {
+                "type": "string",
+                "enum": ["high", "medium", "low"],
+                "description": "优先级"
+              },
+              "effortMinutes": {
+                "type": "number",
+                "minimum": 5,
+                "maximum": 120,
+                "description": "预估耗时（分钟）"
+              },
+              "rationale": {
+                "type": "string",
+                "description": "行动理由（带证据支持）"
+              },
+              "whyNow": {
+                "type": "string",
+                "minLength": 15,
+                "description": "为什么现在这个行动重要（具体原因）"
+              },
+              "evidence": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "enum": ["event", "fact", "conversation", "recency"],
+                      "description": "证据类型"
+                    },
+                    "source": {
+                      "type": "string",
+                      "description": "具体来源"
+                    },
+                    "reference": {
+                      "type": "string",
+                      "description": "直接引用或参考"
+                    }
+                  },
+                  "required": ["type", "source", "reference"]
+                },
+                "minItems": 1,
+                "description": "支持此行动的具体数据点（CRITICAL FIELD）"
+              }
+            },
+            "required": ["id", "contactId", "contactName", "action", "priority", "effortMinutes", "rationale", "whyNow", "evidence"]
+          }
+        },
+        "lightTouches": {
+          "type": "array",
+          "description": "轻度接触 - 低成本的关系维护行动",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "description": "唯一标识符 (UUID v4)"
+              },
+              "contactId": {
+                "type": "string",
+                "description": "联系人 ID"
+              },
+              "contactName": {
+                "type": "string",
+                "description": "联系人姓名"
+              },
+              "action": {
+                "type": "string",
+                "description": "行动描述"
+              },
+              "priority": {
+                "type": "string",
+                "enum": ["high", "medium", "low"],
+                "description": "优先级"
+              },
+              "effortMinutes": {
+                "type": "number",
+                "minimum": 5,
+                "maximum": 120,
+                "description": "预估耗时（分钟）"
+              },
+              "rationale": {
+                "type": "string",
+                "description": "行动理由（带证据支持）"
+              },
+              "whyNow": {
+                "type": "string",
+                "minLength": 15,
+                "description": "为什么现在这个行动重要（具体原因）"
+              },
+              "evidence": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "enum": ["event", "fact", "conversation", "recency"],
+                      "description": "证据类型"
+                    },
+                    "source": {
+                      "type": "string",
+                      "description": "具体来源"
+                    },
+                    "reference": {
+                      "type": "string",
+                      "description": "直接引用或参考"
+                    }
+                  },
+                  "required": ["type", "source", "reference"]
+                },
+                "minItems": 1,
+                "description": "支持此行动的具体数据点（CRITICAL FIELD）"
+              }
+            },
+            "required": ["id", "contactId", "contactName", "action", "priority", "effortMinutes", "rationale", "whyNow", "evidence"]
+          }
+        }
+      }
+    },
+    "weeklyPlan": {
+      "type": "array",
+      "description": "周计划 - 按天分布的行动计划",
+      "items": {
+        "type": "object",
+        "properties": {
+          "day": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 6,
+            "description": "星期几 (0=Sunday, 6=Saturday)"
+          },
+          "dayName": {
+            "type": "string",
+            "enum": ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"],
+            "description": "星期名称"
+          },
+          "maxMinutes": {
+            "type": "number",
+            "minimum": 30,
+            "maximum": 120,
+            "description": "最大时间预算（分钟）"
+          },
+          "actions": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "format": "uuid",
+                  "description": "唯一标识符 (UUID v4)"
+                },
+                "contactId": {
+                  "type": "string",
+                  "description": "联系人 ID"
+                },
+                "contactName": {
+                  "type": "string",
+                  "description": "联系人姓名"
+                },
+                "action": {
+                  "type": "string",
+                  "description": "行动描述"
+                },
+                "effortMinutes": {
+                  "type": "number",
+                  "minimum": 5,
+                  "maximum": 60,
+                  "description": "预估耗时（分钟）"
+                },
+                "priority": {
+                  "type": "string",
+                  "enum": ["high", "medium", "low"],
+                  "description": "优先级"
+                }
+              },
+              "required": ["id", "contactId", "contactName", "action", "effortMinutes", "priority"]
+            },
+            "description": "当天的计划行动"
+          }
+        },
+        "required": ["day", "dayName", "maxMinutes", "actions"]
+      }
     }
   },
   "required": ["followUps", "recommendations", "synthesis", "nextActions"]
 }
-
-
-
-
-

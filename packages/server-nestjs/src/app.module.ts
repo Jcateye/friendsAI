@@ -20,6 +20,7 @@ import {
   ContactFact,
   ContactTodo,
   ContactBrief,
+  AgentFeedback,
 } from './entities';
 import { AuthModule } from './auth/auth.module';
 import { ContactsModule } from './contacts/contacts.module';
@@ -29,6 +30,7 @@ import { AiModule } from './ai/ai.module';
 import { BriefingsModule } from './briefings/briefings.module';
 import { ActionPanelModule } from './action-panel/action-panel.module';
 import { AgentModule } from './agent/agent.module';
+import { AgentFeedbackModule } from './agent-feedback/agent-feedback.module';
 import { ConnectorsModule } from './connectors/connectors.module';
 import { ToolsModule } from './tools/tools.module';
 import { ToolConfirmationsModule } from './tool-confirmations/tool-confirmations.module';
@@ -104,6 +106,7 @@ import { HttpLoggingInterceptor } from './common/interceptors/http-logging.inter
       ContactFact,
       ContactTodo,
       ContactBrief,
+      AgentFeedback,
     ]),
     AuthModule,
     ContactsModule,
@@ -113,6 +116,7 @@ import { HttpLoggingInterceptor } from './common/interceptors/http-logging.inter
     BriefingsModule,
     ActionPanelModule,
     AgentModule,
+    AgentFeedbackModule,
     ConnectorsModule,
     ToolsModule,
     ToolConfirmationsModule,
