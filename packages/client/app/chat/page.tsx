@@ -1,189 +1,331 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
-import { useChatStore } from '@/stores/chat';
-import { db } from '@/lib/db';
-import type { Contact, Message } from '@/types';
+import { useEffect, useRef, useState } from 'react';
+import { ChatComposer } from '@/components/chat/ChatComposer';
 import { ChatHeader } from '@/components/chat/ChatHeader';
 import { MessageList } from '@/components/chat/MessageList';
-import { ChatComposer } from '@/components/chat/ChatComposer';
 import { ContactsDrawer } from '@/components/drawer/ContactsDrawer';
+import {
+  getAllContacts,
+  getMessagesByContact,
+  saveContact,
+  saveContactCard,
+  saveMessage,
+} from '@/lib/db';
+import { useChatStore } from '@/stores/chat';
+import type { Contact, ContactCard, Message } from '@/types';
 
-const AVATAR_COLORS = [
-  '#007AFF',
-  '#34C759',
-  '#FF9500',
-  '#AF52DE',
-  '#FF3B30',
-  '#5856D6',
-  '#FFCC00',
-] as const;
+const AVATAR_COLORS = ['#007AFF', '#34C759', '#FF9500', '#AF52DE', '#FF3B30', '#5856D6', '#FFCC00'] as const;
 
-// Demo data
-const DEMO_CONTACTS: Contact[] = [
+const INITIAL_CONTACTS: Contact[] = [
   {
-    id: '1',
+    id: 'contact-zhangsan',
     name: '张三',
     avatarColor: AVATAR_COLORS[0],
     createdAt: new Date(),
     updatedAt: new Date(),
   },
   {
-    id: '2',
+    id: 'contact-lisi',
     name: '李四',
     avatarColor: AVATAR_COLORS[1],
     createdAt: new Date(),
     updatedAt: new Date(),
   },
-  {
-    id: '3',
-    name: '王五',
-    avatarColor: AVATAR_COLORS[2],
-    createdAt: new Date(),
-    updatedAt: new Date(),
-  },
-  {
-    id: '4',
-    name: '赵六',
-    avatarColor: AVATAR_COLORS[3],
-    createdAt: new Date(),
-    updatedAt: new Date(),
-  },
 ];
 
-const DEMO_MESSAGES: Record<string, Message[]> = {
-  '1': [
-    {
-      id: '1-1',
-      contactId: '1',
-      role: 'user',
-      content: '你好，最近怎么样？',
-      createdAt: new Date(Date.now() - 3600000),
-    },
-    {
-      id: '1-2',
-      contactId: '1',
-      role: 'assistant',
-      content: '你好！我很好，谢谢关心。最近在做一个新项目，很有意思。',
-      createdAt: new Date(Date.now() - 3000000),
-    },
-    {
-      id: '1-3',
-      contactId: '1',
-      role: 'user',
-      content: '听起来不错！是什么项目？',
-      createdAt: new Date(Date.now() - 2400000),
-    },
-    {
-      id: '1-4',
-      contactId: '1',
+interface ChatApiResponse {
+  reply: string;
+  toolResult?: string;
+  contactCard?: Omit<ContactCard, 'createdAt'> & { createdAt: string };
+}
+
+type ComposerTool = 'add' | 'image' | 'camera' | 'gif' | 'location';
+
+function createMessageId(prefix: string): string {
+  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function createContactName(contactCount: number): string {
+  return `新联系人${contactCount + 1}`;
+}
+
+function mapToolName(tool: ComposerTool): string {
+  if (tool === 'add') return '添加附件';
+  if (tool === 'image') return '图片';
+  if (tool === 'camera') return '拍照';
+  if (tool === 'gif') return 'GIF';
+  return '位置';
+}
+
+export default function ChatPage() {
+  const { activeContactId, contacts, messages, setContacts, addContact, setActiveContact, setMessages, addMessage } =
+    useChatStore();
+  const [isLoading, setIsLoading] = useState(false);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const bootstrap = async () => {
+      try {
+        const storedContacts = await getAllContacts();
+        const initialContacts = storedContacts.length > 0 ? storedContacts : INITIAL_CONTACTS;
+
+        if (storedContacts.length === 0) {
+          await Promise.all(initialContacts.map((contact) => saveContact(contact)));
+        }
+
+        setContacts(initialContacts);
+
+        if (initialContacts.length > 0) {
+          setActiveContact(initialContacts[0].id);
+        }
+      } catch {
+        setContacts(INITIAL_CONTACTS);
+        setActiveContact(INITIAL_CONTACTS[0].id);
+      }
+    };
+
+    void bootstrap();
+  }, [setActiveContact, setContacts]);
+
+  useEffect(() => {
+    const loadActiveMessages = async () => {
+      if (!activeContactId) {
+        return;
+      }
+
+      try {
+        const storedMessages = await getMessagesByContact(activeContactId);
+        setMessages(activeContactId, storedMessages);
+      } catch {
+        setMessages(activeContactId, []);
+      }
+    };
+
+    void loadActiveMessages();
+  }, [activeContactId, setMessages]);
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [activeContactId, messages]);
+
+  const activeContact = contacts.find((contact) => contact.id === activeContactId) ?? null;
+  const currentMessages = activeContactId ? messages[activeContactId] ?? [] : [];
+
+  const handleAddContact = async () => {
+    const newContact: Contact = {
+      id: createMessageId('contact'),
+      name: createContactName(contacts.length),
+      avatarColor: AVATAR_COLORS[contacts.length % AVATAR_COLORS.length],
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+
+    addContact(newContact);
+    setActiveContact(newContact.id);
+
+    try {
+      await saveContact(newContact);
+    } catch {
+      // Keep optimistic UI behavior for local-first flow.
+    }
+  };
+
+  const handleToolAction = async (tool: ComposerTool) => {
+    if (!activeContactId) {
+      return;
+    }
+
+    const toolMessage: Message = {
+      id: createMessageId('tool-action'),
+      contactId: activeContactId,
       role: 'assistant',
       content: '',
       toolCalls: [
         {
-          id: 'tool-1',
-          name: 'extract_contact_info',
+          id: createMessageId('tool-call'),
+          name: mapToolName(tool),
           arguments: {},
-          result: '已提取联系人信息：王五，前端工程师，专注于 React 开发',
+          result: `${mapToolName(tool)}功能将在后续版本开放`,
         },
       ],
-      createdAt: new Date(Date.now() - 1800000),
-    },
-  ],
-};
+      createdAt: new Date(),
+    };
 
-export default function ChatPage() {
-  const { activeContactId, contacts, messages, setContacts, setActiveContact, setMessages, addMessage } =
-    useChatStore();
+    addMessage(activeContactId, toolMessage);
 
-  const [isLoading, setIsLoading] = useState(false);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
-
-  // Initialize demo data
-  useEffect(() => {
-    setContacts(DEMO_CONTACTS);
-
-    // Load messages for demo contacts
-    Object.entries(DEMO_MESSAGES).forEach(([contactId, msgs]) => {
-      setMessages(contactId, msgs);
-    });
-
-    // Set first contact as active
-    if (DEMO_CONTACTS.length > 0) {
-      setActiveContact(DEMO_CONTACTS[0].id);
+    try {
+      await saveMessage(toolMessage);
+    } catch {
+      // Keep optimistic UI behavior for local-first flow.
     }
-  }, [setContacts, setMessages, setActiveContact]);
+  };
 
-  // Auto scroll to bottom when messages change
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, activeContactId]);
+  const handleVoiceInput = async () => {
+    if (!activeContactId) {
+      return;
+    }
 
-  const activeContact = contacts.find((c) => c.id === activeContactId) || null;
-  const currentMessages = activeContactId ? messages[activeContactId] || [] : [];
+    const voiceMessage: Message = {
+      id: createMessageId('voice-hint'),
+      contactId: activeContactId,
+      role: 'assistant',
+      content: '语音输入暂未接入，请先使用文本输入。',
+      createdAt: new Date(),
+    };
+
+    addMessage(activeContactId, voiceMessage);
+
+    try {
+      await saveMessage(voiceMessage);
+    } catch {
+      // Keep optimistic UI behavior for local-first flow.
+    }
+  };
 
   const handleSendMessage = async (content: string) => {
-    if (!activeContactId) return;
+    if (!activeContactId || !activeContact) {
+      return;
+    }
 
-    // Add user message
     const userMessage: Message = {
-      id: `${Date.now()}-user`,
+      id: createMessageId('user'),
       contactId: activeContactId,
       role: 'user',
       content,
       createdAt: new Date(),
     };
+
     addMessage(activeContactId, userMessage);
 
-    // Simulate AI response
+    try {
+      await saveMessage(userMessage);
+    } catch {
+      // Keep optimistic UI behavior for local-first flow.
+    }
+
     setIsLoading(true);
 
-    // Simulate tool call
-    setTimeout(() => {
+    let payload: ChatApiResponse | null = null;
+
+    try {
+      const response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          contact: activeContact,
+          messages: [...currentMessages, userMessage].map((message) => ({
+            role: message.role,
+            content: message.content,
+          })),
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('聊天服务请求失败');
+      }
+
+      payload = (await response.json()) as ChatApiResponse;
+    } catch {
+      const fallbackMessage: Message = {
+        id: createMessageId('assistant-error'),
+        contactId: activeContactId,
+        role: 'assistant',
+        content: '当前 AI 服务不可用，请检查本地代理配置后重试。',
+        createdAt: new Date(),
+      };
+
+      addMessage(activeContactId, fallbackMessage);
+
+      try {
+        await saveMessage(fallbackMessage);
+      } catch {
+        // Keep optimistic UI behavior for local-first flow.
+      }
+
+      setIsLoading(false);
+      return;
+    }
+
+    if (payload.toolResult) {
+      const normalizedCard = payload.contactCard
+        ? {
+            ...payload.contactCard,
+            createdAt: new Date(payload.contactCard.createdAt),
+          }
+        : undefined;
+
       const toolMessage: Message = {
-        id: `${Date.now()}-tool`,
+        id: createMessageId('assistant-tool'),
         contactId: activeContactId,
         role: 'assistant',
         content: '',
         toolCalls: [
           {
-            id: `tool-${Date.now()}`,
+            id: createMessageId('extract-contact'),
             name: 'extract_contact_info',
             arguments: {},
-            result: '已识别并保存联系人信息',
+            result: payload.toolResult,
           },
         ],
+        contactCard: normalizedCard,
         createdAt: new Date(),
       };
+
       addMessage(activeContactId, toolMessage);
 
-      // Simulate text response
-      setTimeout(() => {
-        const responseMessage: Message = {
-          id: `${Date.now()}-assistant`,
-          contactId: activeContactId,
-          role: 'assistant',
-          content: `我已记录：${content}`,
-          createdAt: new Date(),
-        };
-        addMessage(activeContactId, responseMessage);
-        setIsLoading(false);
-      }, 1000);
-    }, 500);
+      try {
+        await saveMessage(toolMessage);
+      } catch {
+        // Keep optimistic UI behavior for local-first flow.
+      }
+
+      if (normalizedCard) {
+        try {
+          await saveContactCard(normalizedCard);
+        } catch {
+          // Keep optimistic UI behavior for local-first flow.
+        }
+      }
+    }
+
+    const assistantMessage: Message = {
+      id: createMessageId('assistant'),
+      contactId: activeContactId,
+      role: 'assistant',
+      content: payload.reply || '我已经记下来了。',
+      createdAt: new Date(),
+    };
+
+    addMessage(activeContactId, assistantMessage);
+
+    try {
+      await saveMessage(assistantMessage);
+    } catch {
+      // Keep optimistic UI behavior for local-first flow.
+    }
+
+    setIsLoading(false);
   };
 
   return (
     <div className="flex h-screen w-full flex-col bg-[#F5F5F7]">
-      <ContactsDrawer />
+      <ContactsDrawer onAddContact={handleAddContact} />
 
       <main className="flex flex-1 flex-col">
         <ChatHeader contact={activeContact} />
 
         <MessageList messages={currentMessages} />
-
         <div ref={messagesEndRef} />
 
-        <ChatComposer onSendMessage={handleSendMessage} disabled={isLoading} />
+        <ChatComposer
+          onSendMessage={handleSendMessage}
+          onToolAction={handleToolAction}
+          onVoiceInput={handleVoiceInput}
+          disabled={isLoading}
+        />
       </main>
     </div>
   );

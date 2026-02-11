@@ -1,5 +1,6 @@
 import type { Message } from '@/types';
-import { User, Bot } from 'lucide-react';
+import { Bot } from 'lucide-react';
+
 
 interface MessageBubbleProps {
   message: Message;
@@ -30,7 +31,7 @@ export function MessageBubble({ message }: MessageBubbleProps) {
               >
                 <div className="flex items-center gap-1 font-semibold">
                   <Bot className="h-3 w-3" />
-                  <span>🔧 {tool.name}</span>
+                  <span>{tool.name}</span>
                 </div>
                 {tool.result && (
                   <div className="mt-1 text-gray-600">{tool.result}</div>

@@ -14,6 +14,7 @@ export interface Message {
   role: 'user' | 'assistant' | 'system';
   content: string;
   toolCalls?: ToolCall[];
+  contactCard?: ContactCard;
   createdAt: Date;
 }
 
