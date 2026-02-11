@@ -38,3 +38,10 @@ packages/*/.swc/
 
 # Logs
 logs/
+
+# Ignore only pdf skill links/content
+.agent/skills/pdf
+.agents/skills/pdf
+.claude/skills/pdf
+.cursor/skills/pdf
+skills/pdf

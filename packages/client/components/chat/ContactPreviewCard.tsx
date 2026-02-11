@@ -3,9 +3,17 @@ import { Mail, Phone, Building2, Briefcase, Tag } from 'lucide-react';
 
 interface ContactPreviewCardProps {
   card: ContactCard;
+  pendingConfirmation?: boolean;
+  onConfirm?: () => void;
+  onDismiss?: () => void;
 }
 
-export function ContactPreviewCard({ card }: ContactPreviewCardProps) {
+export function ContactPreviewCard({
+  card,
+  pendingConfirmation = false,
+  onConfirm,
+  onDismiss,
+}: ContactPreviewCardProps) {
   return (
     <div className="mx-2 my-2 rounded-[16px] border border-gray-200 bg-white p-4">
       <div className="space-y-3">
@@ -65,6 +73,25 @@ export function ContactPreviewCard({ card }: ContactPreviewCardProps) {
         {card.notes && (
           <div className="rounded-lg bg-gray-50 p-2 text-sm text-gray-600">
             {card.notes}
+          </div>
+        )}
+
+        {pendingConfirmation && (
+          <div className="flex items-center gap-2 pt-1">
+            <button
+              type="button"
+              onClick={onConfirm}
+              className="rounded-full bg-[#007AFF] px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-blue-600"
+            >
+              确认添加联系人
+            </button>
+            <button
+              type="button"
+              onClick={onDismiss}
+              className="rounded-full border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-700 transition-colors hover:bg-gray-100"
+            >
+              暂不添加
+            </button>
           </div>
         )}
       </div>

@@ -6,10 +6,12 @@ import { forwardRef } from 'react';
 
 interface MessageListProps {
   messages: Message[];
+  onConfirmContactCard: (messageId: string) => void;
+  onDismissContactCard: (messageId: string) => void;
 }
 
 export const MessageList = forwardRef<HTMLDivElement, MessageListProps>(
-  ({ messages }, ref) => {
+  ({ messages, onConfirmContactCard, onDismissContactCard }, ref) => {
     return (
       <div
         ref={ref}
@@ -18,7 +20,14 @@ export const MessageList = forwardRef<HTMLDivElement, MessageListProps>(
         {messages.map((message) => (
           <div key={message.id} className="flex flex-col">
             <MessageBubble message={message} />
-            {message.contactCard && <ContactPreviewCard card={message.contactCard} />}
+            {message.contactCard && (
+              <ContactPreviewCard
+                card={message.contactCard}
+                pendingConfirmation={Boolean(message.pendingContactCardConfirmation)}
+                onConfirm={() => onConfirmContactCard(message.id)}
+                onDismiss={() => onDismissContactCard(message.id)}
+              />
+            )}
           </div>
         ))}
       </div>

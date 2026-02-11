@@ -16,6 +16,7 @@ interface ChatStore {
   addContact: (contact: Contact) => void;
   setMessages: (contactId: string, messages: Message[]) => void;
   addMessage: (contactId: string, message: Message) => void;
+  updateMessage: (contactId: string, messageId: string, updater: (message: Message) => Message) => void;
 }
 
 export const useChatStore = create<ChatStore>((set) => ({
@@ -51,6 +52,16 @@ export const useChatStore = create<ChatStore>((set) => ({
       messages: {
         ...state.messages,
         [contactId]: [...(state.messages[contactId] || []), message],
+      },
+    })),
+
+  updateMessage: (contactId, messageId, updater) =>
+    set((state) => ({
+      messages: {
+        ...state.messages,
+        [contactId]: (state.messages[contactId] || []).map((message) =>
+          message.id === messageId ? updater(message) : message
+        ),
       },
     })),
 }));

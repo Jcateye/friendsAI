@@ -2,6 +2,52 @@
 
 ## 变更历史（秒级）
 
+### 2026-02-11 23:12:00 +0800
+- 类型：POC 收尾（名片确认 + 飞书工具开关）
+- 摘要：完成“识别名片后用户确认再添加联系人”流程、前端飞书工具开关与 sync/preview 透传、服务端飞书工具总开关与字段提取映射增强，并补充对应测试。
+- 当前状态：
+  - `packages/client/app/chat/page.tsx`：支持飞书工具开关、sync/preview 模式、名片确认后入库。
+  - `packages/client/components/chat/ContactPreviewCard.tsx`：新增“确认添加联系人/暂不添加”交互。
+  - `packages/client/stores/chat.ts`：新增 `updateMessage`，用于消息级状态更新。
+  - `packages/client/app/api/chat/route.ts`：新增 `FEISHU_CHAT_TOOL_ENABLED` 服务端开关；`sync` 才写飞书；透传 `extractedFields`。
+  - `packages/client/app/api/feishu/bitable/logic.ts`：支持 `extractedFields` 校验与入表字段合并。
+  - `packages/client/app/api/chat/route.test.ts`、`packages/client/app/api/feishu/bitable/logic.test.ts`：新增开关/模式/字段映射相关用例。
+  - `packages/client/.env.example`：新增 `FEISHU_CHAT_TOOL_ENABLED` 示例配置。
+  - `docs/AI-Messages-logic.md`：更新为最新链路说明（确认式名片 + 飞书工具开关）。
+- 影响文件：
+  - `docs/project-status.md`
+  - `docs/AI-Messages-logic.md`
+  - `packages/client/.env.example`
+  - `packages/client/app/chat/page.tsx`
+  - `packages/client/components/chat/MessageList.tsx`
+  - `packages/client/components/chat/ContactPreviewCard.tsx`
+  - `packages/client/stores/chat.ts`
+  - `packages/client/types/index.ts`
+  - `packages/client/app/api/chat/route.ts`
+  - `packages/client/app/api/chat/route.test.ts`
+  - `packages/client/app/api/feishu/bitable/logic.ts`
+  - `packages/client/app/api/feishu/bitable/logic.test.ts`
+
+### 2026-02-11 21:40:44 +0800
+- 类型：MVP 状态追加（聊天链路 + 飞书同步）
+- 摘要：完成本地 AI 聊天 API 接入、Dexie 本地持久化接入、首页本地存储提示、飞书多维表 best-effort 同步（服务端触发）与对应逻辑测试增强。
+- 当前状态：
+  - `packages/client/app/api/chat/route.ts`：聊天代理成功后在服务端尝试同步飞书多维表；失败不阻断聊天主流程。
+  - `packages/client/app/api/feishu/bitable/logic.ts`：完成请求体校验、字段映射、token 获取、写入多维表逻辑；`source` 限制为 `chat`。
+  - `packages/client/app/api/feishu/bitable/route.ts`：保留独立写入入口并增加内部令牌校验（`x-internal-token`）。
+  - `packages/client/app/chat/page.tsx`：聊天读写 Dexie，联系人与消息刷新后可恢复；移除前端直连飞书写入。
+  - `packages/client/app/page.tsx`：增加“本地存储模式”灰色小字提示。
+  - `packages/client/app/api/chat/logic.test.ts`、`packages/client/app/api/feishu/bitable/logic.test.ts`：测试通过（当前 21 个用例）。
+- 影响文件：
+  - `docs/project-status.md`
+  - `packages/client/.env.example`
+  - `packages/client/app/page.tsx`
+  - `packages/client/app/chat/page.tsx`
+  - `packages/client/app/api/chat/route.ts`
+  - `packages/client/app/api/feishu/bitable/logic.ts`
+  - `packages/client/app/api/feishu/bitable/route.ts`
+  - `packages/client/app/api/feishu/bitable/logic.test.ts`
+
 ### 2026-02-11 16:30:52 +0800
 - 类型：文档回补
 - 摘要：按要求恢复初始化版本的 project-status 主体内容，并保留历史记录采用头插方式。

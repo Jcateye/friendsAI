@@ -15,6 +15,7 @@ export interface Message {
   content: string;
   toolCalls?: ToolCall[];
   contactCard?: ContactCard;
+  pendingContactCardConfirmation?: boolean;
   createdAt: Date;
 }
 

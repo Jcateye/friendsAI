@@ -57,6 +57,9 @@ export default function HomePage() {
         >
           开始聊天
         </Link>
+        <p className="mt-3 text-center text-xs text-gray-400">
+          当前为本地存储模式，清除浏览器数据后聊天记录可能丢失。
+        </p>
       </section>
     </div>
   );

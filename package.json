@@ -11,9 +11,9 @@
     "client:dev:weapp": "npm run dev:weapp -w @friends-ai/client",
     "client:build": "npm run build:h5 -w @friends-ai/client",
     "client:build:weapp": "npm run build:weapp -w @friends-ai/client",
-    "server:dev": "npm run dev -w @friends-ai/server",
-    "server:build": "npm run build -w @friends-ai/server",
-    "server:start": "npm run start -w @friends-ai/server",
+    "server:dev": "npm run start:dev -w server-nestjs",
+    "server:build": "npm run build -w server-nestjs",
+    "server:start": "npm run start -w server-nestjs",
     "dev": "concurrently \"npm run client:dev\" \"npm run server:dev\"",
     "build": "npm run client:build && npm run server:build"
   },

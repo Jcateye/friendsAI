@@ -38,6 +38,14 @@ interface ChatApiResponse {
   reply: string;
   toolResult?: string;
   contactCard?: Omit<ContactCard, 'createdAt'> & { createdAt: string };
+  requestId?: string;
+}
+
+interface ChatToolsPayload {
+  enabled: Array<'extract_contact_info' | 'feishu_template_message'>;
+  feishuTemplateMessage?: {
+    mode: 'sync' | 'preview';
+  };
 }
 
 type ComposerTool = 'add' | 'image' | 'camera' | 'gif' | 'location';
@@ -58,10 +66,39 @@ function mapToolName(tool: ComposerTool): string {
   return '位置';
 }
 
+function buildChatToolsPayload(
+  isFeishuToolEnabled: boolean,
+  feishuMode: 'sync' | 'preview'
+): ChatToolsPayload {
+  if (!isFeishuToolEnabled) {
+    return {
+      enabled: ['extract_contact_info'],
+    };
+  }
+
+  return {
+    enabled: ['extract_contact_info', 'feishu_template_message'],
+    feishuTemplateMessage: {
+      mode: feishuMode,
+    },
+  };
+}
+
 export default function ChatPage() {
-  const { activeContactId, contacts, messages, setContacts, addContact, setActiveContact, setMessages, addMessage } =
-    useChatStore();
+  const {
+    activeContactId,
+    contacts,
+    messages,
+    setContacts,
+    addContact,
+    setActiveContact,
+    setMessages,
+    addMessage,
+    updateMessage,
+  } = useChatStore();
   const [isLoading, setIsLoading] = useState(false);
+  const [isFeishuToolEnabled, setIsFeishuToolEnabled] = useState(false);
+  const [feishuMode, setFeishuMode] = useState<'sync' | 'preview'>('sync');
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -111,6 +148,60 @@ export default function ChatPage() {
 
   const activeContact = contacts.find((contact) => contact.id === activeContactId) ?? null;
   const currentMessages = activeContactId ? messages[activeContactId] ?? [] : [];
+
+  const updateMessageById = async (
+    contactId: string,
+    messageId: string,
+    updater: (message: Message) => Message
+  ) => {
+    const targetMessage = (messages[contactId] ?? []).find((message) => message.id === messageId);
+    if (!targetMessage) {
+      return;
+    }
+
+    const updatedMessage = updater(targetMessage);
+    updateMessage(contactId, messageId, updater);
+
+    try {
+      await saveMessage(updatedMessage);
+    } catch {
+      // Keep optimistic UI behavior for local-first flow.
+    }
+  };
+
+  const handleConfirmContactCard = async (messageId: string) => {
+    if (!activeContactId) {
+      return;
+    }
+
+    const message = (messages[activeContactId] ?? []).find((item) => item.id === messageId);
+
+    if (!message?.contactCard) {
+      return;
+    }
+
+    try {
+      await saveContactCard(message.contactCard);
+    } catch {
+      // Keep optimistic UI behavior for local-first flow.
+    }
+
+    await updateMessageById(activeContactId, messageId, (item) => ({
+      ...item,
+      pendingContactCardConfirmation: false,
+    }));
+  };
+
+  const handleDismissContactCard = async (messageId: string) => {
+    if (!activeContactId) {
+      return;
+    }
+
+    await updateMessageById(activeContactId, messageId, (item) => ({
+      ...item,
+      pendingContactCardConfirmation: false,
+    }));
+  };
 
   const handleAddContact = async () => {
     const newContact: Contact = {
@@ -188,11 +279,16 @@ export default function ChatPage() {
       return;
     }
 
+    const normalizedContent = content.trim();
+    if (!normalizedContent) {
+      return;
+    }
+
     const userMessage: Message = {
       id: createMessageId('user'),
       contactId: activeContactId,
       role: 'user',
-      content,
+      content: normalizedContent,
       createdAt: new Date(),
     };
 
@@ -207,28 +303,64 @@ export default function ChatPage() {
     setIsLoading(true);
 
     let payload: ChatApiResponse | null = null;
+    const toolsPayload = buildChatToolsPayload(isFeishuToolEnabled, feishuMode);
 
     try {
+      const requestPayload = {
+        contact: activeContact,
+        messages: [...currentMessages, userMessage]
+          .filter((message) => message.content.trim().length > 0)
+          .map((message) => ({
+            role: message.role,
+            content: message.content,
+          })),
+        tools: toolsPayload,
+      };
+
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          contact: activeContact,
-          messages: [...currentMessages, userMessage].map((message) => ({
-            role: message.role,
-            content: message.content,
-          })),
-        }),
+        body: JSON.stringify(requestPayload),
       });
 
       if (!response.ok) {
-        throw new Error('聊天服务请求失败');
+        const errorBody = (await response.json().catch(() => null)) as
+          | {
+              error?: string;
+              requestId?: string;
+            }
+          | null;
+
+        console.error('[chat-page] /api/chat request failed', {
+          status: response.status,
+          statusText: response.statusText,
+          requestId: errorBody?.requestId,
+          error: errorBody?.error,
+          contactId: activeContact.id,
+          messageCount: requestPayload.messages.length,
+          enabledTools: requestPayload.tools.enabled,
+          feishuMode: requestPayload.tools.feishuTemplateMessage?.mode,
+        });
+
+        throw new Error(errorBody?.error ?? '聊天服务请求失败');
       }
 
       payload = (await response.json()) as ChatApiResponse;
-    } catch {
+
+      console.info('[chat-page] /api/chat request succeeded', {
+        requestId: payload.requestId,
+        contactId: activeContact.id,
+        messageCount: requestPayload.messages.length,
+        hasToolResult: Boolean(payload.toolResult),
+      });
+    } catch (error) {
+      console.error('[chat-page] failed to send message', {
+        contactId: activeContact.id,
+        error: error instanceof Error ? error.message : String(error),
+      });
+
       const fallbackMessage: Message = {
         id: createMessageId('assistant-error'),
         contactId: activeContactId,
@@ -271,6 +403,7 @@ export default function ChatPage() {
           },
         ],
         contactCard: normalizedCard,
+        pendingContactCardConfirmation: Boolean(normalizedCard),
         createdAt: new Date(),
       };
 
@@ -280,14 +413,6 @@ export default function ChatPage() {
         await saveMessage(toolMessage);
       } catch {
         // Keep optimistic UI behavior for local-first flow.
-      }
-
-      if (normalizedCard) {
-        try {
-          await saveContactCard(normalizedCard);
-        } catch {
-          // Keep optimistic UI behavior for local-first flow.
-        }
       }
     }
 
@@ -317,8 +442,36 @@ export default function ChatPage() {
       <main className="flex flex-1 flex-col">
         <ChatHeader contact={activeContact} />
 
-        <MessageList messages={currentMessages} />
+        <MessageList
+          messages={currentMessages}
+          onConfirmContactCard={handleConfirmContactCard}
+          onDismissContactCard={handleDismissContactCard}
+        />
         <div ref={messagesEndRef} />
+
+        <div className="flex items-center justify-between border-t border-gray-200 bg-white px-4 py-2 text-xs text-gray-600">
+          <label className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              checked={isFeishuToolEnabled}
+              onChange={(event) => setIsFeishuToolEnabled(event.target.checked)}
+              disabled={isLoading}
+            />
+            <span>开启飞书多维表工具</span>
+          </label>
+          <label className="flex items-center gap-2">
+            <span>模式</span>
+            <select
+              value={feishuMode}
+              onChange={(event) => setFeishuMode(event.target.value as 'sync' | 'preview')}
+              disabled={!isFeishuToolEnabled || isLoading}
+              className="rounded border border-gray-300 bg-white px-2 py-1 text-xs"
+            >
+              <option value="sync">sync</option>
+              <option value="preview">preview</option>
+            </select>
+          </label>
+        </div>
 
         <ChatComposer
           onSendMessage={handleSendMessage}
