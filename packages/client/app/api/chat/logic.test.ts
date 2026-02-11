@@ -4,6 +4,7 @@ import {
   buildToolResult,
   extractAssistantReply,
   extractContactCardFromText,
+  isToolEnabled,
   parseChatRequestBody,
 } from './logic';
 
@@ -20,6 +21,68 @@ describe('parseChatRequestBody', () => {
     expect(result.contact.id).toBe('c-1');
     expect(result.contact.name).toBe('张三');
     expect(result.messages).toHaveLength(2);
+    expect(result.tools?.enabled).toEqual(['extract_contact_info']);
+  });
+
+  it('deduplicates enabled tools and applies mode default', () => {
+    const result = parseChatRequestBody({
+      contact: { id: 'c-2', name: '李四' },
+      messages: [{ role: 'user', content: 'hello' }],
+      tools: {
+        enabled: ['extract_contact_info', 'feishu_template_message', 'extract_contact_info'],
+        feishuTemplateMessage: {
+          templateId: ' tpl_123 ',
+        },
+      },
+    });
+
+    expect(result.tools?.enabled).toEqual(['extract_contact_info', 'feishu_template_message']);
+    expect(result.tools?.feishuTemplateMessage?.templateId).toBe('tpl_123');
+    expect(result.tools?.feishuTemplateMessage?.mode).toBe('sync');
+  });
+
+  it('throws when enabled tool name is invalid', () => {
+    expect(() =>
+      parseChatRequestBody({
+        contact: { id: 'c-1', name: '张三' },
+        messages: [{ role: 'user', content: 'x' }],
+        tools: {
+          enabled: ['extract_contact_info', 'unknown_tool'],
+        },
+      })
+    ).toThrow('tools.enabled 包含不支持的工具');
+  });
+
+  it('throws when variables value is not string', () => {
+    expect(() =>
+      parseChatRequestBody({
+        contact: { id: 'c-1', name: '张三' },
+        messages: [{ role: 'user', content: 'x' }],
+        tools: {
+          enabled: ['feishu_template_message'],
+          feishuTemplateMessage: {
+            variables: {
+              company: 123,
+            },
+          },
+        },
+      })
+    ).toThrow('tools.feishuTemplateMessage.variables 的值必须是字符串');
+  });
+
+  it('throws when mode is invalid', () => {
+    expect(() =>
+      parseChatRequestBody({
+        contact: { id: 'c-1', name: '张三' },
+        messages: [{ role: 'user', content: 'x' }],
+        tools: {
+          enabled: ['feishu_template_message'],
+          feishuTemplateMessage: {
+            mode: 'async',
+          },
+        },
+      })
+    ).toThrow('tools.feishuTemplateMessage.mode 无效');
   });
 
   it('throws when role is invalid', () => {
@@ -41,6 +104,25 @@ describe('parseChatRequestBody', () => {
   });
 });
 
+describe('isToolEnabled', () => {
+  it('returns true for default extract tool', () => {
+    expect(isToolEnabled({}, 'extract_contact_info')).toBe(true);
+  });
+
+  it('returns false when tool is not enabled', () => {
+    expect(
+      isToolEnabled(
+        {
+          tools: {
+            enabled: ['extract_contact_info'],
+          },
+        },
+        'feishu_template_message'
+      )
+    ).toBe(false);
+  });
+});
+
 describe('buildProxyPayload', () => {
   it('adds system prompt and maps messages', () => {
     const payload = buildProxyPayload(
@@ -48,10 +130,10 @@ describe('buildProxyPayload', () => {
         contact: { id: 'c-1', name: '张三' },
         messages: [{ role: 'user', content: 'hello' }],
       },
-      'gemini-3-flash'
+      'claude-sonnet-4-5-thinking'
     );
 
-    expect(payload.model).toBe('gemini-3-flash');
+    expect(payload.model).toBe('claude-sonnet-4-5-thinking');
     expect(payload.messages[0].role).toBe('system');
     expect(payload.messages[1].role).toBe('user');
   });

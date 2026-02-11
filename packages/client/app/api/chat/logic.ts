@@ -13,6 +13,8 @@ interface ProxyResponse {
   }>;
 }
 
+export type ChatToolName = 'extract_contact_info' | 'feishu_template_message';
+
 export interface ChatRequestInput {
   contact: {
     id: string;
@@ -22,6 +24,15 @@ export interface ChatRequestInput {
     role: 'user' | 'assistant';
     content: string;
   }>;
+  tools?: {
+    enabled: ChatToolName[];
+    disabled?: ChatToolName[];
+    feishuTemplateMessage?: {
+      templateId?: string;
+      variables?: Record<string, string>;
+      mode?: 'sync' | 'preview';
+    };
+  };
 }
 
 export class ValidationError extends Error {
@@ -37,12 +48,145 @@ export interface ChatApiPayload {
   temperature: number;
 }
 
+const DEFAULT_ENABLED_TOOLS: ChatToolName[] = ['extract_contact_info'];
+const FEISHU_TEMPLATE_ID_MAX_LENGTH = 128;
+const FEISHU_VARIABLE_MAX_ENTRIES = 50;
+const FEISHU_VARIABLE_KEY_MAX_LENGTH = 64;
+const FEISHU_VARIABLE_VALUE_MAX_LENGTH = 512;
+const MAX_MESSAGES = 100;
+const MAX_MESSAGE_CONTENT_LENGTH = 4000;
+const MAX_TOTAL_MESSAGE_CONTENT_LENGTH = 20000;
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+function parseToolNameArray(input: unknown, field: 'enabled' | 'disabled'): ChatToolName[] {
+  if (input === undefined) {
+    return field === 'enabled' ? [...DEFAULT_ENABLED_TOOLS] : [];
+  }
+
+  if (!Array.isArray(input)) {
+    throw new ValidationError(`tools.${field} 必须是数组`);
+  }
+
+  return Array.from(
+    new Set(
+      input.map((toolName: unknown): ChatToolName => {
+        if (toolName !== 'extract_contact_info' && toolName !== 'feishu_template_message') {
+          throw new ValidationError(`tools.${field} 包含不支持的工具`);
+        }
+
+        return toolName;
+      })
+    )
+  );
+}
+
+function parseTools(input: unknown): NonNullable<ChatRequestInput['tools']> {
+  if (input === undefined) {
+    return {
+      enabled: [...DEFAULT_ENABLED_TOOLS],
+      disabled: [],
+    };
+  }
+
+  if (!isPlainObject(input)) {
+    throw new ValidationError('tools 格式无效');
+  }
+
+  const enabled = parseToolNameArray(input.enabled, 'enabled');
+  const disabled = parseToolNameArray(input.disabled, 'disabled');
+
+  const feishuInput = input.feishuTemplateMessage;
+
+  if (feishuInput === undefined) {
+    return {
+      enabled,
+      disabled,
+    };
+  }
+
+  if (!isPlainObject(feishuInput)) {
+    throw new ValidationError('tools.feishuTemplateMessage 格式无效');
+  }
+
+  const templateIdInput = feishuInput.templateId;
+  if (templateIdInput !== undefined && typeof templateIdInput !== 'string') {
+    throw new ValidationError('tools.feishuTemplateMessage.templateId 必须是字符串');
+  }
+
+  const templateId = templateIdInput?.trim();
+  if (templateId && templateId.length > FEISHU_TEMPLATE_ID_MAX_LENGTH) {
+    throw new ValidationError('tools.feishuTemplateMessage.templateId 超出限制');
+  }
+
+  const modeInput = feishuInput.mode;
+  if (modeInput !== undefined && modeInput !== 'sync' && modeInput !== 'preview') {
+    throw new ValidationError('tools.feishuTemplateMessage.mode 无效');
+  }
+
+  const variablesInput = feishuInput.variables;
+  if (variablesInput !== undefined && !isPlainObject(variablesInput)) {
+    throw new ValidationError('tools.feishuTemplateMessage.variables 必须是对象');
+  }
+
+  const variablesEntries = Object.entries(variablesInput ?? {});
+
+  if (variablesEntries.length > FEISHU_VARIABLE_MAX_ENTRIES) {
+    throw new ValidationError('tools.feishuTemplateMessage.variables 条目过多');
+  }
+
+  const normalizedVariables = variablesEntries.reduce<Record<string, string>>((acc, [rawKey, rawValue]) => {
+    if (typeof rawValue !== 'string') {
+      throw new ValidationError('tools.feishuTemplateMessage.variables 的值必须是字符串');
+    }
+
+    const key = rawKey.trim();
+    const value = rawValue.trim();
+
+    if (!key || key.length > FEISHU_VARIABLE_KEY_MAX_LENGTH) {
+      throw new ValidationError('tools.feishuTemplateMessage.variables 的键超出限制');
+    }
+
+    if (value.length > FEISHU_VARIABLE_VALUE_MAX_LENGTH) {
+      throw new ValidationError('tools.feishuTemplateMessage.variables 的值超出限制');
+    }
+
+    return {
+      ...acc,
+      [key]: value,
+    };
+  }, {});
+
+  return {
+    enabled,
+    disabled,
+    feishuTemplateMessage: {
+      templateId,
+      variables: Object.keys(normalizedVariables).length > 0 ? normalizedVariables : undefined,
+      mode: modeInput ?? 'sync',
+    },
+  };
+}
+
+export function isToolEnabled(request: Pick<ChatRequestInput, 'tools'>, toolName: ChatToolName): boolean {
+  const enabled = request.tools?.enabled ?? DEFAULT_ENABLED_TOOLS;
+  const disabled = request.tools?.disabled ?? [];
+
+  if (disabled.includes(toolName)) {
+    return false;
+  }
+
+  return enabled.includes(toolName);
+}
+
 export function parseChatRequestBody(input: unknown): ChatRequestInput {
   if (!input || typeof input !== 'object') {
     throw new ValidationError('请求体必须是对象');
   }
 
-  const body = input as Partial<ChatRequestInput>;
+  const body = input as Partial<ChatRequestInput> & { tools?: unknown };
 
   if (!body.contact || typeof body.contact !== 'object') {
     throw new ValidationError('缺少联系人信息');
@@ -63,7 +207,7 @@ export function parseChatRequestBody(input: unknown): ChatRequestInput {
     throw new ValidationError('消息列表不能为空');
   }
 
-  if (body.messages.length > 50) {
+  if (body.messages.length > MAX_MESSAGES) {
     throw new ValidationError('消息条数超出限制');
   }
 
@@ -88,8 +232,21 @@ export function parseChatRequestBody(input: unknown): ChatRequestInput {
     throw new ValidationError('消息列表格式无效');
   }
 
-  if (normalizedMessages.some((message) => message.content.length === 0 || message.content.length > 4000)) {
+  if (
+    normalizedMessages.some(
+      (message) => message.content.length === 0 || message.content.length > MAX_MESSAGE_CONTENT_LENGTH
+    )
+  ) {
     throw new ValidationError('消息内容超出限制');
+  }
+
+  const totalMessageContentLength = normalizedMessages.reduce(
+    (sum, message) => sum + message.content.length,
+    0
+  );
+
+  if (totalMessageContentLength > MAX_TOTAL_MESSAGE_CONTENT_LENGTH) {
+    throw new ValidationError('消息总长度超出限制');
   }
 
   return {
@@ -98,6 +255,7 @@ export function parseChatRequestBody(input: unknown): ChatRequestInput {
       name: contactName,
     },
     messages: normalizedMessages,
+    tools: parseTools(body.tools),
   };
 }
 
