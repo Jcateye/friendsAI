@@ -1,4 +1,5 @@
 import type { Message } from '@/types';
+import ReactMarkdown from 'react-markdown';
 import { Bot } from 'lucide-react';
 
 
@@ -40,13 +41,56 @@ export function MessageBubble({ message }: MessageBubbleProps) {
             ))}
           </div>
         )}
-        <p
-          className={`text-sm leading-relaxed ${
-            isUser ? 'text-white' : 'text-gray-900'
-          }`}
-        >
-          {message.content}
-        </p>
+        {isUser ? (
+          <p className="text-sm leading-relaxed whitespace-pre-wrap text-white">
+            {message.content}
+          </p>
+        ) : (
+          <div className="text-sm leading-relaxed text-gray-900 [&_a]:text-blue-600 [&_a]:underline [&_a]:break-all [&_code]:rounded [&_code]:bg-black/5 [&_code]:px-1 [&_code]:py-0.5 [&_pre]:overflow-x-auto [&_pre]:rounded-lg [&_pre]:bg-black/5 [&_pre]:p-2 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5">
+            <ReactMarkdown
+              allowedElements={[
+                'p',
+                'br',
+                'strong',
+                'em',
+                'del',
+                'ul',
+                'ol',
+                'li',
+                'blockquote',
+                'code',
+                'pre',
+                'a',
+                'h1',
+                'h2',
+                'h3',
+                'h4',
+                'h5',
+                'h6',
+              ]}
+              skipHtml
+              components={{
+                a: ({ href, children, ...props }) => {
+                  const safeHref =
+                    href && /^(https?:|mailto:)/i.test(href) ? href : undefined;
+
+                  return (
+                    <a
+                      {...props}
+                      href={safeHref}
+                      rel="noopener noreferrer nofollow"
+                      target="_blank"
+                    >
+                      {children}
+                    </a>
+                  );
+                },
+              }}
+            >
+              {message.content}
+            </ReactMarkdown>
+          </div>
+        )}
       </div>
     </div>
   );
