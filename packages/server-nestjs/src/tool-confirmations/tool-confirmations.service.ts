@@ -1,7 +1,10 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { ToolConfirmation, ToolConfirmationStatus } from '../entities';
+import { FeishuClient } from '../tools/feishu/feishu.client';
+import { ActionTrackingService } from '../action-tracking/action-tracking.service';
+import { generateUlid } from '../utils/ulid';
 
 interface CreateToolConfirmationInput {
   toolName: string;
@@ -12,9 +15,13 @@ interface CreateToolConfirmationInput {
 
 @Injectable()
 export class ToolConfirmationsService {
+  private readonly logger = new Logger(ToolConfirmationsService.name);
+
   constructor(
     @InjectRepository(ToolConfirmation)
     private readonly toolConfirmationRepository: Repository<ToolConfirmation>,
+    private readonly feishuClient: FeishuClient,
+    private readonly actionTracking: ActionTrackingService,
   ) {}
 
   async create(input: CreateToolConfirmationInput): Promise<ToolConfirmation> {
@@ -99,16 +106,79 @@ export class ToolConfirmationsService {
     payload?: Record<string, any>,
   ): Promise<{ success: boolean; result?: Record<string, any>; error?: string }> {
     const handlers: Record<string, (input?: Record<string, any>) => Promise<Record<string, any>>> = {
-      'feishu.send_message': async input => ({
-        provider: 'feishu',
-        status: 'mocked',
-        payload: input ?? null,
-      }),
-      send_feishu_message: async input => ({
-        provider: 'feishu',
-        status: 'mocked',
-        payload: input ?? null,
-      }),
+      'feishu.send_message': async input => {
+        const { recipientId, message, userId, chatId } = input ?? {};
+        const result = await this.feishuClient.sendTextMessage(
+          userId ?? '',
+          recipientId ?? '',
+          message ?? '',
+          chatId,
+        );
+
+        // 记录事件（fire-and-forget，失败不影响主流程）
+        if (result.success) {
+          const messageId = result.messageId ?? generateUlid();
+          try {
+            await this.actionTracking.recordMessageSent({
+              userId: userId ?? '',
+              suggestionId: input?.suggestionId ?? 'manual',
+              messageId,
+              recipientId: recipientId ?? '',
+              recipientType: input?.recipientType ?? 'contact',
+              channel: 'feishu',
+              contentPreview: message?.substring(0, 100) ?? '',
+            });
+          } catch (error) {
+            this.logger.warn(
+              `Failed to record message sent event: ${error instanceof Error ? error.message : String(error)}`,
+            );
+          }
+        }
+
+        return {
+          provider: 'feishu',
+          status: result.success ? 'sent' : 'failed',
+          messageId: result.messageId,
+          error: result.error,
+        };
+      },
+      send_feishu_message: async input => {
+        // 兼容旧版本的工具名称
+        const { recipientId, message, userId, chatId } = input ?? {};
+        const result = await this.feishuClient.sendTextMessage(
+          userId ?? '',
+          recipientId ?? '',
+          message ?? '',
+          chatId,
+        );
+
+        // 记录事件（fire-and-forget，失败不影响主流程）
+        if (result.success) {
+          const messageId = result.messageId ?? generateUlid();
+          try {
+            await this.actionTracking.recordMessageSent({
+              userId: userId ?? '',
+              suggestionId: input?.suggestionId ?? 'manual',
+              messageId,
+              recipientId: recipientId ?? '',
+              recipientType: input?.recipientType ?? 'contact',
+              channel: 'feishu',
+              contentPreview: message?.substring(0, 100) ?? '',
+            });
+          } catch (error) {
+            this.logger.warn(
+              `Failed to record message sent event: ${error instanceof Error ? error.message : String(error)}`,
+            );
+          }
+        }
+
+        return {
+          provider: 'feishu',
+          status: result.success ? 'sent' : 'failed',
+          messageId: result.messageId,
+          error: result.error,
+        };
+      },
     };
 
     const handler = handlers[toolName];

@@ -160,6 +160,24 @@
     "generatedAt": {
       "type": "number",
       "description": "Timestamp when the insight was generated"
+    },
+    "priorityScore": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 100,
+      "description": "Priority score (0-100) based on relationship health, interaction frequency, and opportunity urgency"
+    },
+    "reasonTags": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Reason tags for categorizing why follow-up or attention is needed (e.g., long_time_no_contact, upcoming_event, stale_commitment, unreciprocated_value)"
+    },
+    "relationshipRiskLevel": {
+      "type": "string",
+      "enum": ["low", "medium", "high"],
+      "description": "Relationship risk level based on relationship health indicators"
     }
   },
   "required": [
@@ -169,6 +187,9 @@
     "risks",
     "suggestedActions",
     "openingLines",
-    "citations"
+    "citations",
+    "priorityScore",
+    "reasonTags",
+    "relationshipRiskLevel"
   ]
 }

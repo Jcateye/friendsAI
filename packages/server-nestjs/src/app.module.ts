@@ -33,6 +33,7 @@ import { ConnectorsModule } from './connectors/connectors.module';
 import { ToolsModule } from './tools/tools.module';
 import { ToolConfirmationsModule } from './tool-confirmations/tool-confirmations.module';
 import { ConversationArchivesModule } from './conversation-archives/conversation-archives.module';
+import { ActionTrackingModule } from './action-tracking/action-tracking.module';
 import { TimestampMsInterceptor } from './common/interceptors/timestamp-ms.interceptor';
 import { HttpLoggingInterceptor } from './common/interceptors/http-logging.interceptor';
 
@@ -91,6 +92,42 @@ import { HttpLoggingInterceptor } from './common/interceptors/http-logging.inter
         };
       },
     }),
+    // V3 数据源配置 - 用于 action tracking 和 weekly report
+    TypeOrmModule.forRootAsync({
+      name: 'v3',
+      inject: [ConfigService],
+      useFactory: (configService: ConfigService): TypeOrmModuleOptions => {
+        // V3 数据库 URL，如果没有配置则使用主数据库 URL
+        const databaseUrl =
+          configService.get<string>('DATABASE_URL_V3') ?? configService.get<string>('DATABASE_URL');
+        if (!databaseUrl) {
+          throw new Error('DATABASE_URL is required for V3 data source');
+        }
+        const synchronize = false;
+
+        // 通过环境变量控制是否打开 TypeORM 的 query 级别调试日志
+        const dbDebugFlag = configService.get<string>('DB_DEBUG_LOG') ?? '';
+        const enableDbDebug = ['1', 'true', 'TRUE', 'yes', 'YES'].includes(dbDebugFlag);
+
+        const logging: LoggerOptions = enableDbDebug ? ['query', 'error', 'warn'] : ['error', 'warn'];
+
+        const logger = new Logger('TypeOrmConfig-V3');
+        logger.log(
+          `[TypeOrm-V3] synchronize=${synchronize}, logging=${Array.isArray(logging) ? logging.join(',') : logging}`,
+        );
+
+        return {
+          type: 'postgres',
+          url: databaseUrl,
+          autoLoadEntities: true,
+          synchronize,
+          migrationsRun: false,
+          logging,
+          // 指向 friendsai_v3_gpt 数据库的 schema（如果需要）
+          // entityPrefix: 'v3_',
+        };
+      },
+    }),
     TypeOrmModule.forFeature([
       User,
       Contact,
@@ -117,6 +154,7 @@ import { HttpLoggingInterceptor } from './common/interceptors/http-logging.inter
     ToolsModule,
     ToolConfirmationsModule,
     ConversationArchivesModule,
+    ActionTrackingModule,
   ],
   controllers: [AppController],
   providers: [

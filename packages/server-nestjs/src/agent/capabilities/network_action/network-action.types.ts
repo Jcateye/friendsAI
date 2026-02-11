@@ -21,6 +21,12 @@ export interface NetworkActionOutput {
     reason: string;
     priority: 'high' | 'medium' | 'low';
     suggestedAction: string;
+    /** V1 闭环：为何是现在 */
+    timing_reason: string;
+    /** V1 闭环：可先提供的价值 */
+    value_first_suggestion: string;
+    /** V1 闭环：后续计划 */
+    followup_plan: string;
   }>;
   /** 关系网络建议 */
   recommendations: Array<{
@@ -28,6 +34,8 @@ export interface NetworkActionOutput {
     description: string;
     contacts: string[]; // 相关联系人 ID
     confidence: number; // 0-1
+    /** V1 闭环：推荐原因 */
+    reason: string;
   }>;
   /** 可读的汇总解释 */
   synthesis: string;

@@ -19,6 +19,10 @@ export interface ContactInsightOutput {
   suggestedActions: SuggestedAction[];
   openingLines: OpeningLine[];
   citations: Citation[];
+  // V1 闭环功能字段
+  priority_score: number;           // 0-100，用于排序
+  reason_tags: string[];            // 原因标签，如 ['long_time_no_contact', 'upcoming_event']
+  relationship_risk_level: 'low' | 'medium' | 'high';
 }
 
 export interface RelationshipSignal {
@@ -70,6 +74,9 @@ export interface ContactInsightContext {
     tags?: string[] | null;
     note?: string | null;
     lastInteractionAt?: Date | null;
+    // V1 闭环优先级计算所需上下文
+    daysSinceLastInteraction?: number;  // 距上次互动天数
+    interactionFrequency?: number;      // 互动频率（次/月）
   };
   recentInteractions: Array<{
     id: string;
@@ -95,6 +102,24 @@ export interface ContactInsightContext {
     }>;
   };
   depth: InsightDepth;
+  // V1 闭环优先级计算所需上下文
+  userPreferences?: {
+    importanceWeights?: {
+      recency?: number;          // 联络及时性权重
+      frequency?: number;        // 互动频率权重
+      events?: number;           // 事件相关性权重
+    };
+    riskThresholds?: {
+      lowRiskDays?: number;      // 低风险阈值（天）
+      mediumRiskDays?: number;   // 中风险阈值（天）
+    };
+  };
+  upcomingEvents?: Array<{
+    id: string;
+    title: string;
+    eventDate: Date;
+    daysUntilEvent: number;
+  }>;
 }
 
 

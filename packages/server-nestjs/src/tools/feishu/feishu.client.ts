@@ -112,4 +112,76 @@ export class FeishuClient {
     const path = `/open-apis/contact/v3/users${query ? `?${query}` : ''}`;
     return this.request(path);
   }
+
+  /**
+   * 发送文本消息到飞书
+   * @param userId 用户ID（用于事件追踪）
+   * @param recipientId 接收者ID（open_id或union_id或user_id）
+   * @param message 消息内容
+   * @param chatId 群聊ID（可选，发送到群聊时使用）
+   * @returns 发送结果
+   */
+  async sendTextMessage(
+    userId: string,
+    recipientId: string,
+    message: string,
+    chatId?: string,
+  ): Promise<{ success: boolean; messageId?: string; error?: string }> {
+    try {
+      const token = await this.getTenantAccessToken();
+
+      // 飞书发送消息API
+      const endpoint = chatId
+        ? `/open-apis/im/v1/messages/${chatId}/reply` // 回复群聊消息
+        : `/open-apis/im/v1/messages`; // 发送私聊消息
+
+      const body = chatId
+        ? {
+            msg_type: 'text',
+            content: JSON.stringify({ text: message }),
+          }
+        : {
+            receive_id_type: 'open_id',
+            msg_type: 'text',
+            receive_id: recipientId,
+            content: JSON.stringify({ text: message }),
+          };
+
+      const response = await fetch(`${this.baseUrl}${endpoint}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(body),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        return {
+          success: false,
+          error: `Feishu API error: ${response.status} ${errorText}`,
+        };
+      }
+
+      const data = await response.json();
+
+      if (data.code !== 0) {
+        return {
+          success: false,
+          error: `Feishu API error: ${data.msg || 'Unknown error'}`,
+        };
+      }
+
+      return {
+        success: true,
+        messageId: data.data?.message_id,
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to send message',
+      };
+    }
+  }
 }

@@ -9,6 +9,7 @@ import { AiService } from '../../ai/ai.service';
 import { TitleSummaryService } from '../capabilities/title_summary/title-summary.service';
 import { ContactInsightService } from '../capabilities/contact_insight/contact-insight.service';
 import { ArchiveBriefService } from '../capabilities/archive_brief/archive-brief.service';
+import { ActionTrackingService } from '../../action-tracking/action-tracking.service';
 import type { AgentDefinitionBundle } from '../contracts/agent-definition.types';
 
 describe('AgentRuntimeExecutor', () => {
@@ -21,6 +22,7 @@ describe('AgentRuntimeExecutor', () => {
   let titleSummaryService: jest.Mocked<TitleSummaryService>;
   let contactInsightService: jest.Mocked<ContactInsightService>;
   let archiveBriefService: jest.Mocked<ArchiveBriefService>;
+  let actionTrackingService: jest.Mocked<ActionTrackingService>;
 
   const mockBundle: AgentDefinitionBundle = {
     definition: {
@@ -103,6 +105,12 @@ describe('AgentRuntimeExecutor', () => {
             generateBrief: jest.fn(),
           },
         },
+        {
+          provide: ActionTrackingService,
+          useValue: {
+            recordSuggestionShown: jest.fn().mockResolvedValue(undefined),
+          },
+        },
       ],
     }).compile();
 
@@ -115,6 +123,7 @@ describe('AgentRuntimeExecutor', () => {
     titleSummaryService = module.get(TitleSummaryService);
     contactInsightService = module.get(ContactInsightService);
     archiveBriefService = module.get(ArchiveBriefService);
+    actionTrackingService = module.get(ActionTrackingService);
   });
 
   it('should be defined', () => {

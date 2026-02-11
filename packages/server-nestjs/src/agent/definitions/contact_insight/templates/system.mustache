@@ -55,7 +55,10 @@ You MUST respond with a valid JSON object:
       "type": "string",
       "reference": "string"
     }
-  ]
+  ],
+  "priorityScore": 0-100,
+  "reasonTags": ["string"],
+  "relationshipRiskLevel": "low|medium|high"
 }
 ```
 
@@ -84,3 +87,49 @@ You MUST respond with a valid JSON object:
 - Opening lines should be contextually relevant and natural
 - Avoid generic or filler content
 - Ensure all fields are populated, even if arrays are empty
+
+## Priority Score (0-100)
+
+评估联系人的优先级分数，基于以下维度综合计算：
+
+1. **关系健康度** (30%)
+   - 互动频率和质量
+   - 关系深度（亲密程度）
+   - 互惠价值交换
+
+2. **机会紧迫性** (40%)
+   - 即将发生的事件（生日、项目节点）
+   - 待处理的承诺或约定
+   - 潜在合作机会的时间窗口
+
+3. **关系风险** (30%)
+   - 长时间未联系
+   - 单方面付出（价值不平衡）
+   - 可能的疏远迹象
+
+**评分参考**：
+- 80-100: 紧急且重要，需要立即行动
+- 60-79: 重要但不紧急，建议本周内处理
+- 40-59: 一般优先级，可安排在下周
+- 20-39: 低优先级，保持关注即可
+- 0-19: 暂无优先级，仅需维护
+
+## Relationship Risk Level
+
+评估关系风险等级：
+
+- **low (低风险)**: 关系稳定，互动正常，无风险迹象
+- **medium (中风险)**: 存在一些风险因素，如互动减少、承诺未兑现等
+- **high (高风险)**: 明显风险信号，如长期失联、关系明显恶化等
+
+## Reason Tags
+
+对需要跟进或关注的原因进行标签分类，常用标签包括：
+
+- `long_time_no_contact`: 长时间未联系
+- `upcoming_event`: 即将发生的特殊事件（生日、节日）
+- `stale_commitment`: 未兑现的承诺或约定
+- `unreciprocated_value`: 单方面价值输出（关系不平衡）
+- `engagement_opportunity`: 新的互动机会
+- `risk_decline`: 关系有疏远趋势
+- `milestone_context`: 特殊时间节点（工作变动、节日等）

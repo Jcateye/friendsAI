@@ -31,6 +31,15 @@ describe('AiService', () => {
               if (key === 'OPENAI_API_KEY') {
                 return 'test-api-key';
               }
+              if (key === 'OPENAI_MODEL') {
+                return 'gpt-5.1-mini';
+              }
+              if (key === 'OPENAI_EMBEDDING_MODEL') {
+                return 'text-embedding-ada-002';
+              }
+              if (key === 'NODE_ENV') {
+                return 'test';
+              }
               return null;
             }),
           },

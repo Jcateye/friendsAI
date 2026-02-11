@@ -11,6 +11,9 @@ import * as crypto from 'crypto';
 import { TitleSummaryService } from '../capabilities/title_summary/title-summary.service';
 import { ContactInsightService } from '../capabilities/contact_insight/contact-insight.service';
 import { ArchiveBriefService } from '../capabilities/archive_brief/archive-brief.service';
+import { ActionTrackingService } from '../../action-tracking/action-tracking.service';
+import type { ContactInsightOutput } from '../capabilities/contact_insight/contact-insight.types';
+import type { NetworkActionOutput } from '../capabilities/network_action/network-action.types';
 
 /**
  * Agent 运行结果
@@ -34,6 +37,9 @@ export interface AgentExecutionResult {
 export class AgentRuntimeExecutor {
   private readonly logger = new Logger(AgentRuntimeExecutor.name);
 
+  /** Feature Flag: 是否启用建议追踪 */
+  private readonly ACTION_TRACKING_ENABLED = process.env.ACTION_TRACKING_ENABLED === 'true';
+
   constructor(
     private readonly registry: AgentDefinitionRegistry,
     private readonly templateRenderer: PromptTemplateRenderer,
@@ -46,6 +52,8 @@ export class AgentRuntimeExecutor {
     private readonly contactInsightService?: ContactInsightService,
     @Inject(forwardRef(() => ArchiveBriefService))
     private readonly archiveBriefService?: ArchiveBriefService,
+    @Inject(forwardRef(() => ActionTrackingService))
+    private readonly actionTrackingService?: ActionTrackingService,
   ) {}
 
   /**
@@ -244,7 +252,15 @@ export class AgentRuntimeExecutor {
       }
     }
 
-    // 10. 返回结果
+    // 10. 追踪建议展示事件（如果启用且适用）
+    if (this.ACTION_TRACKING_ENABLED && this.actionTrackingService && agentId === 'network_action') {
+      const userId = (context.userId ?? options?.userId) as string | undefined;
+      if (userId) {
+        await this.trackNetworkActionSuggestions(userId, agentId, parsedOutput as NetworkActionOutput);
+      }
+    }
+
+    // 11. 返回结果
     return {
       runId,
       cached: false,
@@ -358,20 +374,137 @@ export class AgentRuntimeExecutor {
       throw new BadRequestException('contactId is required');
     }
 
+    const userId = (input.userId || options?.userId) as string;
+
     const result = await this.contactInsightService.generate(
       {
-        userId: (input.userId || options?.userId) as string,
+        userId,
         contactId: input.contactId as string,
         depth: input.depth as 'brief' | 'standard' | 'deep' | undefined,
       },
       { forceRefresh: options?.forceRefresh }
     );
 
+    // 追踪建议展示事件（如果启用）
+    if (this.ACTION_TRACKING_ENABLED && this.actionTrackingService) {
+      await this.trackContactInsightSuggestions(userId, 'contact_insight', result as unknown as ContactInsightOutput);
+    }
+
     return {
       runId,
       cached: false,
       data: result as unknown as Record<string, unknown>,
     };
+  }
+
+  /**
+   * 追踪 contact_insight 的建议展示事件
+   */
+  private async trackContactInsightSuggestions(
+    userId: string,
+    agentId: string,
+    output: ContactInsightOutput
+  ): Promise<void> {
+    if (!this.actionTrackingService) {
+      return;
+    }
+    try {
+      const { suggestedActions } = output;
+      if (!Array.isArray(suggestedActions) || suggestedActions.length === 0) {
+        return;
+      }
+
+      // 为每个建议生成追踪事件
+      await Promise.all(
+        suggestedActions.map((action, index) =>
+          this.actionTrackingService!.recordSuggestionShown({
+            userId,
+            agentId,
+            suggestionId: `${agentId}-${index}`,
+            suggestionType: 'followup',
+            content: {
+              action: action.action,
+              reason: action.reason,
+              priority: action.priority,
+            },
+          })
+        )
+      );
+
+      this.logger.debug(`Tracked ${suggestedActions.length} suggestion_shown events for ${agentId}`);
+    } catch (error) {
+      // 追踪失败不影响主流程
+      this.logger.warn(
+        `Failed to track suggestion_shown events: ${error instanceof Error ? error.message : String(error)}`
+      );
+    }
+  }
+
+  /**
+   * 追踪 network_action 的建议展示事件
+   */
+  private async trackNetworkActionSuggestions(
+    userId: string,
+    agentId: string,
+    output: NetworkActionOutput
+  ): Promise<void> {
+    if (!this.actionTrackingService) {
+      return;
+    }
+    try {
+      const { followUps, recommendations } = output;
+      const suggestionEvents: Array<Promise<void>> = [];
+
+      // 追踪 followUps
+      if (Array.isArray(followUps) && followUps.length > 0) {
+        followUps.forEach((followUp, index) => {
+          suggestionEvents.push(
+            this.actionTrackingService!.recordSuggestionShown({
+              userId,
+              agentId,
+              suggestionId: `${agentId}-followup-${index}`,
+              suggestionType: 'followup',
+              content: {
+                contactId: followUp.contactId,
+                contactName: followUp.contactName,
+                suggestedAction: followUp.suggestedAction,
+                reason: followUp.reason,
+                priority: followUp.priority,
+              },
+            })
+          );
+        });
+      }
+
+      // 追踪 recommendations
+      if (Array.isArray(recommendations) && recommendations.length > 0) {
+        recommendations.forEach((rec, index) => {
+          suggestionEvents.push(
+            this.actionTrackingService!.recordSuggestionShown({
+              userId,
+              agentId,
+              suggestionId: `${agentId}-recommendation-${index}`,
+              suggestionType: rec.type === 'connection' ? 'connection' : rec.type === 'introduction' ? 'introduction' : 'followup',
+              content: {
+                type: rec.type,
+                description: rec.description,
+                contacts: rec.contacts,
+                confidence: rec.confidence,
+                reason: rec.reason,
+              },
+            })
+          );
+        });
+      }
+
+      await Promise.all(suggestionEvents);
+      this.logger.debug(`Tracked ${suggestionEvents.length} suggestion_shown events for ${agentId}`);
+    } catch (error) {
+      // 追踪失败不影响主流程
+      this.logger.warn(
+        `Failed to track suggestion_shown events: ${error instanceof Error ? error.message : String(error)}`
+      );
+    }
   }
 
   /**

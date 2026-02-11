@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AiModule } from '../ai/ai.module';
 import { ConversationsModule } from '../conversations/conversations.module';
+import { ActionTrackingModule } from '../action-tracking/action-tracking.module';
 import {
   User,
   Contact,
@@ -45,6 +46,7 @@ import { AgentListService } from './agent-list.service';
   imports: [
     AiModule,
     ConversationsModule,
+    ActionTrackingModule,
     TypeOrmModule.forFeature([
       User,
       Contact,
