@@ -56,7 +56,7 @@ export function ContactsDrawer({ onAddContact }: ContactsDrawerProps) {
                 }`}
               >
                 <div
-                  className="flex h-10 flex-shrink-0 items-center justify-center rounded-full text-sm font-medium text-white"
+                  className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full text-sm font-medium text-white"
                   style={{ backgroundColor: contact.avatarColor }}
                 >
                   {contact.name.charAt(0).toUpperCase()}

@@ -48,7 +48,7 @@ interface ChatToolsPayload {
   };
 }
 
-type ComposerTool = 'add' | 'image' | 'camera' | 'gif' | 'location';
+type ComposerTool = 'image' | 'video' | 'audio' | 'document' | 'file' | 'feishu_bitable';
 
 function createMessageId(prefix: string): string {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -59,11 +59,13 @@ function createContactName(contactCount: number): string {
 }
 
 function mapToolName(tool: ComposerTool): string {
-  if (tool === 'add') return '添加附件';
   if (tool === 'image') return '图片';
-  if (tool === 'camera') return '拍照';
-  if (tool === 'gif') return 'GIF';
-  return '位置';
+  if (tool === 'video') return '视频';
+  if (tool === 'audio') return '音频';
+  if (tool === 'document') return '文档';
+  if (tool === 'file') return '文件';
+  if (tool === 'feishu_bitable') return '飞书多维表';
+  return '未知工具';
 }
 
 function buildChatToolsPayload(
@@ -449,35 +451,13 @@ export default function ChatPage() {
         />
         <div ref={messagesEndRef} />
 
-        <div className="flex items-center justify-between border-t border-gray-200 bg-white px-4 py-2 text-xs text-gray-600">
-          <label className="flex items-center gap-2">
-            <input
-              type="checkbox"
-              checked={isFeishuToolEnabled}
-              onChange={(event) => setIsFeishuToolEnabled(event.target.checked)}
-              disabled={isLoading}
-            />
-            <span>开启飞书多维表工具</span>
-          </label>
-          <label className="flex items-center gap-2">
-            <span>模式</span>
-            <select
-              value={feishuMode}
-              onChange={(event) => setFeishuMode(event.target.value as 'sync' | 'preview')}
-              disabled={!isFeishuToolEnabled || isLoading}
-              className="rounded border border-gray-300 bg-white px-2 py-1 text-xs"
-            >
-              <option value="sync">sync</option>
-              <option value="preview">preview</option>
-            </select>
-          </label>
-        </div>
-
         <ChatComposer
           onSendMessage={handleSendMessage}
           onToolAction={handleToolAction}
           onVoiceInput={handleVoiceInput}
           disabled={isLoading}
+          isFeishuToolEnabled={isFeishuToolEnabled}
+          onToggleFeishuTool={() => setIsFeishuToolEnabled(!isFeishuToolEnabled)}
         />
       </main>
     </div>
