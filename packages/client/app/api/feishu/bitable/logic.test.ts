@@ -44,7 +44,7 @@ describe('parseBitableSyncRequestBody', () => {
     expect(() =>
       parseBitableSyncRequestBody({
         ...basePayload,
-        content: 'a'.repeat(4001),
+        content: 'a'.repeat(12001),
       })
     ).toThrow(ValidationError);
   });

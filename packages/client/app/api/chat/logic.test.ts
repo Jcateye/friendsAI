@@ -98,7 +98,7 @@ describe('parseChatRequestBody', () => {
     expect(() =>
       parseChatRequestBody({
         contact: { id: 'c-1', name: '张三' },
-        messages: [{ role: 'user', content: 'a'.repeat(4001) }],
+        messages: [{ role: 'user', content: 'a'.repeat(12001) }],
       })
     ).toThrow();
   });

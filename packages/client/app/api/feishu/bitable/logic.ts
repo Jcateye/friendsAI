@@ -86,7 +86,7 @@ export function parseBitableSyncRequestBody(input: unknown): BitableSyncRequest 
     throw new ValidationError('role 无效');
   }
 
-  if (!content || content.length > 4000) {
+  if (!content || content.length > 12000) {
     throw new ValidationError('content 超出限制');
   }
 

@@ -53,9 +53,9 @@ const FEISHU_TEMPLATE_ID_MAX_LENGTH = 128;
 const FEISHU_VARIABLE_MAX_ENTRIES = 50;
 const FEISHU_VARIABLE_KEY_MAX_LENGTH = 64;
 const FEISHU_VARIABLE_VALUE_MAX_LENGTH = 512;
-const MAX_MESSAGES = 100;
-const MAX_MESSAGE_CONTENT_LENGTH = 4000;
-const MAX_TOTAL_MESSAGE_CONTENT_LENGTH = 20000;
+const MAX_MESSAGES = 1000;
+const MAX_MESSAGE_CONTENT_LENGTH = 12000;
+const MAX_TOTAL_MESSAGE_CONTENT_LENGTH = 200000;
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);

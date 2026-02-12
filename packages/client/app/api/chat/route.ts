@@ -185,7 +185,7 @@ export async function POST(request: Request) {
         Authorization: `Bearer ${LOCAL_AI_API_KEY}`,
       },
       body: JSON.stringify(payload),
-      signal: AbortSignal.timeout(15000),
+      signal: AbortSignal.timeout(45000),
     });
 
     if (!proxyResponse.ok) {
