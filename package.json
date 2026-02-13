@@ -32,6 +32,7 @@
     "node": ">=18.0.0"
   },
   "dependencies": {
+    "class-validator": "^0.14.3",
     "openclaw": "^2026.1.30",
     "openspec": "^0.0.0",
     "pg": "^8.18.0"
