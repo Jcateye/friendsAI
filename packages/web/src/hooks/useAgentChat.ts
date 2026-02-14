@@ -163,7 +163,8 @@ async function fetchWithAuth(input: RequestInfo | URL, init?: RequestInit): Prom
  */
 function createFetchWithConversationId(
   onConversationCreated?: (conversationId: string) => void,
-  getConversationId?: () => string | undefined
+  getConversationId?: () => string | undefined,
+  onAwaitingToolConfirmation?: (tool: ToolState) => void,
 ): (input: RequestInfo | URL, init?: RequestInit) => Promise<Response> {
   return async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
     // 在发送请求前，修改请求体以添加最新的 conversationId
@@ -237,6 +238,23 @@ function createFetchWithConversationId(
                   onConversationCreated(conversationEvent.conversationId);
                   conversationIdExtracted = true;
                 }
+
+                const awaitingToolEvents = events.filter(
+                  (item: any) => item.type === 'tool.awaiting_input'
+                );
+                awaitingToolEvents.forEach((toolEvent: any) => {
+                  if (!onAwaitingToolConfirmation || !toolEvent?.toolCallId) {
+                    return;
+                  }
+                  onAwaitingToolConfirmation({
+                    id: toolEvent.toolCallId,
+                    name: toolEvent.toolName || 'Unknown Tool',
+                    status: 'awaiting_input',
+                    confirmationId: toolEvent.confirmationId,
+                    input: toolEvent.input,
+                    message: toolEvent.message,
+                  });
+                });
               } catch (e) {
                 // 忽略解析错误，继续处理流
               }
@@ -277,12 +295,25 @@ export function useAgentChat(
     conversationIdRef.current = conversationId;
   }, [conversationId]);
 
+  // 工具确认状态管理
+  const [pendingConfirmations, setPendingConfirmations] = useState<
+    ToolState[]
+  >([]);
+
   // 创建一个包装的 fetch 函数来拦截流数据并解析 conversationId
   // 同时修改请求体以添加最新的 conversationId
   const fetchWithConversationId = useCallback(
     createFetchWithConversationId(
       onConversationCreated,
-      () => conversationIdRef.current // 提供获取最新 conversationId 的函数
+      () => conversationIdRef.current, // 提供获取最新 conversationId 的函数
+      (tool) => {
+        setPendingConfirmations((prev) => {
+          if (prev.some((item) => item.id === tool.id)) {
+            return prev;
+          }
+          return [...prev, tool];
+        });
+      },
     ),
     [onConversationCreated]
   );
@@ -295,11 +326,6 @@ export function useAgentChat(
     initialMessages,
     fetch: fetchWithConversationId as typeof globalThis.fetch,
   });
-
-  // 工具确认状态管理
-  const [pendingConfirmations, setPendingConfirmations] = useState<
-    ToolState[]
-  >([]);
 
   // 从消息中提取工具状态
   // 使用消息 ID 字符串来检测变化，避免因数组引用变化导致的无限循环

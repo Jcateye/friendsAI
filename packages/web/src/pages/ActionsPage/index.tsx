@@ -1,13 +1,10 @@
 import { useState, useEffect } from 'react'
-import { ChevronRight, Clock, Sparkles, BarChart3, RefreshCw, AlertCircle } from 'lucide-react'
-import { useNavigate } from 'react-router-dom'
+import { Clock, Sparkles, BarChart3, RefreshCw, AlertCircle } from 'lucide-react'
 import { Header } from '../../components/layout/Header'
 import { api } from '../../lib/api/client'
 import type { NetworkActionData } from '../../lib/api/agent-types'
 
 export function ActionsPage() {
-  const navigate = useNavigate()
-
   const [networkData, setNetworkData] = useState<NetworkActionData | null>(null)
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
@@ -40,13 +37,6 @@ export function ActionsPage() {
 
   const handleRefresh = () => {
     loadNetworkAction(true)
-  }
-
-  // 提取联系人名称（从 contactId 中）
-  const getContactName = (contactId: string) => {
-    // 如果 contactId 是 UUID 格式，尝试从缓存或 API 获取
-    // 这里简化处理，返回 ID 的前几位
-    return contactId.substring(0, 8)
   }
 
   return (

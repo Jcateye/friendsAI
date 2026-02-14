@@ -259,21 +259,17 @@ export function ConversationDetailPage() {
   // 技能执行状态
   const [skillLoading, setSkillLoading] = useState(false);
   const [skillResult, setSkillResult] = useState<string | null>(null);
-  const [archiveData, setArchiveData] = useState<any>(null);
 
   // 处理技能选择
   const handleSkillSelect = useCallback(async (skillId: string, operation?: string) => {
     setActiveSkillId(skillId);
     setSkillLoading(true);
     setSkillResult(null);
-    setArchiveData(null);
 
     try {
       if (skillId === 'archive_brief' && operation === 'archive_extract' && conversationId) {
         const result = await api.agent.runArchiveExtract({ conversationId });
         const data = result.data as any;
-        setArchiveData(data);
-
         // 生成展示文本
         let resultText = `📋 归档提取完成\n\n`;
         resultText += `摘要：${data.summary}\n\n`;

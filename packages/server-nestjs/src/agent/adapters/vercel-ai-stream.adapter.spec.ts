@@ -174,7 +174,7 @@ describe('VercelAiStreamAdapter', () => {
       expect(result).toContain('3:');
     });
 
-    it('应该忽略 awaiting_input 状态', () => {
+    it('应该将 awaiting_input 状态转换为 2: 自定义确认事件', () => {
       const event: AgentStreamEvent = {
         event: 'tool.state',
         data: {
@@ -187,7 +187,17 @@ describe('VercelAiStreamAdapter', () => {
       };
 
       const result = adapter.transform(event);
-      expect(result).toBeNull();
+      expect(result).toContain('2:');
+      if (result) {
+        const parsed = JSON.parse(result.substring(2).trim());
+        expect(Array.isArray(parsed)).toBe(true);
+        expect(parsed[0]).toMatchObject({
+          type: 'tool.awaiting_input',
+          toolCallId: 'tool-123',
+          toolName: 'test_tool',
+          confirmationId: 'conf-123',
+        });
+      }
     });
   });
 
@@ -246,6 +256,7 @@ describe('VercelAiStreamAdapter', () => {
       expect(result).toBeNull();
     });
   });
+
 });
 
 
