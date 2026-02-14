@@ -1,15 +1,11 @@
-import { A2UIComponentProps, A2UIContainerProps, A2UIDocument, A2UIAction, A2UIComponent } from './types';
+import { A2UIComponentProps, A2UIContainerProps, A2UIComponent } from './types';
 
-// 延迟导入 A2UIRenderer 以避免循环依赖
-let A2UIRenderer: React.ComponentType<{ document: A2UIDocument; onAction?: (action: A2UIAction) => void }> | null = null;
+import { A2UIRenderer as ImportedA2UIRenderer } from './A2UIRenderer';
 
+// 延迟获取 A2UIRenderer（保留函数结构，避免大范围改动）
 const getA2UIRenderer = () => {
-  if (!A2UIRenderer) {
     // 动态导入以避免循环依赖
-    const module = require('./A2UIRenderer');
-    A2UIRenderer = module.A2UIRenderer;
-  }
-  return A2UIRenderer;
+  return ImportedA2UIRenderer;
 };
 
 export function A2UIContainer({ node, onAction }: A2UIComponentProps) {

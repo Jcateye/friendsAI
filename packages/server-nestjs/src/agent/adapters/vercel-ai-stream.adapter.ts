@@ -120,9 +120,15 @@ export class VercelAiStreamAdapter {
         })}\n`;
       
       case 'awaiting_input':
-        // 等待确认，可能需要特殊处理，暂时返回 null
-        // 可以通过 metadata 或其他方式传递
-        return null;
+        // 等待用户确认：通过 2: 自定义事件透传 confirmationId 等信息
+        return `2:${JSON.stringify([{
+          type: 'tool.awaiting_input',
+          toolCallId: update.toolId,
+          toolName: update.name,
+          confirmationId: update.confirmationId,
+          input: update.input || {},
+          message: update.message,
+        }])}\n`;
       
       default:
         // 其他状态不需要转换
@@ -155,7 +161,6 @@ export class VercelAiStreamAdapter {
     return null;
   }
 }
-
 
 
 
