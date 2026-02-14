@@ -1,4 +1,5 @@
 import { MessageSquare, Users, Zap } from 'lucide-react'
+import type { NavLinkRenderProps } from 'react-router-dom'
 import { NavLink } from 'react-router-dom'
 
 const tabs = [
@@ -14,13 +15,13 @@ export function TabBar() {
         <NavLink
           key={to}
           to={to}
-          className={({ isActive }) =>
+          className={({ isActive }: NavLinkRenderProps) =>
             `flex flex-col items-center gap-1 ${
               isActive ? 'text-primary' : 'text-text-muted'
             }`
           }
         >
-          {({ isActive }) => (
+          {({ isActive }: NavLinkRenderProps) => (
             <>
               <Icon className="w-6 h-6" />
               <span
