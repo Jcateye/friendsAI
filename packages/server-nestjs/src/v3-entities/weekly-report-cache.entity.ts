@@ -62,7 +62,7 @@ export class WeeklyReportCache {
   @Column({ name: 'improvement_suggestions', type: 'simple-array', nullable: true })
   improvementSuggestions: string[] | null;
 
-  @Column({ name: 'generation_version', length: 20, nullable: true })
+  @Column({ name: 'generation_version', type: 'varchar', length: 20, nullable: true })
   generationVersion: string | null;
 
   @Column({ name: 'is_regenerated', type: 'boolean', default: false })

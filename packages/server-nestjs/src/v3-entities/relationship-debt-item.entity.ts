@@ -18,6 +18,7 @@ export class RelationshipDebtItem {
 
   @Column({
     name: 'debt_type',
+    type: 'varchar',
     length: 50,
   })
   debtType: 'unresponded_message' | 'missed_follow_up' | 'broken_promise' | 'long_no_contact' | 'other';
@@ -25,13 +26,13 @@ export class RelationshipDebtItem {
   @Column({ name: 'description', type: 'text' })
   description: string;
 
-  @Column({ name: 'severity', length: 20, default: 'medium' })
+  @Column({ name: 'severity', type: 'varchar', length: 20, default: 'medium' })
   severity: 'low' | 'medium' | 'high' | 'critical';
 
   @Column({ name: 'days_overdue', type: 'int', nullable: true })
   daysOverdue: number | null;
 
-  @Column({ name: 'status', length: 20, default: 'pending' })
+  @Column({ name: 'status', type: 'varchar', length: 20, default: 'pending' })
   status: 'pending' | 'in_progress' | 'resolved' | 'dismissed';
 
   @Column({ name: 'suggested_action', type: 'text', nullable: true })

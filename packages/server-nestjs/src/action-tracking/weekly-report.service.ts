@@ -29,9 +29,9 @@ export class WeeklyReportService {
   private readonly logger = new Logger(WeeklyReportService.name);
 
   constructor(
-    @InjectRepository(ActionOutcomeLog)
+    @InjectRepository(ActionOutcomeLog, 'v3')
     private readonly logRepo: Repository<ActionOutcomeLog>,
-    @InjectRepository(WeeklyReportCache)
+    @InjectRepository(WeeklyReportCache, 'v3')
     private readonly cacheRepo: Repository<WeeklyReportCache>,
   ) {}
 

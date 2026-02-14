@@ -29,6 +29,7 @@ export class RelationshipHealthSnapshot {
 
   @Column({
     name: 'risk_level',
+    type: 'varchar',
     length: 20,
     nullable: true,
   })
@@ -49,7 +50,7 @@ export class RelationshipHealthSnapshot {
   @Column({ name: 'priority_score', type: 'decimal', precision: 5, scale: 2, nullable: true })
   priorityScore: number | null;
 
-  @Column({ name: 'relationship_risk_level', length: 20, nullable: true })
+  @Column({ name: 'relationship_risk_level', type: 'varchar', length: 20, nullable: true })
   relationshipRiskLevel: 'stable' | 'declining' | 'critical' | null;
 
   @Column({ name: 'metadata', type: 'jsonb', nullable: true })

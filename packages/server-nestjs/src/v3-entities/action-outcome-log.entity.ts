@@ -17,19 +17,19 @@ export class ActionOutcomeLog {
   @Column({ name: 'contact_id', type: 'uuid', nullable: true })
   contactId: string | null;
 
-  @Column({ name: 'agent_name', length: 100 })
+  @Column({ name: 'agent_name', type: 'varchar', length: 100 })
   agentName: string;
 
-  @Column({ name: 'action_type', length: 50 })
+  @Column({ name: 'action_type', type: 'varchar', length: 50 })
   actionType: 'suggestion_shown' | 'suggestion_accepted' | 'message_sent' | 'message_replied' | 'followup_completed' | 'other';
 
   @Column({ name: 'action_metadata', type: 'jsonb', nullable: true })
   actionMetadata: Record<string, any> | null;
 
-  @Column({ name: 'outcome_type', length: 50 })
+  @Column({ name: 'outcome_type', type: 'varchar', length: 50 })
   outcomeType: 'success' | 'partial' | 'failure' | 'pending' | 'skipped';
 
-  @Column({ name: 'outcome_reason', length: 255, nullable: true })
+  @Column({ name: 'outcome_reason', type: 'varchar', length: 255, nullable: true })
   outcomeReason: string | null;
 
   @Column({ name: 'action_timestamp', type: 'bigint', transformer: timestampMsTransformer })
@@ -38,7 +38,7 @@ export class ActionOutcomeLog {
   @Column({ name: 'response_time_seconds', type: 'int', nullable: true })
   responseTimeSeconds: number | null;
 
-  @Column({ name: 'platform', length: 50, nullable: true })
+  @Column({ name: 'platform', type: 'varchar', length: 50, nullable: true })
   platform: 'feishu' | 'wechat' | 'email' | 'web' | 'other' | null;
 
   @Column({ name: 'message_id', type: 'uuid', nullable: true })
