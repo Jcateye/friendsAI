@@ -8,6 +8,12 @@ export interface ContactInsightInput {
   userId: string;
   contactId: string;
   depth?: 'brief' | 'standard' | 'deep';
+  /** 用户意图 - optional: maintain|grow|repair */
+  intent?: 'maintain' | 'grow' | 'repair';
+  /** 关系类型偏好 - optional: business|friend|mixed */
+  relationshipMix?: 'business' | 'friend' | 'mixed';
+  /** 时间预算（分钟） - optional */
+  timeBudgetMinutes?: number;
 }
 
 export interface ContactInsightOutput {
@@ -66,13 +72,16 @@ export class ContactInsightService {
     input: ContactInsightInput,
     options: { forceRefresh?: boolean } = {}
   ): Promise<ContactInsightOutput> {
-    const { userId, contactId, depth = 'standard' } = input;
+    const { userId, contactId, depth = 'standard', intent, relationshipMix, timeBudgetMinutes } = input;
 
     // 构建输入数据用于计算 sourceHash
     const inputData = {
       userId,
       contactId,
       depth,
+      intent,
+      relationshipMix,
+      timeBudgetMinutes,
     };
 
     // 计算 sourceHash
@@ -119,6 +128,9 @@ export class ContactInsightService {
         model: 'gpt-4',
         temperature: 0.7,
         maxTokens: 4096,
+        intent,
+        relationshipMix,
+        timeBudgetMinutes,
       },
     );
 
@@ -153,12 +165,18 @@ export class ContactInsightService {
     userId: string;
     contactId: string;
     depth: string;
+    intent?: 'maintain' | 'grow' | 'repair';
+    relationshipMix?: 'business' | 'friend' | 'mixed';
+    timeBudgetMinutes?: number;
   }): string {
     const data = JSON.stringify({
       agentId: this.agentId,
       userId: input.userId,
       contactId: input.contactId,
       depth: input.depth,
+      intent: input.intent,
+      relationshipMix: input.relationshipMix,
+      timeBudgetMinutes: input.timeBudgetMinutes,
     });
     return crypto.createHash('sha256').update(data).digest('hex');
   }

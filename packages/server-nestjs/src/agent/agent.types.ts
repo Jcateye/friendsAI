@@ -48,6 +48,12 @@ export interface AgentRunRequest {
   operation?: string | null;
   /** 输入数据 */
   input: Record<string, unknown>;
+  /** 用户意图 - optional: maintain|grow|repair */
+  intent?: 'maintain' | 'grow' | 'repair';
+  /** 关系类型偏好 - optional: business|friend|mixed */
+  relationshipMix?: 'business' | 'friend' | 'mixed';
+  /** 时间预算（分钟） - optional */
+  timeBudgetMinutes?: number;
   /** 运行选项 */
   options?: {
     /** 是否使用缓存 */

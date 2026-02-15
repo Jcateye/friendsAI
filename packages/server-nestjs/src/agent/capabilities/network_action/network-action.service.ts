@@ -9,6 +9,12 @@ import type {
   NetworkActionErrorCode,
 } from './network-action.types';
 
+type NetworkActionRunInput = NetworkActionInput & {
+  intent?: 'maintain' | 'grow' | 'repair';
+  relationshipMix?: 'business' | 'friend' | 'mixed';
+  timeBudgetMinutes?: number;
+};
+
 /**
  * Network Action Agent 服务
  * 负责执行网络行动建议的生成，包括缓存管理
@@ -29,7 +35,7 @@ export class NetworkActionService {
   /**
    * 执行 Network Action Agent
    */
-  async run(input: NetworkActionInput): Promise<NetworkActionOutput> {
+  async run(input: NetworkActionRunInput): Promise<NetworkActionOutput> {
     try {
       // 1. 构建上下文并计算 sourceHash
       const context = await this.contextBuilder.build(input.userId, input.limit);
@@ -78,6 +84,9 @@ export class NetworkActionService {
           useCache: false, // 我们在这里手动管理缓存
           forceRefresh: input.forceRefresh,
           userId: input.userId,
+          intent: input.intent,
+          relationshipMix: input.relationshipMix,
+          timeBudgetMinutes: input.timeBudgetMinutes,
         },
       );
 
@@ -205,4 +214,3 @@ export class NetworkActionService {
     };
   }
 }
-

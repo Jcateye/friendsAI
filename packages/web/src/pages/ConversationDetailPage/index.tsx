@@ -1,16 +1,18 @@
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useParams, useLocation, useNavigate } from 'react-router-dom';
-import { useEffect, useRef, useMemo, useCallback, useState } from 'react';
 import { Header } from '../../components/layout/Header';
 import { CustomMessageRenderer } from '../../components/chat/CustomMessageRenderer';
 import { ToolConfirmationOverlay } from '../../components/chat/ToolConfirmationOverlay';
 import { ChatInputBox, type AttachedFile } from '../../components/chat/ChatInputBox';
 import { SkillPanel } from '../../components/chat/SkillPanel';
+import { ArchiveApplyPanel } from '../../components/chat/ArchiveApplyPanel';
 import { useConversationHistory } from '../../hooks/useConversationHistory';
 import { useAgentChat } from '../../hooks/useAgentChat';
 import { useToolConfirmations } from '../../hooks/useToolConfirmations';
 import { sortMessagesByCreatedAt } from '../../lib/messages/sortMessagesByCreatedAt';
 import { resolveEpochMs } from '../../lib/time/timestamp';
 import type { Message as AISDKMessage } from 'ai';
+import type { ArchiveExtractData } from '../../lib/api/agent-types';
 import { api } from '../../lib/api/client';
 
 type MessageWithMs = AISDKMessage & {
@@ -259,45 +261,69 @@ export function ConversationDetailPage() {
   // 技能执行状态
   const [skillLoading, setSkillLoading] = useState(false);
   const [skillResult, setSkillResult] = useState<string | null>(null);
+  const [archiveData, setArchiveData] = useState<ArchiveExtractData | null>(null);
+  const [showArchivePanel, setShowArchivePanel] = useState(false);
+
+  // 获取现有联系人列表（用于去重检查）
+  const [existingContacts, setExistingContacts] = useState<any[]>([]);
+
+  // 加载联系人列表
+  useEffect(() => {
+    const loadContacts = async () => {
+      try {
+        const result = await api.contacts.list(1, 100);
+        setExistingContacts(result.items || []);
+      } catch {
+        // 忽略错误
+      }
+    };
+    loadContacts();
+  }, []);
 
   // 处理技能选择
   const handleSkillSelect = useCallback(async (skillId: string, operation?: string) => {
     setActiveSkillId(skillId);
     setSkillLoading(true);
     setSkillResult(null);
+    setShowArchivePanel(false);
 
     try {
       if (skillId === 'archive_brief' && operation === 'archive_extract' && conversationId) {
         const result = await api.agent.runArchiveExtract({ conversationId });
-        const data = result.data as any;
-        // 生成展示文本
+        const data = result.data as ArchiveExtractData;
+
+        // 保存归档数据用于应用面板
+        setArchiveData(data);
+        setShowArchivePanel(true);
+
+        // 生成简短展示文本
         let resultText = `📋 归档提取完成\n\n`;
         resultText += `摘要：${data.summary}\n\n`;
 
+        const parts: string[] = [];
         if (data.payload?.keyPoints?.length) {
-          resultText += `关键点：\n${data.payload.keyPoints.map((p: string) => `• ${p}`).join('\n')}\n\n`;
+          parts.push(`${data.payload.keyPoints.length} 个关键点`);
         }
         if (data.payload?.decisions?.length) {
-          resultText += `决策：\n${data.payload.decisions.map((d: string) => `• ${d}`).join('\n')}\n\n`;
+          parts.push(`${data.payload.decisions.length} 个决策`);
         }
         if (data.payload?.actionItems?.length) {
-          resultText += `行动项：\n${data.payload.actionItems.map((a: string) => `• ${a}`).join('\n')}\n\n`;
+          parts.push(`${data.payload.actionItems.length} 个行动项`);
         }
         if (data.payload?.contacts?.length) {
-          resultText += `👥 提取的联系人：\n${data.payload.contacts.map((c: any) => {
-            let contact = `• ${c.name}`;
-            if (c.company) contact += ` (${c.company})`;
-            if (c.position) contact += ` - ${c.position}`;
-            if (c.email) contact += ` [${c.email}]`;
-            return contact;
-          }).join('\n')}\n\n`;
+          parts.push(`${data.payload.contacts.length} 个联系人`);
         }
         if (data.payload?.facts?.length) {
-          resultText += `📝 事实/信息：\n${data.payload.facts.map((f: any) => `• ${f.content}${f.category ? ` [${f.category}]` : ''}`).join('\n')}\n\n`;
+          parts.push(`${data.payload.facts.length} 个信息点`);
         }
-        if (data.payload?.tags?.length) {
-          resultText += `🏷️ 标签：\n${data.payload.tags.map((t: string) => `#${t}`).join(' ')}\n\n`;
+        if (data.payload?.dates?.length) {
+          parts.push(`${data.payload.dates.length} 个时间事项`);
         }
+
+        if (parts.length > 0) {
+          resultText += `提取到：${parts.join('、')}\n\n`;
+        }
+        resultText += `💡 请在下方应用面板中选择需要创建/更新的项目`;
 
         setSkillResult(resultText);
       } else if (skillId === 'archive_brief' && operation === 'brief_generate' && conversationId) {
@@ -413,6 +439,24 @@ export function ConversationDetailPage() {
         activeSkillId={activeSkillId ?? undefined}
         onSkillSelect={handleSkillSelect}
       />
+
+      {/* Archive Apply Panel - 当归档提取完成后显示 */}
+      {showArchivePanel && archiveData && (
+        <div className="px-4 py-2">
+          <ArchiveApplyPanel
+            data={archiveData}
+            conversationId={conversationId || ''}
+            existingContacts={existingContacts}
+            onApplySuccess={() => {
+              // 刷新联系人列表
+              api.contacts.list(1, 100).then(result => {
+                setExistingContacts(result.items || []);
+              }).catch(() => {});
+            }}
+            onClose={() => setShowArchivePanel(false)}
+          />
+        </div>
+      )}
 
       {/* Chat Input Box */}
       <ChatInputBox

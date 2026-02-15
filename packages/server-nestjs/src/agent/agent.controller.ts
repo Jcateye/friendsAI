@@ -177,6 +177,9 @@ export class AgentController {
           userId,
           conversationId: body.conversationId,
           sessionId: body.sessionId,
+          intent: body.intent,
+          relationshipMix: body.relationshipMix,
+          timeBudgetMinutes: body.timeBudgetMinutes,
         }
       );
 

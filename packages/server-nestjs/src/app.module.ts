@@ -34,6 +34,9 @@ import { ToolsModule } from './tools/tools.module';
 import { ToolConfirmationsModule } from './tool-confirmations/tool-confirmations.module';
 import { ConversationArchivesModule } from './conversation-archives/conversation-archives.module';
 import { ActionTrackingModule } from './action-tracking/action-tracking.module';
+import { FeishuApiModule } from './feishu/api/feishu-api.module';
+import { FeishuWebhookModule } from './feishu/webhook/feishu-webhook.module';
+import { FeishuConfigModule } from './feishu/config/feishu-config.module';
 import { TimestampMsInterceptor } from './common/interceptors/timestamp-ms.interceptor';
 import { HttpLoggingInterceptor } from './common/interceptors/http-logging.interceptor';
 
@@ -155,6 +158,9 @@ import { HttpLoggingInterceptor } from './common/interceptors/http-logging.inter
     ToolConfirmationsModule,
     ConversationArchivesModule,
     ActionTrackingModule,
+    FeishuApiModule,
+    FeishuWebhookModule,
+    FeishuConfigModule,
   ],
   controllers: [AppController],
   providers: [
