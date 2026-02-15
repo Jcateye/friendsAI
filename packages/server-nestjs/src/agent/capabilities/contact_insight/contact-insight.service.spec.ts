@@ -70,6 +70,7 @@ describe('ContactInsightService', () => {
   } as ContactTodo;
 
   const mockContext = {
+    contactId: 'contact-123',
     contact: {
       id: 'contact-123',
       name: 'John Doe',
@@ -82,6 +83,7 @@ describe('ContactInsightService', () => {
     },
     recentInteractions: [
       {
+        index: 1,
         id: 'conv-123',
         summary: 'Initial pricing discussion',
         createdAt: new Date('2024-01-15'),
@@ -90,6 +92,7 @@ describe('ContactInsightService', () => {
     archivedData: {
       events: [
         {
+          index: 1,
           id: 'event-123',
           type: 'event',
           title: 'Coffee Chat',
@@ -282,6 +285,8 @@ describe('ContactInsightService', () => {
           skipServiceRouting: true,
         })
       );
+      const executionOptions = runtimeExecutor.execute.mock.calls[0]?.[3] as Record<string, unknown>;
+      expect(executionOptions.model).toBeUndefined();
       expect(snapshotService.createSnapshot).toHaveBeenCalled();
     });
 

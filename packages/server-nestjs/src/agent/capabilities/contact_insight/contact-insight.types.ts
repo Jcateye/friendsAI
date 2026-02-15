@@ -65,6 +65,7 @@ export interface Citation {
 }
 
 export interface ContactInsightContext {
+  contactId: string;
   contact: {
     id: string;
     name: string;
@@ -79,12 +80,14 @@ export interface ContactInsightContext {
     interactionFrequency?: number;      // 互动频率（次/月）
   };
   recentInteractions: Array<{
+    index: number;
     id: string;
     summary?: string | null;
     createdAt: Date;
   }>;
   archivedData: {
     events: Array<{
+      index: number;
       id: string;
       type: string;
       title: string;
@@ -121,7 +124,6 @@ export interface ContactInsightContext {
     daysUntilEvent: number;
   }>;
 }
-
 
 
 

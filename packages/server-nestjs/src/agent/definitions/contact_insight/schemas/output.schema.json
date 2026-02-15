@@ -40,7 +40,7 @@
         "properties": {
           "title": {
             "type": "string",
-            "minLength": 5,
+            "minLength": 2,
             "maxLength": 100,
             "description": "Title of the opportunity"
           },
@@ -68,7 +68,7 @@
         "properties": {
           "title": {
             "type": "string",
-            "minLength": 5,
+            "minLength": 2,
             "maxLength": 100,
             "description": "Title of the risk"
           },
@@ -96,7 +96,7 @@
         "properties": {
           "action": {
             "type": "string",
-            "minLength": 10,
+            "minLength": 2,
             "maxLength": 200,
             "description": "Suggested action to take"
           },

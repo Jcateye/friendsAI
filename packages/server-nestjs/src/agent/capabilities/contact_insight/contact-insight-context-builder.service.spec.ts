@@ -148,6 +148,7 @@ describe('ContactInsightContextBuilder', () => {
 
       const result = await service.buildContext(userId, contactId, 'standard');
 
+      expect(result.contactId).toBe(contactId);
       expect(result.contact).toEqual({
         id: 'contact-123',
         name: 'John Doe',
@@ -161,8 +162,10 @@ describe('ContactInsightContextBuilder', () => {
 
       expect(result.recentInteractions).toHaveLength(2);
       expect(result.recentInteractions[0].id).toBe('conv-1');
+      expect(result.recentInteractions[0].index).toBe(1);
 
       expect(result.archivedData.events).toHaveLength(1);
+      expect(result.archivedData.events[0].index).toBe(1);
       expect(result.archivedData.facts).toHaveLength(1);
       expect(result.archivedData.todos).toHaveLength(1);
 
@@ -345,11 +348,13 @@ describe('ContactInsightContextBuilder', () => {
 
       expect(result.recentInteractions).toEqual([
         {
+          index: 1,
           id: 'conv-1',
           summary: 'Pricing inquiry',
           createdAt: new Date('2024-01-15'),
         },
         {
+          index: 2,
           id: 'conv-2',
           summary: 'Follow-up',
           createdAt: new Date('2024-01-10'),
@@ -371,6 +376,7 @@ describe('ContactInsightContextBuilder', () => {
 
       expect(result.archivedData.events).toEqual([
         {
+          index: 1,
           id: 'event-1',
           type: 'event',
           title: 'Coffee Chat',

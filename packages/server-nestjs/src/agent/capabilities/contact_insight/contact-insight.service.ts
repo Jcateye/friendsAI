@@ -125,8 +125,6 @@ export class ContactInsightService {
         forceRefresh: options.forceRefresh,
         userId,
         skipServiceRouting: true, // 跳过服务路由，直接使用通用流程
-        model: 'gpt-4',
-        temperature: 0.7,
         maxTokens: 4096,
         intent,
         relationshipMix,

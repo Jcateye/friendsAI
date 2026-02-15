@@ -89,6 +89,7 @@ export class ContactInsightContextBuilder {
 
     // 6. 构建上下文对象
     return {
+      contactId,
       contact: {
         id: contact.id,
         name: contact.name,
@@ -99,13 +100,15 @@ export class ContactInsightContextBuilder {
         note: contact.note,
         lastInteractionAt,
       },
-      recentInteractions: recentConversations.map((c) => ({
+      recentInteractions: recentConversations.map((c, index) => ({
+        index: index + 1,
         id: c.id,
         summary: c.summary,
         createdAt: c.createdAt,
       })),
       archivedData: {
-        events: events.map((e) => ({
+        events: events.map((e, index) => ({
+          index: index + 1,
           id: e.id,
           type: 'event',
           title: e.title,
@@ -126,7 +129,6 @@ export class ContactInsightContextBuilder {
     };
   }
 }
-
 
 
 
