@@ -54,7 +54,7 @@ export class AgentRuntimeExecutor {
     private readonly archiveBriefService?: ArchiveBriefService,
     @Inject(forwardRef(() => ActionTrackingService))
     private readonly actionTrackingService?: ActionTrackingService,
-  ) {}
+  ) { }
 
   /**
    * 执行 Agent
@@ -134,7 +134,7 @@ export class AgentRuntimeExecutor {
     if (options?.useCache !== false && !options?.forceRefresh) {
       // 确定 scopeType 和 scopeId
       const scopeType = this.determineScopeType(agentId, input);
-      const scopeId = this.determineScopeId(agentId, input, options);
+      const scopeId = this.determineScopeId(scopeType, input, options);
 
       const cached = await this.snapshotService.findSnapshot(
         {
@@ -162,7 +162,7 @@ export class AgentRuntimeExecutor {
 
     // 5. 渲染模板
     const renderResult = await this.templateRenderer.render(bundle, context);
-    
+
     // 如果有警告，记录但不中断执行
     if (renderResult.warnings && renderResult.warnings.length > 0) {
       this.logger.warn(`Template rendering warnings for ${agentId}:`, renderResult.warnings);
@@ -170,11 +170,11 @@ export class AgentRuntimeExecutor {
 
     // 6. 调用 AI 服务
     // renderResult 返回的是 system 和 user 字段（虽然类型定义是 systemPrompt 和 userPrompt）
-    const systemPrompt = (renderResult as { system?: string; systemPrompt?: string }).system || 
-                         (renderResult as { system?: string; systemPrompt?: string }).systemPrompt || '';
-    const userPrompt = (renderResult as { user?: string; userPrompt?: string }).user || 
-                       (renderResult as { user?: string; userPrompt?: string }).userPrompt || '';
-    
+    const systemPrompt = (renderResult as { system?: string; systemPrompt?: string }).system ||
+      (renderResult as { system?: string; systemPrompt?: string }).systemPrompt || '';
+    const userPrompt = (renderResult as { user?: string; userPrompt?: string }).user ||
+      (renderResult as { user?: string; userPrompt?: string }).userPrompt || '';
+
     const messages = [
       { role: 'system' as const, content: systemPrompt },
       { role: 'user' as const, content: userPrompt },
@@ -219,6 +219,26 @@ export class AgentRuntimeExecutor {
       // 如果不是 JSON，使用原始文本
       parsedOutput = { content: aiResponse };
     }
+    // 7.5 归一化输出（补齐 AI 可能省略的可选字段）
+    if (agentId === 'network_action' && parsedOutput && typeof parsedOutput === 'object') {
+      const output = parsedOutput as Record<string, unknown>;
+      if (Array.isArray(output.recommendations)) {
+        output.recommendations = output.recommendations.map((rec: any) => ({
+          ...rec,
+          contacts: Array.isArray(rec.contacts) ? rec.contacts : [],
+          confidence: typeof rec.confidence === 'number' ? rec.confidence : 0.5,
+          reason: typeof rec.reason === 'string' ? rec.reason : rec.description || '',
+        }));
+      }
+      if (Array.isArray(output.followUps)) {
+        output.followUps = output.followUps.map((f: any) => ({
+          ...f,
+          timingReason: f.timingReason || f.timing_reason || '',
+          valueFirstSuggestion: f.valueFirstSuggestion || f.value_first_suggestion || '',
+          followupPlan: f.followupPlan || f.followup_plan || '',
+        }));
+      }
+    }
 
     // 8. 验证输出
     const validationResult = await this.outputValidator.validate(bundle, parsedOutput);
@@ -235,7 +255,7 @@ export class AgentRuntimeExecutor {
     if (options?.useCache !== false) {
       try {
         const scopeType = this.determineScopeType(agentId, input);
-        const scopeId = this.determineScopeId(agentId, input, options);
+        const scopeId = this.determineScopeId(scopeType, input, options);
 
         const snapshot = await this.snapshotService.createSnapshot({
           agentId,
@@ -654,16 +674,16 @@ export class AgentRuntimeExecutor {
   ): string {
     // 获取 sourceHashFields 配置
     const sourceHashFields = definition?.cache?.sourceHashFields;
-    
+
     let dataToHash: Record<string, unknown>;
-    
+
     if (sourceHashFields && Array.isArray(sourceHashFields) && sourceHashFields.length > 0) {
       // 只使用配置的字段
       dataToHash = {
         agentId,
         operation: operation ?? null,
       };
-      
+
       for (const field of sourceHashFields) {
         if (input[field] !== undefined) {
           dataToHash[field] = input[field];
@@ -677,7 +697,7 @@ export class AgentRuntimeExecutor {
         ...input,
       };
     }
-    
+
     const data = JSON.stringify(dataToHash);
     return crypto.createHash('sha256').update(data).digest('hex');
   }
@@ -704,23 +724,35 @@ export class AgentRuntimeExecutor {
    * 确定 scopeId
    */
   private determineScopeId(
-    agentId: string,
+    scopeType: 'user' | 'contact' | 'conversation',
     input: Record<string, unknown>,
     options?: { userId?: string; conversationId?: string }
   ): string | null {
-    // 优先使用 input 中的 ID
-    if (input.conversationId) {
-      return input.conversationId as string;
+    if (scopeType === 'conversation') {
+      if (typeof input.conversationId === 'string' && input.conversationId.length > 0) {
+        return input.conversationId;
+      }
+      if (typeof options?.conversationId === 'string' && options.conversationId.length > 0) {
+        return options.conversationId;
+      }
+      return null;
     }
-    if (input.contactId) {
-      return input.contactId as string;
+
+    if (scopeType === 'contact') {
+      if (typeof input.contactId === 'string' && input.contactId.length > 0) {
+        return input.contactId;
+      }
+      return null;
     }
-    // 其次使用 options 中的 ID
-    if (options?.conversationId) {
-      return options.conversationId;
+
+    // user scope：优先使用 options.userId（认证上下文），其次 input.userId
+    if (options?.userId) {
+      return options.userId;
     }
-    // 最后使用 userId 作为 scopeId（对于 user scope）
-    return options?.userId ?? input.userId as string ?? null;
+    if (typeof input.userId === 'string' && input.userId.length > 0) {
+      return input.userId;
+    }
+    return null;
   }
 
 }

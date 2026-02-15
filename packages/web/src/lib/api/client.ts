@@ -638,7 +638,6 @@ export const api = {
           options: {
             useCache: true,
           },
-          conversationId: 'network_action',
         }),
       });
 

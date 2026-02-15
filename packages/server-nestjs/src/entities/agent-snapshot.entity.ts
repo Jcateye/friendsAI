@@ -27,7 +27,7 @@ export class AgentSnapshot {
   @Column({ type: 'text' })
   scopeType: ScopeType;
 
-  @Column({ type: 'uuid', nullable: true })
+  @Column({ type: 'text', nullable: true })
   scopeId: string | null;
 
   @Column({ type: 'uuid', nullable: true })

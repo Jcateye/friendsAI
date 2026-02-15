@@ -586,6 +586,42 @@ describe('AgentRuntimeExecutor', () => {
       expect(createSnapshotCall.scopeType).toBe('user');
       expect(createSnapshotCall.scopeId).toBe('user-123');
     });
+
+    it('should use userId scope for user-scope agents even if options.conversationId is present', async () => {
+      const agentId = 'network_action';
+      const input = { limit: 10 };
+      const userId = 'user-123';
+
+      registry.loadDefinition.mockResolvedValue(mockBundle);
+      snapshotService.findSnapshot.mockResolvedValue({
+        snapshot: null,
+        cached: false,
+      });
+      templateRenderer.render.mockReturnValue({
+        system: 'System',
+        user: 'User',
+        warnings: [],
+      });
+
+      const mockStream = (async function* () {
+        yield { choices: [{ delta: { content: '{"response":"OK"}' } }] };
+      })();
+      aiService.streamChat.mockResolvedValue(mockStream as any);
+      outputValidator.validate.mockReturnValue({ valid: true });
+      snapshotService.createSnapshot.mockResolvedValue({ id: 'snapshot-123' } as any);
+
+      await service.execute(agentId, null, input, {
+        userId,
+        conversationId: 'network_action',
+      });
+
+      const findSnapshotCall = snapshotService.findSnapshot.mock.calls[0][0] as any;
+      const createSnapshotCall = snapshotService.createSnapshot.mock.calls[0][0] as any;
+      expect(findSnapshotCall.scopeType).toBe('user');
+      expect(findSnapshotCall.scopeId).toBe(userId);
+      expect(createSnapshotCall.scopeType).toBe('user');
+      expect(createSnapshotCall.scopeId).toBe(userId);
+    });
   });
 
   describe('source hash computation', () => {

@@ -22,7 +22,11 @@
           },
           "priority": {
             "type": "string",
-            "enum": ["high", "medium", "low"],
+            "enum": [
+              "high",
+              "medium",
+              "low"
+            ],
             "description": "优先级"
           },
           "suggestedAction": {
@@ -42,7 +46,16 @@
             "description": "后续跟进计划（时间规划、内容准备、目标设定）"
           }
         },
-        "required": ["contactId", "contactName", "reason", "priority", "suggestedAction", "timingReason", "valueFirstSuggestion", "followupPlan"]
+        "required": [
+          "contactId",
+          "contactName",
+          "reason",
+          "priority",
+          "suggestedAction",
+          "timingReason",
+          "valueFirstSuggestion",
+          "followupPlan"
+        ]
       }
     },
     "recommendations": {
@@ -53,7 +66,11 @@
         "properties": {
           "type": {
             "type": "string",
-            "enum": ["connection", "followup", "introduction"],
+            "enum": [
+              "connection",
+              "followup",
+              "introduction"
+            ],
             "description": "建议类型"
           },
           "description": {
@@ -78,7 +95,10 @@
             "description": "为何推荐此行动的原因"
           }
         },
-        "required": ["type", "description", "contacts", "confidence", "reason"]
+        "required": [
+          "type",
+          "description"
+        ]
       }
     },
     "synthesis": {
@@ -97,7 +117,11 @@
           },
           "priority": {
             "type": "string",
-            "enum": ["high", "medium", "low"],
+            "enum": [
+              "high",
+              "medium",
+              "low"
+            ],
             "description": "优先级"
           },
           "estimatedTime": {
@@ -105,14 +129,17 @@
             "description": "预估时间（可选）"
           }
         },
-        "required": ["action", "priority"]
+        "required": [
+          "action",
+          "priority"
+        ]
       }
     }
   },
-  "required": ["followUps", "recommendations", "synthesis", "nextActions"]
+  "required": [
+    "followUps",
+    "recommendations",
+    "synthesis",
+    "nextActions"
+  ]
 }
-
-
-
-
-
