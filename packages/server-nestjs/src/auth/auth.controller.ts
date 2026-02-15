@@ -6,11 +6,22 @@ import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { RefreshDto } from './dto/refresh.dto';
 import { LogoutDto } from './dto/logout.dto';
+import { SendCodeDto } from './dto/send-code.dto';
 
 @ApiTags('auth')
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+  constructor(private readonly authService: AuthService) { }
+
+  @Public()
+  @Post('send-code')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Send verification code to email or phone' })
+  @ApiResponseDecorator({ status: 200, description: 'Verification code sent' })
+  @ApiResponseDecorator({ status: 400, description: 'Bad request' })
+  async sendCode(@Body() sendCodeDto: SendCodeDto): Promise<{ success: boolean; message: string }> {
+    return this.authService.sendVerificationCode(sendCodeDto.emailOrPhone);
+  }
 
   @Public()
   @Post('register')

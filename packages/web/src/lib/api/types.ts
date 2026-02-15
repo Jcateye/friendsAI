@@ -17,6 +17,15 @@ export interface LoginRequest {
   password: string;
 }
 
+export interface SendCodeRequest {
+  emailOrPhone: string;
+}
+
+export interface SendCodeResponse {
+  success: boolean;
+  message: string;
+}
+
 export interface RefreshRequest {
   refreshToken: string;
 }

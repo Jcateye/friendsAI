@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { StatusBar } from '../../components/layout/StatusBar'
 import { api } from '../../lib/api/client'
@@ -18,7 +18,11 @@ export function LoginPage() {
   const [email, setEmail] = useState('')
   const [code, setCode] = useState('')
   const [isLoading, setIsLoading] = useState(false)
+  const [isSendingCode, setIsSendingCode] = useState(false)
+  const [codeSent, setCodeSent] = useState(false)
+  const [countdown, setCountdown] = useState(0)
   const [error, setError] = useState<string | null>(null)
+  const [codeMessage, setCodeMessage] = useState<string | null>(null)
 
   // 如果已经登录，重定向到主页
   useEffect(() => {
@@ -37,7 +41,7 @@ export function LoginPage() {
       // 清除 URL 参数，避免刷新页面时重复显示
       setSearchParams({}, { replace: true })
     }
-    
+
     // 从 localStorage 读取保存的账号
     const rememberedEmail = localStorage.getItem(REMEMBERED_EMAIL_KEY)
     if (rememberedEmail) {
@@ -45,16 +49,41 @@ export function LoginPage() {
     }
   }, [searchParams, setSearchParams])
 
+  // 倒计时逻辑
+  useEffect(() => {
+    if (countdown <= 0) return
+    const timer = setTimeout(() => setCountdown(countdown - 1), 1000)
+    return () => clearTimeout(timer)
+  }, [countdown])
+
+  const handleSendCode = useCallback(async () => {
+    if (!email.trim() || countdown > 0 || isSendingCode) return
+
+    setError(null)
+    setCodeMessage(null)
+    setIsSendingCode(true)
+
+    try {
+      const result = await api.auth.sendCode({ emailOrPhone: email.trim() })
+      setCodeSent(true)
+      setCountdown(60)
+      setCodeMessage(result.message)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '发送验证码失败')
+    } finally {
+      setIsSendingCode(false)
+    }
+  }, [email, countdown, isSendingCode])
+
   const handleLogin = async () => {
     setError(null)
     setIsLoading(true)
 
     try {
       // 使用 email 和 code 作为 password 进行登录
-      // 这里简化处理，实际应该是验证码登录流程
       await api.auth.login({
         emailOrPhone: email,
-        password: code, // 暂时使用验证码作为密码
+        password: code,
       })
 
       // 登录成功，保存账号到 localStorage
@@ -72,6 +101,7 @@ export function LoginPage() {
   }
 
   const isLoginDisabled = !email.trim() || !code.trim() || isLoading
+  const isSendDisabled = !email.trim() || countdown > 0 || isSendingCode
 
   return (
     <div className="flex flex-col h-full bg-bg-page px-6 pt-[60px] pb-10 justify-between">
@@ -101,6 +131,13 @@ export function LoginPage() {
             </div>
           )}
 
+          {/* Code Sent Message */}
+          {codeMessage && !error && (
+            <div className="px-4 py-2 bg-green-50 rounded-md border border-green-200">
+              <p className="text-[13px] text-green-600 font-primary">{codeMessage}</p>
+            </div>
+          )}
+
           {/* Email Input */}
           <div className="flex items-center h-[52px] px-4 bg-bg-card rounded-md border border-border">
             <input
@@ -117,8 +154,10 @@ export function LoginPage() {
           <div className="flex gap-3 h-[52px]">
             <div className="flex-1 flex items-center px-4 bg-bg-card rounded-md border border-border">
               <input
-                type="password"
-                placeholder="密码"
+                type="text"
+                inputMode="numeric"
+                maxLength={6}
+                placeholder="输入验证码"
                 value={code}
                 onChange={(e) => setCode(e.target.value)}
                 className="flex-1 bg-transparent text-[15px] text-text-primary placeholder:text-text-muted outline-none font-primary"
@@ -131,10 +170,17 @@ export function LoginPage() {
               />
             </div>
             <button
-              className="px-4 bg-bg-card rounded-md border border-border text-[14px] text-text-secondary font-medium font-primary whitespace-nowrap disabled:opacity-50"
-              disabled={isLoading}
+              onClick={handleSendCode}
+              className="px-4 bg-bg-card rounded-md border border-border text-[14px] text-text-secondary font-medium font-primary whitespace-nowrap disabled:opacity-50 transition-opacity"
+              disabled={isSendDisabled}
             >
-              获取验证码
+              {isSendingCode
+                ? '发送中...'
+                : countdown > 0
+                  ? `${countdown}s`
+                  : codeSent
+                    ? '重新获取'
+                    : '获取验证码'}
             </button>
           </div>
 

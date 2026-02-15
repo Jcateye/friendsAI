@@ -2,6 +2,8 @@ import type {
   // Auth
   RegisterRequest,
   LoginRequest,
+  SendCodeRequest,
+  SendCodeResponse,
   RefreshRequest,
   LogoutRequest,
   AuthResponse,
@@ -72,15 +74,15 @@ async function fetchWithAuth(
 ): Promise<Response> {
   const token = getAuthToken();
   const headers = new Headers(options.headers);
-  
+
   if (token) {
     headers.set('Authorization', `Bearer ${token}`);
   }
-  
+
   if (!headers.has('Content-Type') && options.body) {
     headers.set('Content-Type', 'application/json');
   }
-  
+
   try {
     const response = await fetch(url, {
       ...options,
@@ -106,7 +108,7 @@ async function handleResponse<T>(response: Response): Promise<T> {
     } catch {
       errorMessage = errorText || errorMessage;
     }
-    
+
     // 401 未授权，清除 token 并重定向到登录页
     if (response.status === 401) {
       clearAuthToken();
@@ -119,21 +121,21 @@ async function handleResponse<T>(response: Response): Promise<T> {
         window.location.href = `/login?error=${errorParam}`;
       }
     }
-    
+
     throw new Error(errorMessage);
   }
-  
+
   // 处理空响应（如 204 No Content）
   if (response.status === 204 || response.headers.get('content-length') === '0') {
     return undefined as T;
   }
-  
+
   // 检查响应是否有内容
   const contentType = response.headers.get('content-type');
   if (contentType && contentType.includes('application/json')) {
     return response.json();
   }
-  
+
   // 如果没有 JSON 内容，返回空对象
   return {} as T;
 }
@@ -146,6 +148,17 @@ export const api = {
    * 认证相关 API
    */
   auth: {
+    /**
+     * 发送验证码
+     */
+    async sendCode(request: SendCodeRequest): Promise<SendCodeResponse> {
+      const response = await fetchWithAuth(`${API_BASE}/auth/send-code`, {
+        method: 'POST',
+        body: JSON.stringify(request),
+      });
+      return handleResponse<SendCodeResponse>(response);
+    },
+
     /**
      * 注册用户
      */
@@ -428,7 +441,7 @@ export const api = {
       });
       return handleResponse<ToolConfirmation>(response);
     },
-    
+
     /**
      * 获取工具确认列表（支持筛选）
      */
@@ -444,7 +457,7 @@ export const api = {
       const response = await fetchWithAuth(`${API_BASE}/tool-confirmations?${params}`);
       return handleResponse<ToolConfirmation[]>(response);
     },
-    
+
     /**
      * 获取单个工具确认
      */
@@ -452,7 +465,7 @@ export const api = {
       const response = await fetchWithAuth(`${API_BASE}/tool-confirmations/${id}`);
       return handleResponse<ToolConfirmation>(response);
     },
-    
+
     /**
      * 确认工具执行
      */
@@ -463,7 +476,7 @@ export const api = {
       });
       return handleResponse<ToolConfirmation>(response);
     },
-    
+
     /**
      * 拒绝工具执行
      */
