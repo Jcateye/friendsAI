@@ -5,7 +5,7 @@ import { AgentRuntimeExecutor } from './runtime/agent-runtime-executor.service';
 import { AgentOrchestrator } from './agent.orchestrator';
 import { AgentMessageStore } from './agent-message.store';
 import { AgentListService } from './agent-list.service';
-import type { AgentRunRequest, AgentRunResponse } from './agent.types';
+import type { AgentChatRequest, AgentRunRequest, AgentRunResponse } from './agent.types';
 import type { Request, Response } from 'express';
 import { AgentDefinitionError, AgentDefinitionErrorCode } from './contracts/agent-definition-registry.interface';
 
@@ -365,6 +365,86 @@ describe('AgentController - POST /v1/agent/run', () => {
         expect.any(Object),
         expect.any(Object)
       );
+    });
+  });
+
+  describe('chat context sanitization', () => {
+    it('should sanitize composer context before passing request to orchestrator', async () => {
+      mockAgentOrchestrator.streamChat.mockReturnValue((async function* () {
+        yield {
+          event: 'agent.end',
+          data: {
+            runId: 'run-chat-1',
+            status: 'succeeded',
+            finishedAt: new Date('2026-02-15T10:00:00.000Z').toISOString(),
+          },
+        } as any;
+      })());
+
+      const mockReq = {
+        user: { id: 'req-user-001' },
+        on: jest.fn(),
+        off: jest.fn(),
+      } as unknown as Request;
+
+      const mockRes = {
+        status: jest.fn().mockReturnThis(),
+        json: jest.fn().mockReturnThis(),
+        setHeader: jest.fn(),
+        flushHeaders: jest.fn(),
+        write: jest.fn().mockReturnValue(true),
+        end: jest.fn(),
+        writableEnded: false,
+      } as unknown as Response;
+
+      const requestBody: AgentChatRequest = {
+        prompt: 'hello',
+        userId: 'body-user-001',
+        context: {
+          composer: {
+            enabledTools: [' feishu_send_template_message ', '', 123 as any, 'x'.repeat(200)],
+            attachments: [
+              {
+                name: ' meeting-notes.pdf ',
+                mimeType: ' application/pdf ',
+                size: 24.4,
+                kind: 'file',
+                ignored: 'field',
+              },
+              {
+                name: '',
+                kind: 'image',
+              },
+            ],
+            feishuEnabled: true,
+            inputMode: 'voice',
+            ignored: 'composer-field',
+          },
+          veryLongText: 'a'.repeat(1000),
+        } as any,
+      };
+
+      await controller.chat(mockReq, mockRes, requestBody, 'sse');
+
+      expect(mockAgentOrchestrator.streamChat).toHaveBeenCalledTimes(1);
+      const forwardedRequest = mockAgentOrchestrator.streamChat.mock.calls[0][0];
+
+      expect(forwardedRequest.userId).toBe('req-user-001');
+      expect(forwardedRequest.context?.composer).toEqual({
+        enabledTools: ['feishu_send_template_message', 'x'.repeat(64)],
+        attachments: [
+          {
+            name: 'meeting-notes.pdf',
+            mimeType: 'application/pdf',
+            size: 24,
+            kind: 'file',
+          },
+        ],
+        feishuEnabled: true,
+        inputMode: 'voice',
+      });
+      expect(typeof (forwardedRequest.context as any).veryLongText).toBe('string');
+      expect(((forwardedRequest.context as any).veryLongText as string).length).toBeLessThanOrEqual(500);
     });
   });
 });

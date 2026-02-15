@@ -7,6 +7,7 @@ import { ToolRegistry } from '../ai/tool-registry';
 import { AgentChatRequest } from './agent.types';
 import { AgentMessageStore } from './agent-message.store';
 import { MessagesService } from '../conversations/messages.service';
+import { ConversationsService } from '../conversations/conversations.service';
 import type OpenAI from 'openai';
 
 describe('AgentOrchestrator', () => {
@@ -67,6 +68,12 @@ describe('AgentOrchestrator', () => {
           useValue: {
             appendMessage: jest.fn(),
             listMessages: jest.fn(),
+          },
+        },
+        {
+          provide: ConversationsService,
+          useValue: {
+            create: jest.fn().mockResolvedValue({ id: 'conv-auto-1' }),
           },
         },
       ],
@@ -137,6 +144,123 @@ describe('AgentOrchestrator', () => {
       const messageEvent = events.find((event) => event.event === 'agent.message');
       expect(messageEvent).toBeDefined();
       expect(events[events.length - 1].event).toBe('agent.end');
+    });
+
+    it('should filter tools based on context.composer.enabledTools', async () => {
+      const request: AgentChatRequest = {
+        prompt: 'Use selected tool only',
+        context: {
+          composer: {
+            enabledTools: ['selected_tool'],
+          },
+        },
+      };
+
+      contextBuilder.buildMessages.mockReturnValue([
+        { role: 'system', content: 'You are helpful' },
+        { role: 'user', content: 'Use selected tool only' },
+      ] as OpenAI.Chat.Completions.ChatCompletionMessageParam[]);
+
+      toolRegistry.list.mockReturnValue([
+        {
+          name: 'selected_tool',
+          description: 'Selected tool',
+          parameters: { type: 'object', properties: {} },
+        },
+        {
+          name: 'other_tool',
+          description: 'Other tool',
+          parameters: { type: 'object', properties: {} },
+        },
+      ]);
+
+      const mockStream = (async function* () {
+        yield {
+          choices: [
+            {
+              delta: { content: 'ok' },
+              finish_reason: null,
+            },
+          ],
+        } as OpenAI.Chat.Completions.ChatCompletionChunk;
+        yield {
+          choices: [
+            {
+              delta: {},
+              finish_reason: 'stop',
+            },
+          ],
+        } as OpenAI.Chat.Completions.ChatCompletionChunk;
+      })();
+
+      aiService.streamChat.mockResolvedValue(mockStream);
+
+      for await (const _event of orchestrator.streamChat(request)) {
+        // drain stream
+      }
+
+      expect(aiService.streamChat).toHaveBeenCalled();
+      const chatOptions = aiService.streamChat.mock.calls[0][1];
+      const toolNames = (chatOptions.tools ?? []).map((tool) => tool.function.name);
+      expect(toolNames).toEqual(['selected_tool']);
+    });
+
+    it('should fallback to all tools when enabledTools filter result is empty', async () => {
+      const request: AgentChatRequest = {
+        prompt: 'Fallback tools',
+        context: {
+          composer: {
+            enabledTools: ['missing_tool'],
+          },
+        },
+      };
+
+      contextBuilder.buildMessages.mockReturnValue([
+        { role: 'system', content: 'You are helpful' },
+        { role: 'user', content: 'Fallback tools' },
+      ] as OpenAI.Chat.Completions.ChatCompletionMessageParam[]);
+
+      toolRegistry.list.mockReturnValue([
+        {
+          name: 'tool_a',
+          description: 'Tool A',
+          parameters: { type: 'object', properties: {} },
+        },
+        {
+          name: 'tool_b',
+          description: 'Tool B',
+          parameters: { type: 'object', properties: {} },
+        },
+      ]);
+
+      const mockStream = (async function* () {
+        yield {
+          choices: [
+            {
+              delta: { content: 'done' },
+              finish_reason: null,
+            },
+          ],
+        } as OpenAI.Chat.Completions.ChatCompletionChunk;
+        yield {
+          choices: [
+            {
+              delta: {},
+              finish_reason: 'stop',
+            },
+          ],
+        } as OpenAI.Chat.Completions.ChatCompletionChunk;
+      })();
+
+      aiService.streamChat.mockResolvedValue(mockStream);
+
+      for await (const _event of orchestrator.streamChat(request)) {
+        // drain stream
+      }
+
+      const chatOptions = aiService.streamChat.mock.calls[0][1];
+      const toolNames = (chatOptions.tools ?? []).map((tool) => tool.function.name).sort();
+      expect(toolNames).toEqual(['tool_a', 'tool_b']);
     });
 
     it('should handle tool calls and execute them', async () => {

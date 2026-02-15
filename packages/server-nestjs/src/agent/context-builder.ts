@@ -31,9 +31,10 @@ export class ContextBuilder {
 
     // 2. 如果有上下文，添加上下文消息
     if (request.context && Object.keys(request.context).length > 0) {
+      const stableContext = this.sortKeysRecursively(request.context);
       messages.push({
         role: 'system',
-        content: `Context: ${JSON.stringify(request.context)}`,
+        content: `Context: ${JSON.stringify(stableContext)}`,
       });
     }
 
@@ -125,5 +126,25 @@ export class ContextBuilder {
     const trimmedOthers = otherMessages.slice(-maxLength + systemMessages.length);
 
     return [...systemMessages, ...trimmedOthers];
+  }
+
+  private sortKeysRecursively(value: unknown): unknown {
+    if (Array.isArray(value)) {
+      return value.map((item) => this.sortKeysRecursively(item));
+    }
+
+    if (value === null || typeof value !== 'object') {
+      return value;
+    }
+
+    const record = value as Record<string, unknown>;
+    const sortedKeys = Object.keys(record).sort((a, b) => a.localeCompare(b));
+    const sortedRecord: Record<string, unknown> = {};
+
+    for (const key of sortedKeys) {
+      sortedRecord[key] = this.sortKeysRecursively(record[key]);
+    }
+
+    return sortedRecord;
   }
 }

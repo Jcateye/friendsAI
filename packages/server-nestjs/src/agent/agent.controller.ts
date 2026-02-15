@@ -3,7 +3,15 @@ import { ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
 import type { Request, Response } from 'express';
 import { AgentOrchestrator } from './agent.orchestrator';
 import { AgentMessageStore } from './agent-message.store';
-import type { AgentChatRequest, AgentRunRequest, AgentRunResponse, AgentStreamEvent } from './agent.types';
+import type {
+  AgentChatContext,
+  AgentChatRequest,
+  AgentComposerAttachment,
+  AgentComposerContext,
+  AgentRunRequest,
+  AgentRunResponse,
+  AgentStreamEvent,
+} from './agent.types';
 import type { AgentError, AgentRunEnd, AgentSseEvent } from './client-types';
 import { VercelAiStreamAdapter } from './adapters/vercel-ai-stream.adapter';
 import { AgentRuntimeExecutor } from './runtime/agent-runtime-executor.service';
@@ -13,6 +21,13 @@ import { AgentListResponseDto } from './dto/agent-list.dto';
 @ApiTags('Agent')
 @Controller('agent')
 export class AgentController {
+  private readonly maxContextDepth = 3;
+  private readonly maxContextArrayLength = 20;
+  private readonly maxContextObjectKeys = 24;
+  private readonly maxContextStringLength = 500;
+  private readonly maxComposerTools = 12;
+  private readonly maxComposerAttachments = 10;
+
   constructor(
     private readonly agentOrchestrator: AgentOrchestrator,
     private readonly messageStore: AgentMessageStore,
@@ -84,8 +99,10 @@ export class AgentController {
     }, 15000);
 
     try {
+      const sanitizedContext = this.sanitizeChatContext(body.context);
       const preparedRequest: AgentChatRequest = {
         ...body,
+        context: sanitizedContext,
         userId: (req.user as { id?: string } | undefined)?.id ?? body.userId,
       };
 
@@ -260,5 +277,151 @@ export class AgentController {
   private writeEvent(res: Response, event: AgentStreamEvent | AgentSseEvent): void {
     res.write(`event: ${event.event}\n`);
     res.write(`data: ${JSON.stringify(event)}\n\n`);
+  }
+
+  private sanitizeChatContext(context: AgentChatRequest['context']): AgentChatContext | undefined {
+    if (!this.isRecord(context)) {
+      return undefined;
+    }
+
+    const sanitized: AgentChatContext = {};
+
+    for (const [key, value] of Object.entries(context)) {
+      if (key === 'composer') {
+        const composer = this.sanitizeComposerContext(value);
+        if (composer) {
+          sanitized.composer = composer;
+        }
+        continue;
+      }
+
+      const normalizedValue = this.sanitizeGenericContextValue(value, 0);
+      if (normalizedValue !== undefined) {
+        sanitized[key] = normalizedValue;
+      }
+    }
+
+    if (Object.keys(sanitized).length === 0) {
+      return undefined;
+    }
+
+    return sanitized;
+  }
+
+  private sanitizeComposerContext(value: unknown): AgentComposerContext | undefined {
+    if (!this.isRecord(value)) {
+      return undefined;
+    }
+
+    const sanitized: AgentComposerContext = {};
+
+    if (Array.isArray(value.enabledTools)) {
+      const enabledTools = Array.from(
+        new Set(
+          value.enabledTools
+            .filter((tool): tool is string => typeof tool === 'string')
+            .map((tool) => tool.trim().slice(0, 64))
+            .filter((tool) => tool.length > 0)
+        )
+      ).slice(0, this.maxComposerTools);
+
+      if (enabledTools.length > 0) {
+        sanitized.enabledTools = enabledTools;
+      }
+    }
+
+    if (Array.isArray(value.attachments)) {
+      const attachments = value.attachments
+        .map((attachment) => this.sanitizeComposerAttachment(attachment))
+        .filter((attachment): attachment is AgentComposerAttachment => attachment !== undefined)
+        .slice(0, this.maxComposerAttachments);
+
+      if (attachments.length > 0) {
+        sanitized.attachments = attachments;
+      }
+    }
+
+    if (typeof value.feishuEnabled === 'boolean') {
+      sanitized.feishuEnabled = value.feishuEnabled;
+    }
+
+    if (value.inputMode === 'text' || value.inputMode === 'voice') {
+      sanitized.inputMode = value.inputMode;
+    }
+
+    if (Object.keys(sanitized).length === 0) {
+      return undefined;
+    }
+
+    return sanitized;
+  }
+
+  private sanitizeComposerAttachment(value: unknown): AgentComposerAttachment | undefined {
+    if (!this.isRecord(value)) {
+      return undefined;
+    }
+
+    const name = typeof value.name === 'string' ? value.name.trim().slice(0, 180) : '';
+    if (!name) {
+      return undefined;
+    }
+
+    const mimeType =
+      typeof value.mimeType === 'string' ? value.mimeType.trim().slice(0, 120) : undefined;
+    const size = typeof value.size === 'number' && Number.isFinite(value.size)
+      ? Math.max(0, Math.round(value.size))
+      : undefined;
+
+    return {
+      name,
+      mimeType: mimeType || undefined,
+      size,
+      kind: value.kind === 'image' ? 'image' : 'file',
+    };
+  }
+
+  private sanitizeGenericContextValue(value: unknown, depth: number): unknown {
+    if (value === null) {
+      return null;
+    }
+    if (typeof value === 'string') {
+      return value.trim().slice(0, this.maxContextStringLength);
+    }
+    if (typeof value === 'number') {
+      return Number.isFinite(value) ? value : undefined;
+    }
+    if (typeof value === 'boolean') {
+      return value;
+    }
+    if (Array.isArray(value)) {
+      if (depth >= this.maxContextDepth) {
+        return undefined;
+      }
+      const items = value
+        .slice(0, this.maxContextArrayLength)
+        .map((item) => this.sanitizeGenericContextValue(item, depth + 1))
+        .filter((item) => item !== undefined);
+      return items;
+    }
+    if (!this.isRecord(value)) {
+      return undefined;
+    }
+    if (depth >= this.maxContextDepth) {
+      return undefined;
+    }
+
+    const result: Record<string, unknown> = {};
+    const entries = Object.entries(value).slice(0, this.maxContextObjectKeys);
+    for (const [key, nestedValue] of entries) {
+      const sanitized = this.sanitizeGenericContextValue(nestedValue, depth + 1);
+      if (sanitized !== undefined) {
+        result[key] = sanitized;
+      }
+    }
+    return result;
+  }
+
+  private isRecord(value: unknown): value is Record<string, unknown> {
+    return value !== null && typeof value === 'object' && !Array.isArray(value);
   }
 }

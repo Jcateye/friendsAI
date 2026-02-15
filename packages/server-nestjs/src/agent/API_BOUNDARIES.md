@@ -18,7 +18,21 @@
 {
   messages?: AgentChatMessage[];
   prompt?: string;
-  context?: Record<string, unknown>;
+  context?: {
+    composer?: {
+      enabledTools?: string[];
+      attachments?: Array<{
+        name: string;
+        mimeType?: string;
+        size?: number;
+        kind: 'image' | 'file';
+      }>;
+      feishuEnabled?: boolean;
+      inputMode?: 'text' | 'voice';
+    };
+    // 允许业务透传其它上下文字段
+    [key: string]: unknown;
+  };
   model?: string;
   temperature?: number;
   maxTokens?: number;
@@ -29,6 +43,30 @@
 ```
 
 **响应**: SSE 流式事件（agent.start, agent.delta, agent.message, tool.state, agent.end）
+
+**`context.composer` 约定**:
+- 用于承载前端聊天输入区（工具、多媒体、模式）元信息，仅透传元数据，不上传二进制内容。
+- 后端会对该字段做安全清洗（长度裁剪、数组上限、未知字段丢弃），避免污染 prompt。
+- 当 `enabledTools` 有值时，编排层会优先按该列表过滤工具；若过滤为空，会自动回退到默认工具集。
+
+**示例**:
+```json
+{
+  "messages": [
+    { "role": "user", "content": "帮我发一条飞书模板消息给客户" }
+  ],
+  "context": {
+    "composer": {
+      "enabledTools": ["feishu_send_template_message"],
+      "attachments": [
+        { "name": "meeting-notes.pdf", "mimeType": "application/pdf", "size": 20480, "kind": "file" }
+      ],
+      "feishuEnabled": true,
+      "inputMode": "text"
+    }
+  }
+}
+```
 
 ### `/v1/agent/run` - 统一执行入口
 
@@ -94,7 +132,6 @@
 - `GET /action-panel/dashboard` → `agentId: 'network_action'`
 
 所有 legacy 端点保持响应格式不变，确保向后兼容。
-
 
 
 

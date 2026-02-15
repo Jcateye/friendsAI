@@ -13,10 +13,29 @@ import type { AgentId } from './contracts/agent-definition.types';
 
 export type AgentChatMessage = OpenAI.Chat.Completions.ChatCompletionMessageParam;
 
+export interface AgentComposerAttachment {
+  name: string;
+  mimeType?: string;
+  size?: number;
+  kind: 'image' | 'file';
+}
+
+export interface AgentComposerContext {
+  enabledTools?: string[];
+  attachments?: AgentComposerAttachment[];
+  feishuEnabled?: boolean;
+  inputMode?: 'text' | 'voice';
+  [key: string]: unknown;
+}
+
+export interface AgentChatContext extends Record<string, unknown> {
+  composer?: AgentComposerContext;
+}
+
 export interface AgentChatRequest {
   messages?: AgentChatMessage[];
   prompt?: string;
-  context?: Record<string, unknown>;
+  context?: AgentChatContext;
   model?: string;
   temperature?: number;
   maxTokens?: number;

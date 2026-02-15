@@ -130,7 +130,7 @@ export class AgentOrchestrator {
       iterationCount++;
 
       // 获取可用工具列表
-      const tools = this.getToolsForOpenAI();
+      const tools = this.getToolsForOpenAI(request);
 
       // 调用 AI 服务
       const stream = await this.aiService.streamChat(messages, {
@@ -464,10 +464,19 @@ export class AgentOrchestrator {
     }
   }
 
-  private getToolsForOpenAI(): OpenAI.Chat.Completions.ChatCompletionTool[] {
+  private getToolsForOpenAI(request: AgentChatRequest): OpenAI.Chat.Completions.ChatCompletionTool[] {
     const registeredTools = this.toolRegistry.list();
+    const requestedTools = this.getRequestedToolNames(request);
 
-    return registeredTools.map(tool => ({
+    let effectiveTools = registeredTools;
+    if (requestedTools.length > 0) {
+      const requestedSet = new Set(requestedTools);
+      const filtered = registeredTools.filter((tool) => requestedSet.has(tool.name));
+      // 如果过滤后为空，回退到默认行为（全部已注册工具）
+      effectiveTools = filtered.length > 0 ? filtered : registeredTools;
+    }
+
+    return effectiveTools.map(tool => ({
       type: 'function' as const,
       function: {
         name: tool.name,
@@ -475,6 +484,22 @@ export class AgentOrchestrator {
         parameters: tool.parameters,
       },
     }));
+  }
+
+  private getRequestedToolNames(request: AgentChatRequest): string[] {
+    const composer = request.context?.composer;
+    if (!composer || !Array.isArray(composer.enabledTools)) {
+      return [];
+    }
+
+    return Array.from(
+      new Set(
+        composer.enabledTools
+          .filter((name): name is string => typeof name === 'string')
+          .map((name) => name.trim())
+          .filter((name) => name.length > 0)
+      )
+    );
   }
 
   /**

@@ -3,8 +3,7 @@ import { useParams, useLocation, useNavigate } from 'react-router-dom';
 import { Header } from '../../components/layout/Header';
 import { CustomMessageRenderer } from '../../components/chat/CustomMessageRenderer';
 import { ToolConfirmationOverlay } from '../../components/chat/ToolConfirmationOverlay';
-import { ChatInputBox, type AttachedFile } from '../../components/chat/ChatInputBox';
-import { SkillPanel } from '../../components/chat/SkillPanel';
+import { ChatInputBox, type ChatComposerSubmitPayload, type SkillActionOption, type ToolOption } from '../../components/chat/ChatInputBox';
 import { ArchiveApplyPanel } from '../../components/chat/ArchiveApplyPanel';
 import { useConversationHistory } from '../../hooks/useConversationHistory';
 import { useAgentChat } from '../../hooks/useAgentChat';
@@ -18,6 +17,47 @@ import { api } from '../../lib/api/client';
 type MessageWithMs = AISDKMessage & {
   createdAtMs?: number;
 };
+
+const AVAILABLE_CHAT_TOOLS: ToolOption[] = [
+  {
+    id: 'web_search',
+    name: '网络搜索',
+    description: '搜索最新信息',
+  },
+  {
+    id: 'feishu_list_message_templates',
+    name: '飞书模板',
+    description: '查询飞书消息模板',
+  },
+  {
+    id: 'feishu_send_template_message',
+    name: '发送飞书消息',
+    description: '按模板发送飞书消息',
+  },
+];
+
+const COMPOSER_SKILL_ACTIONS: SkillActionOption[] = [
+  {
+    id: 'skill_archive_extract',
+    name: '会话归档',
+    description: '提取归档并显示应用面板',
+    skillId: 'archive_brief',
+    operation: 'archive_extract',
+  },
+  {
+    id: 'skill_brief_generate',
+    name: '生成简报',
+    description: '联系人详情页可生成会前简报',
+    skillId: 'archive_brief',
+    operation: 'brief_generate',
+  },
+  {
+    id: 'skill_contact_insight',
+    name: '联系人洞察',
+    description: '联系人详情页可生成洞察分析',
+    skillId: 'contact_insight',
+  },
+];
 
 export function ConversationDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -70,9 +110,6 @@ export function ConversationDetailPage() {
   });
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
-
-  // 技能选择状态
-  const [activeSkillId, setActiveSkillId] = useState<string | null>(null);
 
   // 使用 ref 保存所有用户消息，防止 stop 时被移除
   const userMessagesBackupRef = useRef<Map<string, MessageWithMs>>(new Map());
@@ -247,10 +284,20 @@ export function ConversationDetailPage() {
   }, [initialMessage, historyLoading, historyMessages.length, sortedMessages, chat.messages, conversationId, id, chat]);
 
   // 处理发送消息
-  const handleSendMessage = useCallback((content: string, _files?: AttachedFile[], _tools?: string[]) => {
-    // TODO: 处理文件上传和工具选择
-    // 目前只发送文本内容
-    chat.sendMessage(content);
+  const handleSendMessage = useCallback((payload: ChatComposerSubmitPayload) => {
+    chat.sendMessage(payload.content, {
+      composerContext: {
+        enabledTools: payload.tools,
+        attachments: payload.files.map((item) => ({
+          name: item.file.name,
+          mimeType: item.file.type || undefined,
+          size: item.file.size,
+          kind: item.type,
+        })),
+        feishuEnabled: payload.feishuEnabled,
+        inputMode: payload.inputMode,
+      },
+    });
   }, [chat]);
 
   // 处理停止生成
@@ -282,7 +329,6 @@ export function ConversationDetailPage() {
 
   // 处理技能选择
   const handleSkillSelect = useCallback(async (skillId: string, operation?: string) => {
-    setActiveSkillId(skillId);
     setSkillLoading(true);
     setSkillResult(null);
     setShowArchivePanel(false);
@@ -340,10 +386,13 @@ export function ConversationDetailPage() {
       // 5秒后清除简单结果，保留归档数据
       setTimeout(() => {
         setSkillResult(null);
-        setActiveSkillId(null);
       }, 8000);
     }
   }, [conversationId]);
+
+  const handleComposerSkillAction = useCallback((action: SkillActionOption) => {
+    void handleSkillSelect(action.skillId, action.operation);
+  }, [handleSkillSelect]);
 
   return (
     <div className="flex flex-col h-full bg-bg-page">
@@ -434,12 +483,6 @@ export function ConversationDetailPage() {
         )}
       </div>
 
-      {/* Skill Panel */}
-      <SkillPanel
-        activeSkillId={activeSkillId ?? undefined}
-        onSkillSelect={handleSkillSelect}
-      />
-
       {/* Archive Apply Panel - 当归档提取完成后显示 */}
       {showArchivePanel && archiveData && (
         <div className="px-4 py-2">
@@ -464,6 +507,9 @@ export function ConversationDetailPage() {
         onStop={handleStop}
         isLoading={chat.isLoading}
         placeholder="输入消息..."
+        availableTools={AVAILABLE_CHAT_TOOLS}
+        skillActions={COMPOSER_SKILL_ACTIONS}
+        onSelectSkillAction={handleComposerSkillAction}
         disabled={false}
       />
 

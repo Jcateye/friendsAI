@@ -56,9 +56,40 @@ describe('ContextBuilder', () => {
       expect(messages[0].role).toBe('system');
       expect(messages[1]).toEqual({
         role: 'system',
-        content: 'Context: {"userName":"Alice","userAge":25}',
+        content: 'Context: {"userAge":25,"userName":"Alice"}',
       });
       expect(messages[2].role).toBe('user');
+    });
+
+    it('should serialize context with stable key order', () => {
+      const request: AgentChatRequest = {
+        prompt: 'Use context',
+        context: {
+          zKey: 1,
+          aKey: {
+            b: 2,
+            a: 1,
+          },
+          composer: {
+            feishuEnabled: true,
+            enabledTools: ['tool_b', 'tool_a'],
+            attachments: [
+              {
+                size: 128,
+                name: 'notes.txt',
+                kind: 'file',
+              },
+            ],
+          },
+        } as any,
+      };
+
+      const messages = contextBuilder.buildMessages(request);
+      expect(messages[1]).toEqual({
+        role: 'system',
+        content:
+          'Context: {"aKey":{"a":1,"b":2},"composer":{"attachments":[{"kind":"file","name":"notes.txt","size":128}],"enabledTools":["tool_b","tool_a"],"feishuEnabled":true},"zKey":1}',
+      });
     });
 
     it('should use existing messages when provided', () => {

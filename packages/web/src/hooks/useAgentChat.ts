@@ -9,6 +9,24 @@ import type { Message as AISDKMessage } from 'ai';
 import type { ToolState } from '../lib/api/types';
 import { api, clearAuthToken } from '../lib/api/client';
 
+export interface ComposerAttachmentMetadata {
+  name: string;
+  mimeType?: string;
+  size?: number;
+  kind: 'image' | 'file';
+}
+
+export interface AgentComposerContext {
+  enabledTools?: string[];
+  attachments?: ComposerAttachmentMetadata[];
+  feishuEnabled?: boolean;
+  inputMode?: 'text' | 'voice';
+}
+
+export interface SendMessageOptions {
+  composerContext?: AgentComposerContext;
+}
+
 export interface UseAgentChatOptions {
   /**
    * 会话 ID
@@ -40,7 +58,7 @@ export interface UseAgentChatReturn {
   /**
    * 发送消息
    */
-  sendMessage: (message: string) => void;
+  sendMessage: (message: string, options?: SendMessageOptions) => void;
   /**
    * 输入值
    */
@@ -77,6 +95,90 @@ export interface UseAgentChatReturn {
    * 拒绝工具
    */
   rejectTool: (id: string, reason?: string) => Promise<void>;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function normalizeComposerContext(context: AgentComposerContext | undefined): AgentComposerContext | undefined {
+  if (!context) {
+    return undefined;
+  }
+
+  const normalized: AgentComposerContext = {};
+
+  if (Array.isArray(context.enabledTools)) {
+    const enabledTools = Array.from(
+      new Set(
+        context.enabledTools
+          .filter((name): name is string => typeof name === 'string')
+          .map((name) => name.trim())
+          .filter((name) => name.length > 0)
+      )
+    ).slice(0, 12);
+
+    if (enabledTools.length > 0) {
+      normalized.enabledTools = enabledTools;
+    }
+  }
+
+  if (Array.isArray(context.attachments)) {
+    const attachments: ComposerAttachmentMetadata[] = [];
+    for (const attachment of context.attachments) {
+      if (!isRecord(attachment)) {
+        continue;
+      }
+
+      const name = typeof attachment.name === 'string' ? attachment.name.trim().slice(0, 180) : '';
+      if (!name) {
+        continue;
+      }
+
+      const mimeType =
+        typeof attachment.mimeType === 'string'
+          ? attachment.mimeType.trim().slice(0, 120)
+          : undefined;
+      const size = typeof attachment.size === 'number' && Number.isFinite(attachment.size)
+        ? Math.max(0, Math.round(attachment.size))
+        : undefined;
+      const kind = attachment.kind === 'image' ? 'image' : 'file';
+
+      const normalizedAttachment: ComposerAttachmentMetadata = {
+        name,
+        kind,
+      };
+      if (mimeType) {
+        normalizedAttachment.mimeType = mimeType;
+      }
+      if (size !== undefined) {
+        normalizedAttachment.size = size;
+      }
+
+      attachments.push(normalizedAttachment);
+      if (attachments.length >= 10) {
+        break;
+      }
+    }
+
+    if (attachments.length > 0) {
+      normalized.attachments = attachments;
+    }
+  }
+
+  if (typeof context.feishuEnabled === 'boolean') {
+    normalized.feishuEnabled = context.feishuEnabled;
+  }
+
+  if (context.inputMode === 'text' || context.inputMode === 'voice') {
+    normalized.inputMode = context.inputMode;
+  }
+
+  if (Object.keys(normalized).length === 0) {
+    return undefined;
+  }
+
+  return normalized;
 }
 
 /**
@@ -165,6 +267,7 @@ function createFetchWithConversationId(
   onConversationCreated?: (conversationId: string) => void,
   getConversationId?: () => string | undefined,
   onAwaitingToolConfirmation?: (tool: ToolState) => void,
+  getNextComposerContext?: () => AgentComposerContext | undefined,
 ): (input: RequestInfo | URL, init?: RequestInit) => Promise<Response> {
   return async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
     // 在发送请求前，修改请求体以添加最新的 conversationId
@@ -187,6 +290,17 @@ function createFetchWithConversationId(
         } else if (currentConversationId === 'new') {
           // 如果是 'new'，不设置 conversationId，让后端创建新会话
           delete bodyObj.conversationId;
+        }
+
+        const composerContext = getNextComposerContext?.();
+        if (composerContext) {
+          const existingContext = isRecord(bodyObj.context)
+            ? (bodyObj.context as Record<string, unknown>)
+            : {};
+          bodyObj.context = {
+            ...existingContext,
+            composer: composerContext,
+          };
         }
         
         // 创建新的请求体
@@ -295,6 +409,8 @@ export function useAgentChat(
     conversationIdRef.current = conversationId;
   }, [conversationId]);
 
+  const composerContextQueueRef = useRef<AgentComposerContext[]>([]);
+
   // 工具确认状态管理
   const [pendingConfirmations, setPendingConfirmations] = useState<
     ToolState[]
@@ -314,6 +430,7 @@ export function useAgentChat(
           return [...prev, tool];
         });
       },
+      () => composerContextQueueRef.current.shift(),
     ),
     [onConversationCreated]
   );
@@ -458,7 +575,12 @@ export function useAgentChat(
   );
 
   // 包装 append 为 sendMessage
-  const sendMessage = useCallback((message: string) => {
+  const sendMessage = useCallback((message: string, options?: SendMessageOptions) => {
+    const composerContext = normalizeComposerContext(options?.composerContext);
+    if (composerContext) {
+      composerContextQueueRef.current.push(composerContext);
+    }
+
     chat.append({
       role: 'user',
       content: message,
