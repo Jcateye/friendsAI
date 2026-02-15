@@ -1,4 +1,4 @@
-import { Injectable, InternalServerErrorException } from '@nestjs/common';
+import { Injectable, InternalServerErrorException, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import OpenAI from 'openai';
 import fs from 'fs';
@@ -7,22 +7,28 @@ import dotenv from 'dotenv';
 
 @Injectable()
 export class AiService {
+  private readonly logger = new Logger(AiService.name);
   private openai: OpenAI;
   private model: string;
   private embeddingModel: string;
 
   constructor(private configService: ConfigService) {
-    const { apiKey, model, embeddingModel } = this.resolveOpenAiConfig();
+    const { apiKey, baseUrl, model, embeddingModel } = this.resolveOpenAiConfig();
     if (!apiKey) {
       throw new InternalServerErrorException('OPENAI_API_KEY is not configured.');
     }
-    this.openai = new OpenAI({ apiKey });
+    this.openai = new OpenAI({
+      apiKey,
+      ...(baseUrl ? { baseURL: baseUrl } : {}),
+    });
     this.model = model;
     this.embeddingModel = embeddingModel;
+    this.logger.log(`AI Service initialized: model=${model}, embedding=${embeddingModel}, baseUrl=${baseUrl || 'https://api.openai.com/v1 (default)'}`);
   }
 
   private resolveOpenAiConfig(): {
     apiKey: string | undefined;
+    baseUrl: string | undefined;
     model: string;
     embeddingModel: string;
   } {
@@ -34,18 +40,23 @@ export class AiService {
       fileConfig.OPENAI_API_KEY ??
       this.configService.get<string>('OPENAI_API_KEY') ??
       process.env.OPENAI_API_KEY;
+    const baseUrl =
+      fileConfig.OPENAI_BASE_URL ??
+      this.configService.get<string>('OPENAI_BASE_URL') ??
+      process.env.OPENAI_BASE_URL ??
+      undefined;
     const model =
       fileConfig.OPENAI_MODEL ??
       this.configService.get<string>('OPENAI_MODEL') ??
       process.env.OPENAI_MODEL ??
-      'gpt-5.1-mini';
+      'gpt-4.1-mini';
     const embeddingModel =
       fileConfig.OPENAI_EMBEDDING_MODEL ??
       this.configService.get<string>('OPENAI_EMBEDDING_MODEL') ??
       process.env.OPENAI_EMBEDDING_MODEL ??
       'text-embedding-ada-002';
 
-    return { apiKey, model, embeddingModel };
+    return { apiKey, baseUrl, model, embeddingModel };
   }
 
   private loadLocalEnv(nodeEnv: string): Record<string, string> {
