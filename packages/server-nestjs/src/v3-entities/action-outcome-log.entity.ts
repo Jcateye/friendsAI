@@ -11,7 +11,7 @@ export class ActionOutcomeLog {
   @PrimaryColumn('uuid')
   id: string;
 
-  @Column({ name: 'user_id', type: 'uuid' })
+  @Column({ name: 'user_id', type: 'varchar', length: 255 })
   userId: string;
 
   @Column({ name: 'contact_id', type: 'uuid', nullable: true })
@@ -62,7 +62,7 @@ export class ActionOutcomeLog {
   @Column({ name: 'metadata', type: 'jsonb', nullable: true })
   metadata: Record<string, any> | null;
 
-  @Column({ name: 'created_at', type: 'bigint', transformer: timestampMsTransformer })
+  @Column({ name: 'created_at', type: 'timestamp', nullable: true })
   createdAt: Date;
 
   @BeforeInsert()

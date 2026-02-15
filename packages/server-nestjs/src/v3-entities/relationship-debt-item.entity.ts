@@ -1,6 +1,5 @@
 import { Entity, PrimaryColumn, Column, Index, BeforeInsert } from 'typeorm';
 import { uuidv7 } from 'uuidv7';
-import { timestampMsTransformer } from '../entities/timestamp-ms.transformer';
 
 @Entity('relationship_debt_item')
 @Index('IDX_debt_user_contact', ['userId', 'contactId'])
@@ -10,10 +9,10 @@ export class RelationshipDebtItem {
   @PrimaryColumn('uuid')
   id: string;
 
-  @Column({ name: 'user_id', type: 'uuid' })
+  @Column({ name: 'user_id', type: 'varchar', length: 255 })
   userId: string;
 
-  @Column({ name: 'contact_id', type: 'uuid' })
+  @Column({ name: 'contact_id', type: 'varchar', length: 255 })
   contactId: string;
 
   @Column({
@@ -53,10 +52,10 @@ export class RelationshipDebtItem {
   @Column({ name: 'metadata', type: 'jsonb', nullable: true })
   metadata: Record<string, any> | null;
 
-  @Column({ name: 'created_at', type: 'bigint', transformer: timestampMsTransformer })
+  @Column({ name: 'created_at', type: 'timestamp', nullable: true })
   createdAt: Date;
 
-  @Column({ name: 'updated_at', type: 'bigint', transformer: timestampMsTransformer })
+  @Column({ name: 'updated_at', type: 'timestamp', nullable: true })
   updatedAt: Date;
 
   @BeforeInsert()

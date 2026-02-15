@@ -1,6 +1,5 @@
 import { Entity, PrimaryColumn, Column, Index, BeforeInsert } from 'typeorm';
 import { uuidv7 } from 'uuidv7';
-import { timestampMsTransformer } from '../entities/timestamp-ms.transformer';
 
 @Entity('relationship_health_snapshot')
 @Index('IDX_health_snapshot_user_date', ['userId', 'snapshotDate'])
@@ -9,10 +8,10 @@ export class RelationshipHealthSnapshot {
   @PrimaryColumn('uuid')
   id: string;
 
-  @Column({ name: 'user_id', type: 'uuid' })
+  @Column({ name: 'user_id', type: 'varchar', length: 255 })
   userId: string;
 
-  @Column({ name: 'contact_id', type: 'uuid' })
+  @Column({ name: 'contact_id', type: 'varchar', length: 255 })
   contactId: string;
 
   @Column({ name: 'snapshot_date', type: 'date' })
@@ -56,7 +55,7 @@ export class RelationshipHealthSnapshot {
   @Column({ name: 'metadata', type: 'jsonb', nullable: true })
   metadata: Record<string, any> | null;
 
-  @Column({ name: 'created_at', type: 'bigint', transformer: timestampMsTransformer })
+  @Column({ name: 'created_at', type: 'timestamp', nullable: true })
   createdAt: Date;
 
   @BeforeInsert()

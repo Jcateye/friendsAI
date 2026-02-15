@@ -1,6 +1,5 @@
 import { Entity, PrimaryColumn, Column, Index, BeforeInsert } from 'typeorm';
 import { uuidv7 } from 'uuidv7';
-import { timestampMsTransformer } from '../entities/timestamp-ms.transformer';
 
 @Entity('weekly_report_cache')
 @Index('IDX_report_user_week', ['userId', 'weekStartDate'], { unique: true })
@@ -8,7 +7,7 @@ export class WeeklyReportCache {
   @PrimaryColumn('uuid')
   id: string;
 
-  @Column({ name: 'user_id', type: 'uuid' })
+  @Column({ name: 'user_id', type: 'varchar', length: 255 })
   userId: string;
 
   @Column({ name: 'week_start_date', type: 'date' })
@@ -68,10 +67,10 @@ export class WeeklyReportCache {
   @Column({ name: 'is_regenerated', type: 'boolean', default: false })
   isRegenerated: boolean;
 
-  @Column({ name: 'created_at', type: 'bigint', transformer: timestampMsTransformer })
+  @Column({ name: 'created_at', type: 'timestamp', nullable: true })
   createdAt: Date;
 
-  @Column({ name: 'updated_at', type: 'bigint', transformer: timestampMsTransformer })
+  @Column({ name: 'updated_at', type: 'timestamp', nullable: true })
   updatedAt: Date;
 
   @BeforeInsert()
