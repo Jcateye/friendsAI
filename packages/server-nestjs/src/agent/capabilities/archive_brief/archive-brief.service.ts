@@ -82,9 +82,13 @@ export class ArchiveBriefService {
     // 构建输入数据
     const inputData = {
       operation: 'archive_extract',
+      archive_extract: true,
+      brief_generate: false,
       conversationId,
+      contactId: '',
       content: conversation.content,
-      messages: conversation.messages?.map((msg) => ({
+      messages: conversation.messages?.map((msg, index) => ({
+        index: index + 1,
         role: msg.role,
         content: msg.content || '',
       })) || [],
@@ -186,13 +190,19 @@ export class ArchiveBriefService {
     // 构建输入数据
     const inputData = {
       operation: 'brief_generate',
+      archive_extract: false,
+      brief_generate: true,
+      conversationId: '',
       contactId,
+      content: '',
+      messages: [],
       name: contact.name,
       company: contact.company,
       position: contact.position,
       tags: contact.tags,
-      recentInteractions: recentConversations.map((conv) => ({
-        date: conv.createdAt.toISOString(),
+      recentInteractions: recentConversations.map((conv, index) => ({
+        index: index + 1,
+        createdAt: conv.createdAt.toISOString(),
         type: 'conversation',
         summary: conv.summary || conv.content || '无内容',
       })),
@@ -307,5 +317,3 @@ export class ArchiveBriefService {
     return crypto.createHash('sha256').update(data).digest('hex');
   }
 }
-
-

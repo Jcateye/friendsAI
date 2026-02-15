@@ -129,28 +129,145 @@ export class PromptTemplateRenderer {
     userTemplate: string,
     context: RuntimeContext,
   ): string[] {
-    const missing: string[] = [];
-    const allVars = this.extractVariables(systemTemplate).concat(
-      this.extractVariables(userTemplate),
-    );
+    const missing = new Set<string>();
 
-    for (const varPath of allVars) {
-      if (!this.hasVariable(context, varPath)) {
-        missing.push(varPath);
-      }
-    }
+    this.collectMissingByRenderedPath(systemTemplate, context, missing);
+    this.collectMissingByRenderedPath(userTemplate, context, missing);
 
-    return missing;
+    return Array.from(missing);
   }
 
   /**
-   * 从模板中提取变量路径
+   * 按 Mustache 渲染路径检测缺失变量，避免 section/loop 场景误报
    */
-  private extractVariables(template: string): string[] {
+  private collectMissingByRenderedPath(
+    template: string,
+    context: RuntimeContext,
+    missing: Set<string>,
+  ): void {
+    try {
+      const tokens = Mustache.parse(template) as MustacheToken[];
+      this.collectMissingFromTokens(tokens, [context], missing);
+    } catch {
+      // parse 失败时回退到原始正则策略
+      const allVars = this.extractVariablesFallback(template);
+      for (const varPath of allVars) {
+        if (!this.hasVariableFallback(context, varPath)) {
+          missing.add(varPath);
+        }
+      }
+    }
+  }
+
+  /**
+   * 遍历 Mustache token 树，按上下文作用域检测缺失变量
+   */
+  private collectMissingFromTokens(
+    tokens: MustacheToken[],
+    contextStack: unknown[],
+    missing: Set<string>,
+  ): void {
+    for (const token of tokens) {
+      const type = token[0];
+      const rawName = token[1];
+      const name = typeof rawName === 'string' ? rawName.trim() : '';
+
+      if (!name) continue;
+
+      if (type === 'name' || type === '&') {
+        if (name === '.') continue;
+        const resolved = this.resolveVariable(contextStack, name);
+        if (!resolved.found) {
+          missing.add(name);
+        }
+        continue;
+      }
+
+      if (type !== '#' && type !== '^') {
+        continue;
+      }
+
+      const sectionTokens = (token[4] as MustacheToken[] | undefined) ?? [];
+      const section = this.resolveVariable(contextStack, name);
+
+      if (type === '#') {
+        if (!section.found || !this.isTruthyForMustache(section.value)) {
+          continue;
+        }
+
+        if (Array.isArray(section.value)) {
+          for (const item of section.value) {
+            this.collectMissingFromTokens(sectionTokens, [...contextStack, item], missing);
+          }
+        } else if (section.value !== null && typeof section.value === 'object') {
+          this.collectMissingFromTokens(sectionTokens, [...contextStack, section.value], missing);
+        } else {
+          this.collectMissingFromTokens(sectionTokens, contextStack, missing);
+        }
+      } else {
+        // Inverted section
+        if (!section.found || !this.isTruthyForMustache(section.value)) {
+          this.collectMissingFromTokens(sectionTokens, contextStack, missing);
+        }
+      }
+    }
+  }
+
+  /**
+   * 按 Mustache 语义在上下文栈中解析变量
+   */
+  private resolveVariable(
+    contextStack: unknown[],
+    varPath: string,
+  ): { found: boolean; value?: unknown } {
+    if (varPath === '.') {
+      return { found: true, value: contextStack[contextStack.length - 1] };
+    }
+
+    for (let i = contextStack.length - 1; i >= 0; i -= 1) {
+      const resolved = this.resolveFromContext(contextStack[i], varPath);
+      if (resolved.found) {
+        return resolved;
+      }
+    }
+
+    return { found: false };
+  }
+
+  private resolveFromContext(
+    context: unknown,
+    varPath: string,
+  ): { found: boolean; value?: unknown } {
+    const parts = varPath.split('.');
+    let current: unknown = context;
+
+    for (const part of parts) {
+      if (typeof current !== 'object' || current === null) {
+        return { found: false };
+      }
+      if (!(part in (current as Record<string, unknown>))) {
+        return { found: false };
+      }
+      current = (current as Record<string, unknown>)[part];
+    }
+
+    return { found: true, value: current };
+  }
+
+  private isTruthyForMustache(value: unknown): boolean {
+    if (Array.isArray(value)) {
+      return value.length > 0;
+    }
+    return Boolean(value);
+  }
+
+  /**
+   * 从模板中提取变量路径（fallback）
+   */
+  private extractVariablesFallback(template: string): string[] {
     const vars: string[] = [];
-    // Mustache 变量格式：{{variable}} 或 {{variable.path}}
     const regex = /\{\{([^}]+)\}\}/g;
-    let match;
+    let match: RegExpExecArray | null;
 
     while ((match = regex.exec(template)) !== null) {
       const varPath = match[1].trim();
@@ -170,9 +287,9 @@ export class PromptTemplateRenderer {
   }
 
   /**
-   * 检查上下文中是否存在变量
+   * 检查上下文中是否存在变量（fallback）
    */
-  private hasVariable(context: RuntimeContext, varPath: string): boolean {
+  private hasVariableFallback(context: RuntimeContext, varPath: string): boolean {
     const parts = varPath.split('.');
     let current: unknown = context;
 
@@ -214,3 +331,5 @@ export class PromptTemplateRenderer {
     }
   }
 }
+
+type MustacheToken = [string, string, number?, number?, MustacheToken[]?];

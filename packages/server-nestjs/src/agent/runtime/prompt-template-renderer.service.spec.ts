@@ -110,5 +110,62 @@ describe('PromptTemplateRenderer', () => {
       expect(result.warnings.length).toBeGreaterThan(0);
       expect(result.warnings.some((w) => w.path === 'missingVar')).toBe(true);
     });
+
+    it('should not report loop item fields as missing when section data exists', () => {
+      const bundle: AgentDefinitionBundle = {
+        definition: {
+          id: 'test',
+          version: '1.0.0',
+          prompt: {
+            systemTemplate: 'system.mustache',
+            userTemplate: 'user.mustache',
+          },
+          validation: {
+            outputSchema: 'output.schema.json',
+          },
+        },
+        systemTemplate: 'System',
+        userTemplate: '{{#messages}}[{{index}}] {{role}}: {{content}}{{/messages}}',
+      };
+
+      const context: RuntimeContext = {
+        messages: [
+          { index: 1, role: 'user', content: 'hello' },
+        ],
+      };
+
+      const result = service.render(bundle, context);
+
+      expect(result.warnings.some((w) => w.path === 'index')).toBe(false);
+      expect(result.warnings.some((w) => w.path === 'role')).toBe(false);
+      expect(result.warnings.some((w) => w.path === 'content')).toBe(false);
+    });
+
+    it('should not report variables from inactive sections as missing', () => {
+      const bundle: AgentDefinitionBundle = {
+        definition: {
+          id: 'test',
+          version: '1.0.0',
+          prompt: {
+            systemTemplate: 'system.mustache',
+            userTemplate: 'user.mustache',
+          },
+          validation: {
+            outputSchema: 'output.schema.json',
+          },
+        },
+        systemTemplate: 'System',
+        userTemplate: '{{#archive_extract}}{{conversationId}}{{/archive_extract}}{{#brief_generate}}{{contactId}}{{/brief_generate}}',
+      };
+
+      const context: RuntimeContext = {
+        archive_extract: true,
+        conversationId: 'conv-1',
+      };
+
+      const result = service.render(bundle, context);
+
+      expect(result.warnings.some((w) => w.path === 'contactId')).toBe(false);
+    });
   });
 });
