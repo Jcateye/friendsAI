@@ -62,14 +62,14 @@ export class AiService {
   private loadLocalEnv(nodeEnv: string): Record<string, string> {
     const envNames = [nodeEnv];
     if (nodeEnv === 'dev') envNames.push('dev');
-    if (nodeEnv === 'dev') envNames.push('dev');
 
     const baseNames = envNames.flatMap((name) => [
-      `.env.${name}.local`,
       `.env.${name}`,
+      `.env.${name}.local`,
     ]);
-    const shared = ['.env.local', '.env'];
-    const candidates = [...baseNames, ...shared];
+    const shared = ['.env', '.env.local'];
+    // 按优先级从低到高排列，后面的覆盖前面的
+    const candidates = [...shared, ...baseNames];
     const cwd = process.cwd();
     const inPackage = path.basename(cwd) === 'server-nestjs';
     const resolved = [
@@ -79,15 +79,17 @@ export class AiService {
         : []),
     ];
 
+    // 合并所有存在的 env 文件，高优先级覆盖低优先级
+    let merged: Record<string, string> = {};
     for (const candidate of resolved) {
       if (!fs.existsSync(candidate)) {
         continue;
       }
       const content = fs.readFileSync(candidate, 'utf8');
-      return dotenv.parse(content);
+      merged = { ...merged, ...dotenv.parse(content) };
     }
 
-    return {};
+    return merged;
   }
 
   async generateEmbedding(text: string): Promise<number[]> {
