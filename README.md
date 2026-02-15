@@ -241,8 +241,39 @@ bun run build            # 构建前后端
 
 ### 后端开发
 1. 后端代码位于 `packages/server-nestjs/src`
-2. 使用环境文件 `packages/server-nestjs/.env.development` / `packages/server-nestjs/.env.production` 配置环境变量
-3. 端口通过 `PORT` 配置（开发默认 3000）
+2. 端口通过 `PORT` 配置（开发默认 3000）
+
+#### 环境变量文件优先级
+
+后端 AI 服务加载环境变量时，会**合并**以下文件，后面的覆盖前面的（优先级从低到高）：
+
+```
+.env            → 最低优先级，通用默认值
+.env.local      → 本地通用覆盖（gitignore）
+.env.dev        → 开发环境配置（提交到 git，使用占位符）
+.env.dev.local  → ★ 最高优先级，本地私有密钥（gitignore）
+```
+
+> **最佳实践**：将真实的 API Key 等敏感信息放在 `.env.dev.local` 中，`.env.dev` 只保留占位符。
+> `.env.*.local` 和 `.env.local` 已在 `.gitignore` 中，不会被提交到仓库。
+
+#### AI 服务配置
+
+| 变量 | 说明 | 示例 |
+|------|------|------|
+| `OPENAI_API_KEY` | AI 服务密钥（必填） | `your_api_key` |
+| `OPENAI_BASE_URL` | API 端点（可选，默认 OpenAI 官方） | `https://open.bigmodel.cn/api/paas/v4` |
+| `OPENAI_MODEL` | 聊天模型（可选） | `glm-4-flash`、`gpt-4.1-mini` |
+| `OPENAI_EMBEDDING_MODEL` | 向量模型（可选） | `embedding-3`、`text-embedding-ada-002` |
+
+支持所有兼容 OpenAI API 格式的服务商（智谱 GLM、OpenRouter 等），只需配置 `OPENAI_BASE_URL` 即可。
+
+**快速配置示例**（智谱 AI）：
+
+```bash
+# packages/server-nestjs/.env.dev.local（不会提交到 git）
+OPENAI_API_KEY=你的智谱API密钥
+```
 
 ### 前端配置
 1. 前端环境文件位于 `packages/web/.env.development` / `packages/web/.env.production`
