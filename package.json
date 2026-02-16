@@ -22,7 +22,8 @@
     "test:watch": "bun run --cwd packages/server-nestjs test:watch",
     "test:coverage": "bun run --cwd packages/server-nestjs test:cov",
     "test:e2e": "bun run --cwd packages/server-nestjs test:e2e",
-    "test:ci": "bun run test && bun run test:e2e"
+    "web:bundle:check": "node scripts/check-web-bundle-size.js",
+    "test:ci": "bun run test && bun run test:e2e && bun run web:build && bun run web:bundle:check"
   },
   "devDependencies": {
     "ajv": "^8.17.1",

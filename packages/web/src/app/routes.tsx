@@ -1,18 +1,32 @@
+import { lazy, Suspense, type ReactNode } from 'react'
 import { createBrowserRouter } from 'react-router-dom'
 import { AppShell } from '../components/layout/AppShell'
 import { ProtectedRoute } from '../components/auth/ProtectedRoute'
-import { LoginPage } from '../pages/LoginPage'
-import { ChatPage } from '../pages/ChatPage'
-import { ConversationDetailPage } from '../pages/ConversationDetailPage'
-import { ContactsPage } from '../pages/ContactsPage'
-import { ContactDetailPage } from '../pages/ContactDetailPage'
-import { ActionsPage } from '../pages/ActionsPage'
-import { SettingsPage } from '../pages/SettingsPage'
+
+const LoginPage = lazy(() => import('../pages/LoginPage').then((m) => ({ default: m.LoginPage })))
+const ChatPage = lazy(() => import('../pages/ChatPage').then((m) => ({ default: m.ChatPage })))
+const ConversationDetailPage = lazy(() =>
+  import('../pages/ConversationDetailPage').then((m) => ({ default: m.ConversationDetailPage })),
+)
+const ContactsPage = lazy(() => import('../pages/ContactsPage').then((m) => ({ default: m.ContactsPage })))
+const ContactDetailPage = lazy(() =>
+  import('../pages/ContactDetailPage').then((m) => ({ default: m.ContactDetailPage })),
+)
+const ActionsPage = lazy(() => import('../pages/ActionsPage').then((m) => ({ default: m.ActionsPage })))
+const SettingsPage = lazy(() => import('../pages/SettingsPage').then((m) => ({ default: m.SettingsPage })))
+
+function withSuspense(node: ReactNode) {
+  return (
+    <Suspense fallback={<div className="p-4 text-text-muted text-sm">加载中...</div>}>
+      {node}
+    </Suspense>
+  )
+}
 
 export const router = createBrowserRouter([
   {
     path: '/login',
-    element: <LoginPage />,
+    element: withSuspense(<LoginPage />),
   },
   {
     path: '/',
@@ -22,10 +36,10 @@ export const router = createBrowserRouter([
       </ProtectedRoute>
     ),
     children: [
-      { index: true, element: <ChatPage /> },
-      { path: 'chat', element: <ChatPage /> },
-      { path: 'contacts', element: <ContactsPage /> },
-      { path: 'actions', element: <ActionsPage /> },
+      { index: true, element: withSuspense(<ChatPage />) },
+      { path: 'chat', element: withSuspense(<ChatPage />) },
+      { path: 'contacts', element: withSuspense(<ContactsPage />) },
+      { path: 'actions', element: withSuspense(<ActionsPage />) },
     ],
   },
   {
@@ -33,7 +47,7 @@ export const router = createBrowserRouter([
     element: (
       <ProtectedRoute>
         <AppShell showTabBar={false}>
-          <ConversationDetailPage />
+          {withSuspense(<ConversationDetailPage />)}
         </AppShell>
       </ProtectedRoute>
     ),
@@ -43,7 +57,7 @@ export const router = createBrowserRouter([
     element: (
       <ProtectedRoute>
         <AppShell showTabBar={false}>
-          <ContactDetailPage />
+          {withSuspense(<ContactDetailPage />)}
         </AppShell>
       </ProtectedRoute>
     ),
@@ -53,7 +67,7 @@ export const router = createBrowserRouter([
     element: (
       <ProtectedRoute>
         <AppShell showTabBar={false}>
-          <SettingsPage />
+          {withSuspense(<SettingsPage />)}
         </AppShell>
       </ProtectedRoute>
     ),

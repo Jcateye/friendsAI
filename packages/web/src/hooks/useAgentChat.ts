@@ -8,6 +8,7 @@ import { useChat } from 'ai/react';
 import type { Message as AISDKMessage } from 'ai';
 import type { ToolState } from '../lib/api/types';
 import { api, clearAuthToken } from '../lib/api/client';
+import { parseVercelAgentCustomDataLine } from '../lib/agent-stream/parseVercelAgentStream';
 
 export interface ComposerAttachmentMetadata {
   name: string;
@@ -339,39 +340,25 @@ function createFetchWithConversationId(
           buffer = lines.pop() || '';
           
           for (const line of lines) {
-            // 解析 2: 格式的自定义数据
-            if (line.startsWith('2:') && !conversationIdExtracted) {
-              try {
-                const data = JSON.parse(line.slice(2));
-                // 处理数组格式或单个对象格式
-                const events = Array.isArray(data) ? data : [data];
-                const conversationEvent = events.find(
-                  (item: any) => item.type === 'conversation.created'
-                );
-                if (conversationEvent?.conversationId) {
-                  onConversationCreated(conversationEvent.conversationId);
-                  conversationIdExtracted = true;
-                }
-
-                const awaitingToolEvents = events.filter(
-                  (item: any) => item.type === 'tool.awaiting_input'
-                );
-                awaitingToolEvents.forEach((toolEvent: any) => {
-                  if (!onAwaitingToolConfirmation || !toolEvent?.toolCallId) {
-                    return;
-                  }
-                  onAwaitingToolConfirmation({
-                    id: toolEvent.toolCallId,
-                    name: toolEvent.toolName || 'Unknown Tool',
-                    status: 'awaiting_input',
-                    confirmationId: toolEvent.confirmationId,
-                    input: toolEvent.input,
-                    message: toolEvent.message,
-                  });
-                });
-              } catch (e) {
-                // 忽略解析错误，继续处理流
+            const customData = parseVercelAgentCustomDataLine(line);
+            if (customData) {
+              if (!conversationIdExtracted && customData.conversationId) {
+                onConversationCreated(customData.conversationId);
+                conversationIdExtracted = true;
               }
+              customData.awaitingTools.forEach((toolEvent) => {
+                if (!onAwaitingToolConfirmation) {
+                  return;
+                }
+                onAwaitingToolConfirmation({
+                  id: toolEvent.toolCallId,
+                  name: toolEvent.toolName || 'Unknown Tool',
+                  status: 'awaiting_input',
+                  confirmationId: toolEvent.confirmationId,
+                  input: toolEvent.input as any,
+                  message: toolEvent.message,
+                });
+              });
             }
             
             // 将原始数据传递给下游
