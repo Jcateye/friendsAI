@@ -6,6 +6,8 @@ import { Repository } from 'typeorm';
 import { FeishuApiService } from '../api/feishu-api.service';
 import { FeishuWebhookLog } from '../entities/feishu-config.entity';
 import { ButtonClickDto, ButtonClickErrorResponse, ButtonClickResponse } from './dto/button-click.dto';
+import { MessageStatusDto, MessageStatusResponse } from './dto/message-status.dto';
+import { FeishuMessageDelivery } from '../../v3-entities';
 
 const WEBHOOK_STATUS = {
   RECEIVED: 0,
@@ -18,12 +20,15 @@ const WEBHOOK_STATUS = {
 export class FeishuWebhookService {
   private readonly logger = new Logger(FeishuWebhookService.name);
   private readonly encryptKey: string;
+  private readonly closedLoopEnabled = process.env.FEISHU_CLOSED_LOOP_ENABLED !== 'false';
 
   constructor(
     private readonly config: ConfigService,
     private readonly feishuApi: FeishuApiService,
     @InjectRepository(FeishuWebhookLog)
     private readonly webhookLogRepository: Repository<FeishuWebhookLog>,
+    @InjectRepository(FeishuMessageDelivery, 'v3')
+    private readonly deliveryRepository: Repository<FeishuMessageDelivery>,
   ) {
     this.encryptKey = this.config.get<string>('FEISHU_ENCRYPT_KEY') ?? '';
   }
@@ -113,6 +118,61 @@ export class FeishuWebhookService {
         error: 'PROCESSING_FAILED',
       };
     }
+  }
+
+  async handleMessageStatus(dto: MessageStatusDto): Promise<MessageStatusResponse> {
+    if (!this.closedLoopEnabled) {
+      return {
+        success: false,
+        message: 'feishu_closed_loop_disabled',
+      };
+    }
+
+    if (!dto.messageId || !dto.status) {
+      return {
+        success: false,
+        message: 'messageId and status are required',
+      };
+    }
+
+    const delivery = await this.deliveryRepository.findOne({
+      where: {
+        messageId: dto.messageId,
+      },
+      order: {
+        createdAt: 'DESC',
+      },
+    });
+
+    if (!delivery) {
+      return {
+        success: false,
+        message: `delivery not found for messageId=${dto.messageId}`,
+      };
+    }
+
+    delivery.status = dto.status;
+    delivery.errorCode = dto.errorCode ?? null;
+    delivery.errorMessage = dto.errorMessage ?? null;
+    delivery.retryable = dto.status === 'failed';
+    delivery.responsePayload = {
+      ...(delivery.responsePayload ?? {}),
+      callback: {
+        timestamp: dto.timestamp ?? null,
+        traceId: dto.traceId ?? null,
+        extra: dto.extra ?? null,
+      },
+      status: dto.status,
+      errorCode: dto.errorCode ?? null,
+      errorMessage: dto.errorMessage ?? null,
+    };
+
+    const saved = await this.deliveryRepository.save(delivery);
+    return {
+      success: true,
+      message: 'delivery status updated',
+      deliveryId: saved.id,
+    };
   }
 
   verifySignature(dto: ButtonClickDto): boolean {
