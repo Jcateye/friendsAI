@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { ToolConfirmation, ToolConfirmationStatus } from '../entities';
@@ -13,9 +13,26 @@ interface CreateToolConfirmationInput {
   userId?: string;
 }
 
+interface BatchItemResult {
+  id: string;
+  success: boolean;
+  status?: ToolConfirmationStatus;
+  code?: string;
+  message?: string;
+}
+
+export interface ToolConfirmationBatchResult {
+  total: number;
+  succeeded: number;
+  failed: number;
+  items: BatchItemResult[];
+}
+
 @Injectable()
 export class ToolConfirmationsService {
   private readonly logger = new Logger(ToolConfirmationsService.name);
+  private readonly maxBatchSize = Number(process.env.TOOL_CONFIRMATION_BATCH_MAX ?? 20);
+  private readonly batchEnabled = process.env.TOOL_BATCH_OPS_ENABLED !== 'false';
 
   constructor(
     @InjectRepository(ToolConfirmation)
@@ -63,8 +80,13 @@ export class ToolConfirmationsService {
     return confirmation;
   }
 
-  async confirm(id: string, payloadOverrides?: Record<string, any>): Promise<ToolConfirmation> {
+  async confirm(
+    id: string,
+    payloadOverrides?: Record<string, any>,
+    userId?: string,
+  ): Promise<ToolConfirmation> {
     const confirmation = await this.findOne(id);
+    this.ensureOwnership(confirmation, userId);
 
     if (confirmation.status !== 'pending') {
       throw new BadRequestException(`Tool confirmation ${id} is already ${confirmation.status}`);
@@ -87,8 +109,9 @@ export class ToolConfirmationsService {
     return this.toolConfirmationRepository.save(confirmation);
   }
 
-  async reject(id: string, reason?: string): Promise<ToolConfirmation> {
+  async reject(id: string, reason?: string, userId?: string): Promise<ToolConfirmation> {
     const confirmation = await this.findOne(id);
+    this.ensureOwnership(confirmation, userId);
 
     if (confirmation.status !== 'pending') {
       throw new BadRequestException(`Tool confirmation ${id} is already ${confirmation.status}`);
@@ -99,6 +122,137 @@ export class ToolConfirmationsService {
     confirmation.error = reason ?? null;
 
     return this.toolConfirmationRepository.save(confirmation);
+  }
+
+  async batchConfirm(
+    userId: string | undefined,
+    items: Array<{ id: string; payload?: Record<string, any> }>,
+  ): Promise<ToolConfirmationBatchResult> {
+    if (!this.batchEnabled) {
+      throw new BadRequestException('tool_batch_ops_disabled');
+    }
+    this.validateBatchInput(items);
+
+    const results: BatchItemResult[] = [];
+    for (const item of items) {
+      try {
+        const confirmation = await this.confirm(item.id, item.payload, userId);
+        results.push({
+          id: item.id,
+          success: true,
+          status: confirmation.status,
+        });
+      } catch (error) {
+        results.push(this.toBatchError(item.id, error));
+      }
+    }
+
+    return this.aggregateBatchResult(results);
+  }
+
+  async batchReject(
+    userId: string | undefined,
+    templateReason: string | undefined,
+    items: Array<{ id: string; reason?: string }>,
+  ): Promise<ToolConfirmationBatchResult> {
+    if (!this.batchEnabled) {
+      throw new BadRequestException('tool_batch_ops_disabled');
+    }
+    this.validateBatchInput(items);
+
+    const normalizedTemplateReason = templateReason?.trim();
+    const results: BatchItemResult[] = [];
+    for (const item of items) {
+      try {
+        const reason = item.reason?.trim() || normalizedTemplateReason || undefined;
+        const confirmation = await this.reject(item.id, reason, userId);
+        results.push({
+          id: item.id,
+          success: true,
+          status: confirmation.status,
+        });
+      } catch (error) {
+        results.push(this.toBatchError(item.id, error));
+      }
+    }
+
+    return this.aggregateBatchResult(results);
+  }
+
+  private validateBatchInput(items: Array<{ id: string }>): void {
+    if (!Array.isArray(items) || items.length === 0) {
+      throw new BadRequestException('empty_batch_items');
+    }
+    if (items.length > this.maxBatchSize) {
+      throw new BadRequestException({
+        code: 'batch_size_exceeded',
+        message: `Batch size exceeds max limit ${this.maxBatchSize}`,
+      });
+    }
+  }
+
+  private ensureOwnership(confirmation: ToolConfirmation, userId?: string): void {
+    if (!userId) {
+      return;
+    }
+    if (confirmation.userId && confirmation.userId !== userId) {
+      throw new ForbiddenException('tool_confirmation_forbidden');
+    }
+  }
+
+  private toBatchError(id: string, error: unknown): BatchItemResult {
+    if (error instanceof NotFoundException) {
+      return {
+        id,
+        success: false,
+        code: 'not_found',
+        message: error.message,
+      };
+    }
+    if (error instanceof ForbiddenException) {
+      return {
+        id,
+        success: false,
+        code: 'forbidden',
+        message: error.message,
+      };
+    }
+    if (error instanceof BadRequestException) {
+      const response = error.getResponse();
+      const code =
+        typeof response === 'object' && response !== null && 'code' in response
+          ? String((response as { code?: unknown }).code)
+          : 'bad_request';
+      const message =
+        typeof response === 'object' && response !== null && 'message' in response
+          ? Array.isArray((response as { message?: unknown }).message)
+            ? String((response as { message?: unknown[] }).message?.[0] ?? error.message)
+            : String((response as { message?: unknown }).message)
+          : error.message;
+      return {
+        id,
+        success: false,
+        code,
+        message,
+      };
+    }
+    return {
+      id,
+      success: false,
+      code: 'unknown_error',
+      message: error instanceof Error ? error.message : 'unknown error',
+    };
+  }
+
+  private aggregateBatchResult(items: BatchItemResult[]): ToolConfirmationBatchResult {
+    const succeeded = items.filter((item) => item.success).length;
+    const failed = items.length - succeeded;
+    return {
+      total: items.length,
+      succeeded,
+      failed,
+      items,
+    };
   }
 
   private async executeTool(

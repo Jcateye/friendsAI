@@ -17,6 +17,21 @@ interface RejectToolDto {
   reason?: string;
 }
 
+interface BatchConfirmToolDto {
+  items: Array<{
+    id: string;
+    payload?: Record<string, any>;
+  }>;
+}
+
+interface BatchRejectToolDto {
+  templateReason?: string;
+  items: Array<{
+    id: string;
+    reason?: string;
+  }>;
+}
+
 @ApiTags('tool-confirmations')
 @ApiBearerAuth()
 @Controller('tool-confirmations')
@@ -90,7 +105,7 @@ export class ToolConfirmationsController {
     return this.toolConfirmationsService.findOne(id);
   }
 
-  @Post(':id/confirm')
+  @Post(':id([0-9a-fA-F-]+)/confirm')
   @ApiOperation({
     summary: '确认某个工具操作',
     description: '用户在前端确认之后调用此接口，后端会据此继续执行工具操作。',
@@ -101,11 +116,12 @@ export class ToolConfirmationsController {
     description: '工具操作已确认并进入后续执行流程',
   })
   @HttpCode(HttpStatus.OK)
-  confirm(@Param('id') id: string, @Body() body: ConfirmToolDto = {}) {
-    return this.toolConfirmationsService.confirm(id, body.payload);
+  confirm(@Request() req: any, @Param('id') id: string, @Body() body: ConfirmToolDto = {}) {
+    const userId = req.user?.id;
+    return this.toolConfirmationsService.confirm(id, body.payload, userId);
   }
 
-  @Post(':id/reject')
+  @Post(':id([0-9a-fA-F-]+)/reject')
   @ApiOperation({
     summary: '拒绝某个工具操作',
     description: '用户在前端拒绝之后调用此接口，可携带拒绝原因，后端会记录并终止该工具操作。',
@@ -116,7 +132,38 @@ export class ToolConfirmationsController {
     description: '工具操作已被拒绝',
   })
   @HttpCode(HttpStatus.OK)
-  reject(@Param('id') id: string, @Body() body: RejectToolDto = {}) {
-    return this.toolConfirmationsService.reject(id, body.reason);
+  reject(@Request() req: any, @Param('id') id: string, @Body() body: RejectToolDto = {}) {
+    const userId = req.user?.id;
+    return this.toolConfirmationsService.reject(id, body.reason, userId);
+  }
+
+  @Post('batch/confirm')
+  @ApiOperation({
+    summary: '批量确认工具执行',
+    description: '按条执行批量确认，允许部分成功并返回每条结果。',
+  })
+  @ApiResponse({
+    status: 200,
+    description: '返回批量执行结果（总数、成功数、失败数、逐条结果）',
+  })
+  @HttpCode(HttpStatus.OK)
+  batchConfirm(@Request() req: any, @Body() body: BatchConfirmToolDto) {
+    const userId = req.user?.id;
+    return this.toolConfirmationsService.batchConfirm(userId, body.items ?? []);
+  }
+
+  @Post('batch/reject')
+  @ApiOperation({
+    summary: '批量拒绝工具执行',
+    description: '支持模板化拒绝理由，按条执行并返回逐条结果。',
+  })
+  @ApiResponse({
+    status: 200,
+    description: '返回批量执行结果（总数、成功数、失败数、逐条结果）',
+  })
+  @HttpCode(HttpStatus.OK)
+  batchReject(@Request() req: any, @Body() body: BatchRejectToolDto) {
+    const userId = req.user?.id;
+    return this.toolConfirmationsService.batchReject(userId, body.templateReason, body.items ?? []);
   }
 }
