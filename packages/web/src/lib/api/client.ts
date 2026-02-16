@@ -40,6 +40,8 @@ import type {
   FeishuMessageTemplate,
   SendFeishuTemplateMessageRequest,
   SendFeishuTemplateMessageResponse,
+  SkillCatalogResponse,
+  SkillInvocationIntentResponse,
 } from './types';
 import type {
   AgentRunResponse,
@@ -673,6 +675,62 @@ export const api = {
       });
 
       return handleResponse<AgentRunResponse<NetworkActionData>>(response);
+    },
+
+    /**
+     * 通用运行入口（动态 skills action 可复用）
+     */
+    async runGeneric(request: {
+      agentId: string;
+      operation?: string | null;
+      input: Record<string, unknown>;
+      conversationId?: string;
+      sessionId?: string;
+      options?: {
+        useCache?: boolean;
+        forceRefresh?: boolean;
+      };
+    }): Promise<AgentRunResponse<Record<string, unknown>>> {
+      const response = await fetchWithAuth(`${API_BASE}/agent/run`, {
+        method: 'POST',
+        body: JSON.stringify({
+          agentId: request.agentId,
+          operation: request.operation ?? null,
+          input: request.input,
+          conversationId: request.conversationId,
+          sessionId: request.sessionId,
+          options: request.options ?? { useCache: true },
+        }),
+      });
+
+      return handleResponse<AgentRunResponse<Record<string, unknown>>>(response);
+    },
+  },
+
+  skills: {
+    async getCatalog(params?: {
+      agentScope?: string;
+      capability?: string;
+    }): Promise<SkillCatalogResponse> {
+      const search = new URLSearchParams();
+      if (params?.agentScope) search.set('agentScope', params.agentScope);
+      if (params?.capability) search.set('capability', params.capability);
+      const query = search.toString();
+      const response = await fetchWithAuth(`${API_BASE}/skills/catalog${query ? `?${query}` : ''}`);
+      return handleResponse<SkillCatalogResponse>(response);
+    },
+
+    async parseDebug(request: {
+      text?: string;
+      composer?: Record<string, unknown>;
+      agentScope?: string;
+      capability?: string;
+    }): Promise<SkillInvocationIntentResponse> {
+      const response = await fetchWithAuth(`${API_BASE}/skills/parse-debug`, {
+        method: 'POST',
+        body: JSON.stringify(request),
+      });
+      return handleResponse<SkillInvocationIntentResponse>(response);
     },
   },
 

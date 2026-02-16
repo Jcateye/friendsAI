@@ -22,6 +22,8 @@ export interface AgentComposerContext {
   attachments?: ComposerAttachmentMetadata[];
   feishuEnabled?: boolean;
   inputMode?: 'text' | 'voice';
+  skillActionId?: string;
+  rawInputs?: Record<string, unknown>;
 }
 
 export interface SendMessageOptions {
@@ -173,6 +175,29 @@ function normalizeComposerContext(context: AgentComposerContext | undefined): Ag
 
   if (context.inputMode === 'text' || context.inputMode === 'voice') {
     normalized.inputMode = context.inputMode;
+  }
+
+  if (typeof context.skillActionId === 'string') {
+    const skillActionId = context.skillActionId.trim().slice(0, 160);
+    if (skillActionId.length > 0) {
+      normalized.skillActionId = skillActionId;
+    }
+  }
+
+  if (isRecord(context.rawInputs)) {
+    const rawInputs: Record<string, unknown> = {};
+    const entries = Object.entries(context.rawInputs).slice(0, 20);
+    for (const [key, value] of entries) {
+      if (typeof key !== 'string' || key.trim().length === 0) {
+        continue;
+      }
+      if (value === null || ['string', 'number', 'boolean'].includes(typeof value) || Array.isArray(value) || isRecord(value)) {
+        rawInputs[key] = value;
+      }
+    }
+    if (Object.keys(rawInputs).length > 0) {
+      normalized.rawInputs = rawInputs;
+    }
   }
 
   if (Object.keys(normalized).length === 0) {

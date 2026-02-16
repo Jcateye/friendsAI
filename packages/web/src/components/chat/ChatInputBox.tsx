@@ -38,6 +38,11 @@ export interface SkillActionOption {
   description?: string;
   skillId: string;
   operation?: string;
+  run?: {
+    agentId: string;
+    operation?: string | null;
+    inputTemplate?: Record<string, unknown>;
+  };
   icon?: React.ReactNode;
 }
 

@@ -12,6 +12,7 @@ import { sortMessagesByCreatedAt } from '../../lib/messages/sortMessagesByCreate
 import { resolveEpochMs } from '../../lib/time/timestamp';
 import type { Message as AISDKMessage } from 'ai';
 import type { ArchiveExtractData } from '../../lib/api/agent-types';
+import type { SkillCatalogItem } from '../../lib/api/types';
 import { api } from '../../lib/api/client';
 
 type MessageWithMs = AISDKMessage & {
@@ -58,6 +59,31 @@ const COMPOSER_SKILL_ACTIONS: SkillActionOption[] = [
     skillId: 'contact_insight',
   },
 ];
+
+function mapCatalogToSkillActions(items: SkillCatalogItem[]): SkillActionOption[] {
+  const actions: SkillActionOption[] = [];
+  const seen = new Set<string>();
+
+  for (const item of items) {
+    for (const action of item.actions) {
+      const actionId = action.actionId || `${item.key}:${action.operation}`;
+      if (seen.has(actionId)) {
+        continue;
+      }
+      seen.add(actionId);
+      actions.push({
+        id: actionId,
+        name: action.name,
+        description: action.description,
+        skillId: action.skillKey,
+        operation: action.operation === 'default' ? undefined : action.operation,
+        run: action.run,
+      });
+    }
+  }
+
+  return actions;
+}
 
 export function ConversationDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -310,6 +336,7 @@ export function ConversationDetailPage() {
   const [skillResult, setSkillResult] = useState<string | null>(null);
   const [archiveData, setArchiveData] = useState<ArchiveExtractData | null>(null);
   const [showArchivePanel, setShowArchivePanel] = useState(false);
+  const [dynamicSkillActions, setDynamicSkillActions] = useState<SkillActionOption[]>(COMPOSER_SKILL_ACTIONS);
 
   // 获取现有联系人列表（用于去重检查）
   const [existingContacts, setExistingContacts] = useState<any[]>([]);
@@ -327,8 +354,39 @@ export function ConversationDetailPage() {
     loadContacts();
   }, []);
 
+  useEffect(() => {
+    let disposed = false;
+
+    const loadSkillCatalog = async () => {
+      try {
+        const catalog = await api.skills.getCatalog({
+          agentScope: conversationId || 'chat_conversation',
+          capability: 'chat',
+        });
+        const mappedActions = mapCatalogToSkillActions(catalog.items);
+
+        if (!disposed) {
+          setDynamicSkillActions(
+            mappedActions.length > 0 ? mappedActions : COMPOSER_SKILL_ACTIONS,
+          );
+        }
+      } catch {
+        if (!disposed) {
+          setDynamicSkillActions(COMPOSER_SKILL_ACTIONS);
+        }
+      }
+    };
+
+    void loadSkillCatalog();
+    return () => {
+      disposed = true;
+    };
+  }, [conversationId]);
+
   // 处理技能选择
-  const handleSkillSelect = useCallback(async (skillId: string, operation?: string) => {
+  const handleSkillSelect = useCallback(async (action: SkillActionOption) => {
+    const skillId = action.skillId;
+    const operation = action.operation;
     setSkillLoading(true);
     setSkillResult(null);
     setShowArchivePanel(false);
@@ -376,6 +434,29 @@ export function ConversationDetailPage() {
         setSkillResult('💡 生成简报功能需要在联系人详情页使用。\n\n打开联系人详情页后，点击「生成洞察」按钮即可生成会前简报。');
       } else if (skillId === 'contact_insight') {
         setSkillResult('👤 联系人洞察功能需要在联系人详情页使用。\n\n打开联系人详情页后，点击「洞察」按钮即可生成完整的联系人洞察分析。');
+      } else if (action.run?.agentId) {
+        const runtimeInput: Record<string, unknown> = {
+          ...(action.run.inputTemplate ?? {}),
+        };
+        if (!runtimeInput.conversationId && conversationId) {
+          runtimeInput.conversationId = conversationId;
+        }
+
+        const result = await api.agent.runGeneric({
+          agentId: action.run.agentId,
+          operation: action.run.operation,
+          input: runtimeInput,
+          conversationId: conversationId ?? undefined,
+          options: {
+            useCache: true,
+          },
+        });
+
+        const payload = JSON.stringify(result.data, null, 2);
+        const clippedPayload = payload.length > 1200 ? `${payload.slice(0, 1197)}...` : payload;
+        setSkillResult(
+          `✅ 技能 "${skillId}" 操作 "${operation || '默认'}" 执行成功${result.cached ? '（缓存命中）' : ''}\n\n${clippedPayload}`,
+        );
       } else {
         setSkillResult(`✅ 技能 "${skillId}" 操作 "${operation || '默认'}" 触发成功`);
       }
@@ -391,7 +472,7 @@ export function ConversationDetailPage() {
   }, [conversationId]);
 
   const handleComposerSkillAction = useCallback((action: SkillActionOption) => {
-    void handleSkillSelect(action.skillId, action.operation);
+    void handleSkillSelect(action);
   }, [handleSkillSelect]);
 
   return (
@@ -508,7 +589,7 @@ export function ConversationDetailPage() {
         isLoading={chat.isLoading}
         placeholder="输入消息..."
         availableTools={AVAILABLE_CHAT_TOOLS}
-        skillActions={COMPOSER_SKILL_ACTIONS}
+        skillActions={dynamicSkillActions}
         onSelectSkillAction={handleComposerSkillAction}
         disabled={false}
       />

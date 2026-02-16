@@ -419,3 +419,67 @@ export interface SendFeishuTemplateMessageResponse {
   errorCode?: string;
   error?: string;
 }
+
+// ==================== Skills ====================
+
+export interface SkillActionOptionV2 {
+  actionId: string;
+  skillKey: string;
+  operation: string;
+  name: string;
+  description?: string;
+  run?: {
+    agentId: string;
+    operation?: string | null;
+    inputTemplate?: Record<string, unknown>;
+  };
+  riskLevel?: 'low' | 'medium' | 'high';
+}
+
+export interface SkillCatalogItem {
+  key: string;
+  displayName: string;
+  description?: string;
+  source: 'global' | 'tenant' | 'builtin';
+  scopeType: 'global' | 'tenant';
+  scopeId: string | null;
+  version: string;
+  status: string;
+  actions: SkillActionOptionV2[];
+  parserRules?: Record<string, unknown>;
+  binding?: {
+    scopeType: string;
+    scopeId: string;
+    priority: number;
+    enabled: boolean;
+    rolloutPercent: number;
+    pinnedVersion: string | null;
+  };
+}
+
+export interface SkillCatalogResponse {
+  items: SkillCatalogItem[];
+  warnings: string[];
+}
+
+export interface SkillInvocationIntentResponse {
+  matched: boolean;
+  status: string;
+  skillKey?: string;
+  operation?: string;
+  args?: Record<string, unknown>;
+  source: string;
+  confidence: number;
+  traceId: string;
+  warnings: string[];
+  candidates?: Array<{
+    skillKey: string;
+    operation?: string;
+    confidence: number;
+  }>;
+  execution?: {
+    agentId: string;
+    operation?: string | null;
+    input: Record<string, unknown>;
+  };
+}
