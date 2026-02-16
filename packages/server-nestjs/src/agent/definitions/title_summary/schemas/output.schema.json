@@ -1,0 +1,18 @@
+{
+  "type": "object",
+  "required": ["title", "summary"],
+  "properties": {
+    "title": {
+      "type": "string",
+      "description": "A short, descriptive title for the conversation (max 50 characters)"
+    },
+    "summary": {
+      "type": "string",
+      "description": "A comprehensive summary of the conversation (2-3 sentences)"
+    }
+  }
+}
+
+
+
+

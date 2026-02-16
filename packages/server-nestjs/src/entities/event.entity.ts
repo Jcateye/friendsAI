@@ -1,12 +1,16 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, ManyToOne, JoinColumn } from 'typeorm';
+import { Entity, PrimaryColumn, Column, CreateDateColumn, ManyToOne, JoinColumn, Index, BeforeInsert, BeforeUpdate } from 'typeorm';
+import { uuidv7 } from 'uuidv7';
 import { Contact } from './contact.entity';
+import { timestampMsTransformer } from './timestamp-ms.transformer';
 
-@Entity()
+@Entity({ name: 'events' })
+@Index('IDX_events_contactId', ['contactId'])
+@Index('IDX_events_eventDate', ['eventDate'])
 export class Event {
-  @PrimaryGeneratedColumn('uuid')
+  @PrimaryColumn('uuid')
   id: string;
 
-  @Column()
+  @Column('varchar', { length: 500 })
   title: string;
 
   @Column({ type: 'text', nullable: true })
@@ -15,22 +19,43 @@ export class Event {
   @Column({ type: 'jsonb', nullable: true })
   details: Record<string, any>;
 
-  @Column({ type: 'timestamp', nullable: true })
+  @Column({ type: 'bigint', nullable: true, transformer: timestampMsTransformer })
   eventDate: Date;
 
   @Column({ type: 'vector', nullable: true })
   embedding: number[];
 
+  @Column({ type: 'uuid', nullable: true })
+  sourceConversationId: string | null;
+
+  @Column({ type: 'text', array: true, nullable: true })
+  sourceMessageIds: string[] | null;
+
   @ManyToOne(() => Contact, contact => contact.events)
   @JoinColumn({ name: 'contactId' })
   contact: Contact;
 
-  @Column({ nullable: true })
+  @Column({ type: 'uuid', nullable: true })
   contactId: string | null;
 
-  @CreateDateColumn()
+  @Column({ type: 'bigint', transformer: timestampMsTransformer })
   createdAt: Date;
 
-  @UpdateDateColumn()
+  @Column({ type: 'bigint', transformer: timestampMsTransformer })
   updatedAt: Date;
+
+  @BeforeInsert()
+  setCreatedAt() {
+    if (!this.id) {
+      this.id = uuidv7();
+    }
+    const now = new Date();
+    this.createdAt = now;
+    this.updatedAt = now;
+  }
+
+  @BeforeUpdate()
+  updateTimestamp() {
+    this.updatedAt = new Date();
+  }
 }

@@ -1,0 +1,54 @@
+Analyze the following contact and generate comprehensive insights:
+
+## Contact Profile
+- Name: {{contact.name}}
+{{#contact.email}}
+- Email: {{contact.email}}
+{{/contact.email}}
+{{#contact.company}}
+- Company: {{contact.company}}
+{{/contact.company}}
+{{#contact.position}}
+- Position: {{contact.position}}
+{{/contact.position}}
+{{#contact.tags}}
+- Tags: {{contact.tags}}
+{{/contact.tags}}
+{{#contact.note}}
+- Note: {{contact.note}}
+{{/contact.note}}
+
+## Recent Interactions
+{{#recentInteractions}}
+- Conversation ID: {{id}}
+{{#summary}}
+  Summary: {{summary}}
+{{/summary}}
+  Created: {{createdAt}}
+{{/recentInteractions}}
+{{^recentInteractions}}
+No recent interactions found.
+{{/recentInteractions}}
+
+## Archived Data
+{{#archivedData.events}}
+- Event: {{type}} - {{description}}
+{{/archivedData.events}}
+{{#archivedData.facts}}
+- Fact: {{content}}
+{{/archivedData.facts}}
+{{#archivedData.todos}}
+- Todo: {{title}} - {{status}}
+{{/archivedData.todos}}
+{{^archivedData}}
+No archived data found.
+{{/archivedData}}
+
+## Analysis Depth
+Requested depth: {{depth}}
+
+Please generate insights based on the above information. Ensure all claims are backed by citations to the source data.
+
+
+
+

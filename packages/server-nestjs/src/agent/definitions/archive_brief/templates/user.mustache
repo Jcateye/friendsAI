@@ -1,0 +1,69 @@
+## Operation: {{operation}}
+
+---
+
+{{#archive_extract}}
+## Archive Extraction Context
+
+**Conversation ID:** {{conversationId}}
+{{#content}}**Content Preview:** {{content}}{{/content}}
+
+**Message Count:** {{messages.length}}
+
+{{#messages}}
+### [{{index}}] {{role}}
+{{content}}
+
+{{/messages}}
+{{^messages}}
+No messages available.
+
+{{/messages}}
+
+## Task
+
+Extract and summarize this conversation archive into a structured format following the output format specified in the system prompt. Include:
+- Key points discussed
+- Decisions made
+- Action items identified
+- Participants involved
+- **Contacts mentioned**: Extract any people mentioned with their details (name, company, position, email)
+- **Facts/Information**: Important information points, categorized by topic (项目, 技术, 商务, etc.)
+- **Tags/Topics**: Relevant topics or themes discussed
+- **Dates/Time**: Any deadlines, meetings, or milestones mentioned with dates
+
+Output in **Chinese** unless the conversation is clearly English-only.
+{{/archive_extract}}
+
+{{#brief_generate}}
+## Contact Briefing Context
+
+**Contact ID:** {{contactId}}
+**Name:** {{name}}
+{{#company}}**Company:** {{company}}{{/company}}
+{{#position}}**Position:** {{position}}{{/position}}
+{{#tags}}**Tags:** {{tags}}{{/tags}}
+
+**Recent Interactions Count:** {{recentInteractions.length}}
+
+{{#recentInteractions}}
+### [{{index}}] {{#summary}}{{summary}}{{/summary}}{{^summary}}No summary available{{/summary}}
+{{#createdAt}}**Date:** {{createdAt}}{{/createdAt}}
+
+{{/recentInteractions}}
+{{^recentInteractions}}
+No recent interactions available.
+
+{{/recentInteractions}}
+
+## Task
+
+Generate a comprehensive briefing following the output format specified in the system prompt. Include:
+- Relationship background and context
+- Recent interaction summary
+- Key topics and interests
+- Suggested conversation starters
+- Recommended talking points
+
+Output in **Chinese** unless the contact data is clearly English-only.
+{{/brief_generate}}

@@ -1,9 +1,9 @@
 import { Module } from '@nestjs/common';
-import { ActionPanelService } from './action-panel/action-panel.service';
+import { AgentModule } from '../agent/agent.module';
 import { ActionPanelController } from './action-panel/action-panel.controller';
 
 @Module({
-  providers: [ActionPanelService],
-  controllers: [ActionPanelController]
+  imports: [AgentModule],
+  controllers: [ActionPanelController],
 })
 export class ActionPanelModule {}

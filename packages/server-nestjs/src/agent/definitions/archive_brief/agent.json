@@ -1,0 +1,26 @@
+{
+  "id": "archive_brief",
+  "version": "1.0.0",
+  "prompt": {
+    "systemTemplate": "templates/system.mustache",
+    "userTemplate": "templates/user.mustache",
+    "defaultsFile": "defaults.json"
+  },
+  "memory": {
+    "strategy": "conversation",
+    "maxTokens": 3000
+  },
+  "tools": {
+    "mode": "none"
+  },
+  "validation": {
+    "outputSchema": "schemas/output.schema.json"
+  },
+  "cache": {
+    "ttl": 86400
+  }
+}
+
+
+
+

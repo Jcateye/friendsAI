@@ -1,0 +1,22 @@
+## Conversation Context
+
+**Conversation ID:** {{conversationId}}
+**Message Count:** {{messages.length}}
+
+{{#messages}}
+{{#index}}### [{{index}}] {{role}}{{/index}}{{^index}}### {{role}}{{/index}}
+{{content}}
+
+{{/messages}}
+{{^messages}}
+No messages available.
+
+{{/messages}}
+
+## Task
+
+Based on the conversation above, generate a title and summary in **Chinese** following the output format specified in the system prompt.
+
+
+
+

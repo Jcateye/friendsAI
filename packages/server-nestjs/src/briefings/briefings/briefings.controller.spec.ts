@@ -5,11 +5,17 @@ import { NotFoundException } from '@nestjs/common';
 
 const MOCK_USER_ID = 'mock-user-id';
 const MOCK_CONTACT_ID = 'contact-uuid-1';
-const MOCK_BRIEFING_TEXT = 'This is a generated briefing.';
+const MOCK_BRIEFING = {
+  id: 'brief-1',
+  contact_id: MOCK_CONTACT_ID,
+  content: 'This is a generated briefing.',
+  generated_at: new Date().toISOString(),
+  source_hash: 'hash',
+};
 
 // Mock BriefingService
 const mockBriefingService = {
-  generateBriefing: jest.fn(),
+  getBriefing: jest.fn(),
   refreshBriefing: jest.fn(),
 };
 
@@ -35,23 +41,23 @@ describe('BriefingsController', () => {
     expect(controller).toBeDefined();
   });
 
-  describe('generateBriefing', () => {
+  describe('getBriefing', () => {
     // Mock Request object
     const mockRequest = { user: { id: MOCK_USER_ID } } as any;
 
     beforeEach(() => {
-      mockBriefingService.generateBriefing.mockResolvedValue(MOCK_BRIEFING_TEXT);
+      mockBriefingService.getBriefing.mockResolvedValue(MOCK_BRIEFING);
     });
 
-    it('should call BriefingService.generateBriefing with correct parameters', async () => {
-      const result = await controller.generateBriefing(mockRequest, MOCK_CONTACT_ID);
-      expect(service.generateBriefing).toHaveBeenCalledWith(MOCK_CONTACT_ID, MOCK_USER_ID);
-      expect(result).toEqual(MOCK_BRIEFING_TEXT);
+    it('should call BriefingService.getBriefing with correct parameters', async () => {
+      const result = await controller.getBriefing(mockRequest, MOCK_CONTACT_ID);
+      expect(service.getBriefing).toHaveBeenCalledWith(MOCK_CONTACT_ID, MOCK_USER_ID);
+      expect(result).toEqual(MOCK_BRIEFING);
     });
 
     it('should throw NotFoundException if BriefingService throws NotFoundException', async () => {
-      mockBriefingService.generateBriefing.mockRejectedValue(new NotFoundException('Contact not found'));
-      await expect(controller.generateBriefing(mockRequest, MOCK_CONTACT_ID)).rejects.toThrow(NotFoundException);
+      mockBriefingService.getBriefing.mockRejectedValue(new NotFoundException('Contact not found'));
+      await expect(controller.getBriefing(mockRequest, MOCK_CONTACT_ID)).rejects.toThrow(NotFoundException);
     });
   });
 
@@ -59,13 +65,13 @@ describe('BriefingsController', () => {
     const mockRequest = { user: { id: MOCK_USER_ID } } as any;
 
     beforeEach(() => {
-      mockBriefingService.refreshBriefing.mockResolvedValue(MOCK_BRIEFING_TEXT);
+      mockBriefingService.refreshBriefing.mockResolvedValue(MOCK_BRIEFING);
     });
 
     it('should call BriefingService.refreshBriefing with correct parameters', async () => {
       const result = await controller.refreshBriefing(mockRequest, MOCK_CONTACT_ID);
       expect(service.refreshBriefing).toHaveBeenCalledWith(MOCK_CONTACT_ID, MOCK_USER_ID);
-      expect(result).toEqual(MOCK_BRIEFING_TEXT);
+      expect(result).toEqual(MOCK_BRIEFING);
     });
 
     it('should throw NotFoundException if BriefingService throws NotFoundException', async () => {

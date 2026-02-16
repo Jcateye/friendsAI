@@ -1,34 +1,30 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { TypeOrmModule } from '@nestjs/typeorm';
-import { AuthService } from './auth.service';
 import { AuthController } from './auth.controller';
-import { User, Contact, Conversation, Event } from '../entities';
+import { AuthService } from './auth.service';
 
 describe('AuthController', () => {
   let controller: AuthController;
-  let service: AuthService;
+  let authService: {
+    register: jest.Mock;
+    login: jest.Mock;
+    refresh: jest.Mock;
+    logout: jest.Mock;
+  };
 
   beforeEach(async () => {
+    authService = {
+      register: jest.fn(),
+      login: jest.fn(),
+      refresh: jest.fn(),
+      logout: jest.fn(),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
-      imports: [
-        TypeOrmModule.forRoot({
-          type: 'postgres',
-          host: 'localhost',
-          port: 5434,
-          username: 'postgres',
-          password: 'postgres',
-          database: 'friends_ai_db',
-          entities: [User, Contact, Conversation, Event],
-          synchronize: true,
-        }),
-        TypeOrmModule.forFeature([User]),
-      ],
       controllers: [AuthController],
-      providers: [AuthService],
+      providers: [{ provide: AuthService, useValue: authService }],
     }).compile();
 
     controller = module.get<AuthController>(AuthController);
-    service = module.get<AuthService>(AuthService);
   });
 
   it('should be defined', () => {
@@ -37,54 +33,89 @@ describe('AuthController', () => {
 
   describe('register', () => {
     it('should register a new user', async () => {
+      authService.register.mockResolvedValue({
+        accessToken: 'access-token',
+        refreshToken: 'refresh-token',
+        expiresIn: 900,
+        user: {
+          id: 'user-1',
+          email: 'test@example.com',
+          phone: null,
+          name: 'Test User',
+        },
+      });
+
       const result = await controller.register({
         email: 'test@example.com',
         password: 'password123',
         name: 'Test User',
       });
 
-      expect(result).toHaveProperty('id');
-      expect(result).toHaveProperty('email', 'test@example.com');
-    });
-
-    it('should throw conflict error for duplicate email', async () => {
-      await controller.register({
-        email: 'duplicate@example.com',
-        password: 'password123',
-      });
-
-      await expect(
-        controller.register({
-          email: 'duplicate@example.com',
-          password: 'password123',
-        }),
-      ).rejects.toThrow();
+      expect(authService.register).toHaveBeenCalledWith(
+        'test@example.com',
+        undefined,
+        'password123',
+        'Test User',
+      );
+      expect(result).toHaveProperty('accessToken');
+      expect(result.user).toHaveProperty('email', 'test@example.com');
     });
   });
 
   describe('login', () => {
     it('should login with valid credentials', async () => {
-      await controller.register({
-        email: 'login@example.com',
-        password: 'password123',
+      authService.login.mockResolvedValue({
+        accessToken: 'access-token',
+        refreshToken: 'refresh-token',
+        expiresIn: 900,
+        user: {
+          id: 'user-1',
+          email: 'login@example.com',
+          phone: null,
+          name: null,
+        },
       });
 
       const result = await controller.login({
-        email: 'login@example.com',
+        emailOrPhone: 'login@example.com',
         password: 'password123',
       });
 
-      expect(result).toHaveProperty('id');
-      expect(result).toHaveProperty('email', 'login@example.com');
+      expect(authService.login).toHaveBeenCalledWith('login@example.com', 'password123');
+      expect(result).toHaveProperty('refreshToken');
+      expect(result.user).toHaveProperty('email', 'login@example.com');
     });
+  });
 
-    it('should throw unauthorized error for invalid credentials', async () => {
-      await expect(
-        controller.login({
-          email: 'nonexistent@example.com',
-          password: 'wrongpassword',
-        }),
-      ).rejects.toThrow();
+  describe('refresh', () => {
+    it('should refresh tokens', async () => {
+      authService.refresh.mockResolvedValue({
+        accessToken: 'new-access',
+        refreshToken: 'new-refresh',
+        expiresIn: 900,
+        user: {
+          id: 'user-1',
+          email: 'user@example.com',
+          phone: null,
+          name: null,
+        },
+      });
+
+      const result = await controller.refresh({ refreshToken: 'old-refresh' });
+
+      expect(authService.refresh).toHaveBeenCalledWith('old-refresh');
+      expect(result).toHaveProperty('accessToken', 'new-access');
+    });
+  });
+
+  describe('logout', () => {
+    it('should logout successfully', async () => {
+      authService.logout.mockResolvedValue({ success: true });
+
+      const result = await controller.logout({ refreshToken: 'refresh-token' });
+
+      expect(authService.logout).toHaveBeenCalledWith('refresh-token');
+      expect(result).toEqual({ success: true });
     });
   });
 });

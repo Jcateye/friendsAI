@@ -1,0 +1,21 @@
+[
+  {
+    "description": "User views contact list from backend",
+    "steps": [
+      "Open contacts tab",
+      "Fetch contacts from API",
+      "Render contacts grouped by initial",
+      "Tap a contact to open detail page"
+    ],
+    "passes": true
+  },
+  {
+    "description": "User sees contact brief and recent events",
+    "steps": [
+      "Open a contact detail page",
+      "Fetch contact context and brief",
+      "Render brief summary and recent events list"
+    ],
+    "passes": true
+  }
+]

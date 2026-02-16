@@ -1,0 +1,28 @@
+{
+  "id": "contact_insight",
+  "version": "1.0.0",
+  "prompt": {
+    "systemTemplate": "templates/system.mustache",
+    "userTemplate": "templates/user.mustache",
+    "defaultsFile": "defaults.json"
+  },
+  "memory": {
+    "strategy": "contact",
+    "maxTokens": 4000
+  },
+  "tools": {
+    "mode": "allowlist",
+    "allowedTools": []
+  },
+  "validation": {
+    "inputSchema": "schemas/input.schema.json",
+    "outputSchema": "schemas/output.schema.json"
+  },
+  "cache": {
+    "ttl": 21600
+  }
+}
+
+
+
+

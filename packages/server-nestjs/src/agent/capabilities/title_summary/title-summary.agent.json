@@ -1,0 +1,30 @@
+{
+  "id": "title_summary",
+  "name": "Title Summary Agent",
+  "version": "1.0.0",
+  "description": "为对话生成标题和摘要",
+  "prompt": {
+    "systemTemplate": "templates/system.mustache",
+    "userTemplate": "templates/prompt.mustache",
+    "defaultsFile": "defaults.json"
+  },
+  "memory": {
+    "strategy": "conversation",
+    "maxTokens": 2000
+  },
+  "tools": {
+    "mode": "none"
+  },
+  "validation": {
+    "inputSchemaFile": "schemas/input.schema.json",
+    "outputSchemaFile": "schemas/output.schema.json"
+  },
+  "cache": {
+    "ttl": 86400,
+    "sourceHashFields": ["conversationId", "content"]
+  }
+}
+
+
+
+

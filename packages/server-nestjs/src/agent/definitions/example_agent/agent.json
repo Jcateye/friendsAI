@@ -1,0 +1,27 @@
+{
+  "id": "example_agent",
+  "version": "1.0.0",
+  "prompt": {
+    "systemTemplate": "system.mustache",
+    "userTemplate": "user.mustache",
+    "defaultsFile": "defaults.json"
+  },
+  "memory": {
+    "strategy": "conversation",
+    "maxTokens": 1000
+  },
+  "tools": {
+    "mode": "allowlist",
+    "allowedTools": ["example_tool"]
+  },
+  "validation": {
+    "outputSchema": "output.schema.json"
+  },
+  "cache": {
+    "ttl": 3600
+  }
+}
+
+
+
+

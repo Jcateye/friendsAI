@@ -1,0 +1,20 @@
+[
+  {
+    "description": "User views open action items",
+    "steps": [
+      "Open action tab",
+      "Fetch open actions from API",
+      "Render action list with due dates"
+    ],
+    "passes": true
+  },
+  {
+    "description": "User marks an action item done",
+    "steps": [
+      "Tap action item",
+      "Update status to done",
+      "List refreshes without the completed item"
+    ],
+    "passes": true
+  }
+]

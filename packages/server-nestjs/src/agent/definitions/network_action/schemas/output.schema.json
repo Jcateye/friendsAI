@@ -1,0 +1,145 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "followUps": {
+      "type": "array",
+      "description": "需要跟进的联系人列表",
+      "items": {
+        "type": "object",
+        "properties": {
+          "contactId": {
+            "type": "string",
+            "description": "联系人 ID"
+          },
+          "contactName": {
+            "type": "string",
+            "description": "联系人姓名"
+          },
+          "reason": {
+            "type": "string",
+            "description": "跟进原因"
+          },
+          "priority": {
+            "type": "string",
+            "enum": [
+              "high",
+              "medium",
+              "low"
+            ],
+            "description": "优先级"
+          },
+          "suggestedAction": {
+            "type": "string",
+            "description": "建议的行动"
+          },
+          "timingReason": {
+            "type": "string",
+            "description": "为何现在是最佳时机（身份迁移窗口、节日节点、行业事件等）"
+          },
+          "valueFirstSuggestion": {
+            "type": "string",
+            "description": "先给价值点的建议（降低索取感的策略）"
+          },
+          "followupPlan": {
+            "type": "string",
+            "description": "后续跟进计划（时间规划、内容准备、目标设定）"
+          }
+        },
+        "required": [
+          "contactId",
+          "contactName",
+          "reason",
+          "priority",
+          "suggestedAction",
+          "timingReason",
+          "valueFirstSuggestion",
+          "followupPlan"
+        ]
+      }
+    },
+    "recommendations": {
+      "type": "array",
+      "description": "关系网络建议",
+      "items": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "connection",
+              "followup",
+              "introduction"
+            ],
+            "description": "建议类型"
+          },
+          "description": {
+            "type": "string",
+            "description": "建议描述"
+          },
+          "contacts": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "相关联系人 ID 列表"
+          },
+          "confidence": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "description": "置信度"
+          },
+          "reason": {
+            "type": "string",
+            "description": "为何推荐此行动的原因"
+          }
+        },
+        "required": [
+          "type",
+          "description"
+        ]
+      }
+    },
+    "synthesis": {
+      "type": "string",
+      "description": "可读的汇总解释"
+    },
+    "nextActions": {
+      "type": "array",
+      "description": "可执行的下一步行动",
+      "items": {
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string",
+            "description": "行动描述"
+          },
+          "priority": {
+            "type": "string",
+            "enum": [
+              "high",
+              "medium",
+              "low"
+            ],
+            "description": "优先级"
+          },
+          "estimatedTime": {
+            "type": "string",
+            "description": "预估时间（可选）"
+          }
+        },
+        "required": [
+          "action",
+          "priority"
+        ]
+      }
+    }
+  },
+  "required": [
+    "followUps",
+    "recommendations",
+    "synthesis",
+    "nextActions"
+  ]
+}

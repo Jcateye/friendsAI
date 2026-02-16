@@ -7,15 +7,24 @@
     "packages/*"
   ],
   "scripts": {
-    "client:dev": "npm run dev:h5 -w @friends-ai/client",
-    "client:dev:weapp": "npm run dev:weapp -w @friends-ai/client",
-    "client:build": "npm run build:h5 -w @friends-ai/client",
-    "client:build:weapp": "npm run build:weapp -w @friends-ai/client",
-    "server:dev": "npm run dev -w @friends-ai/server",
-    "server:build": "npm run build -w @friends-ai/server",
-    "server:start": "npm run start -w @friends-ai/server",
-    "dev": "concurrently \"npm run client:dev\" \"npm run server:dev\"",
-    "build": "npm run client:build && npm run server:build"
+    "web:dev": "bun run --cwd packages/web dev",
+    "web:build": "bun run --cwd packages/web build",
+    "web:preview": "bun run --cwd packages/web preview",
+    "server:dev": "bun run --cwd packages/server-nestjs start:dev",
+    "server:build": "bun run --cwd packages/server-nestjs build",
+    "server:start": "bun run --cwd packages/server-nestjs start:prod",
+    "server:migrate": "bun run --cwd packages/server-nestjs migrate",
+    "dev": "concurrently \"bun run web:dev\" \"bun run server:dev\"",
+    "build": "bun run web:build && bun run server:build",
+    "user-stories:verify": "node scripts/verify-user-stories.js",
+    "ralph": "bun run scripts/ralph/runner.ts",
+    "test": "bun run --cwd packages/server-nestjs test",
+    "test:watch": "bun run --cwd packages/server-nestjs test:watch",
+    "test:coverage": "bun run --cwd packages/server-nestjs test:cov",
+    "test:e2e": "bun run --cwd packages/server-nestjs test:e2e",
+    "db:migration:smoke": "bun run --cwd packages/server-nestjs migration:smoke",
+    "web:bundle:check": "node scripts/check-web-bundle-size.js",
+    "test:ci": "bun run db:migration:smoke && bun run test && bun run test:e2e && bun run web:build && bun run web:bundle:check"
   },
   "devDependencies": {
     "ajv": "^8.17.1",
@@ -23,5 +32,11 @@
   },
   "engines": {
     "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "openclaw": "^2026.1.30",
+    "openspec": "^0.0.0",
+    "pg": "^8.18.0",
+    "uuidv7": "^1.1.0"
   }
 }

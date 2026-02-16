@@ -1,0 +1,31 @@
+{
+  "id": "archive_brief",
+  "name": "Archive Brief Agent",
+  "version": "1.0.0",
+  "description": "支持归档提取和简报生成两个操作",
+  "operations": ["archive_extract", "brief_generate"],
+  "prompt": {
+    "systemTemplate": "templates/system.mustache",
+    "userTemplate": "templates/prompt.mustache",
+    "defaultsFile": "defaults.json"
+  },
+  "memory": {
+    "strategy": "conversation",
+    "maxTokens": 4000
+  },
+  "tools": {
+    "mode": "none"
+  },
+  "validation": {
+    "inputSchemaFile": "schemas/input.schema.json",
+    "outputSchemaFile": "schemas/output.schema.json"
+  },
+  "cache": {
+    "ttl": 86400,
+    "sourceHashFields": ["operation", "conversationId", "contactId"]
+  }
+}
+
+
+
+

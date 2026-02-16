@@ -1,0 +1,44 @@
+{{#archive_extract}}
+请分析以下对话内容，提取关键信息：
+
+对话ID: {{conversationId}}
+内容: {{content}}
+
+消息列表:
+{{#messages}}
+- {{role}}: {{content}}
+{{/messages}}
+
+请返回归档提取结果，包含：
+- id: 对话ID
+- status: 处理状态
+- summary: 对话摘要
+- payload: 结构化数据
+{{/archive_extract}}
+
+{{#brief_generate}}
+请为以下联系人生成会前简报：
+
+联系人ID: {{contactId}}
+姓名: {{name}}
+公司: {{company}}
+职位: {{position}}
+标签: {{tags}}
+
+{{#recentInteractions}}
+最近交互:
+{{#.}}
+- {{date}}: {{type}} - {{summary}}
+{{/.}}
+{{/recentInteractions}}
+
+请返回简报内容，包含：
+- id: 简报ID
+- contact_id: 联系人ID
+- content: 简报内容
+- generated_at: 生成时间
+{{/brief_generate}}
+
+
+
+

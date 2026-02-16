@@ -1,26 +1,35 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, ManyToOne, OneToMany, JoinColumn } from 'typeorm';
+import { Entity, PrimaryColumn, Column, CreateDateColumn, ManyToOne, OneToMany, JoinColumn, Index, BeforeInsert, BeforeUpdate } from 'typeorm';
+import { uuidv7 } from 'uuidv7';
 import { User } from './user.entity';
 import { Event } from './event.entity';
 import { Conversation } from './conversation.entity';
+import { ContactFact } from './contact-fact.entity';
+import { ContactTodo } from './contact-todo.entity';
+import { ContactBrief } from './contact-brief.entity';
+import { timestampMsTransformer } from './timestamp-ms.transformer';
 
-@Entity()
+@Entity({ name: 'contacts' })
+@Index('IDX_contacts_userId', ['userId'])
 export class Contact {
-  @PrimaryGeneratedColumn('uuid')
+  @PrimaryColumn('uuid')
   id: string;
 
-  @Column()
+  @Column('varchar', { length: 255 })
   name: string;
 
-  @Column({ nullable: true })
+  @Column('varchar', { length: 255, nullable: true })
+  alias: string | null;
+
+  @Column('varchar', { length: 255, nullable: true })
   email: string | null;
 
-  @Column({ nullable: true })
+  @Column('varchar', { length: 50, nullable: true })
   phone: string | null;
 
-  @Column({ nullable: true })
+  @Column('varchar', { length: 255, nullable: true })
   company: string | null;
 
-  @Column({ nullable: true })
+  @Column('varchar', { length: 255, nullable: true })
   position: string | null;
 
   @Column({ type: 'jsonb', nullable: true })
@@ -29,22 +38,49 @@ export class Contact {
   @Column({ type: 'simple-array', nullable: true })
   tags: string[] | null;
 
+  @Column({ type: 'text', nullable: true })
+  note: string | null;
+
   @ManyToOne(() => User, user => user.contacts, { nullable: true })
   @JoinColumn({ name: 'userId' })
   user: User | null;
 
-  @Column({ nullable: true })
+  @Column({ type: 'uuid', nullable: true })
   userId: string | null;
 
   @OneToMany(() => Event, event => event.contact)
   events: Event[];
 
+  @OneToMany(() => ContactFact, fact => fact.contact)
+  facts: ContactFact[];
+
+  @OneToMany(() => ContactTodo, todo => todo.contact)
+  todos: ContactTodo[];
+
+  @OneToMany(() => ContactBrief, brief => brief.contact)
+  briefs: ContactBrief[];
+
   @OneToMany(() => Conversation, conversation => conversation.contact)
   conversations: Conversation[];
 
-  @CreateDateColumn()
+  @Column({ type: 'bigint', transformer: timestampMsTransformer })
   createdAt: Date;
 
-  @UpdateDateColumn()
+  @Column({ type: 'bigint', transformer: timestampMsTransformer })
   updatedAt: Date;
+
+  @BeforeInsert()
+  setCreatedAt() {
+    if (!this.id) {
+      this.id = uuidv7();
+    }
+    const now = new Date();
+    this.createdAt = now;
+    this.updatedAt = now;
+  }
+
+  @BeforeUpdate()
+  updateTimestamp() {
+    this.updatedAt = new Date();
+  }
 }

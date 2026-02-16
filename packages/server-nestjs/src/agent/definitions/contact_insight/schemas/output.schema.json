@@ -1,0 +1,242 @@
+{
+  "type": "object",
+  "properties": {
+    "profileSummary": {
+      "type": "string",
+      "minLength": 50,
+      "maxLength": 1000,
+      "description": "A concise summary of the contact's profile and relationship context"
+    },
+    "relationshipSignals": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "description": "Type of relationship signal (e.g., 'positive_trend', 'engagement_opportunity', 'risk_indicator')"
+          },
+          "description": {
+            "type": "string",
+            "minLength": 20,
+            "maxLength": 500,
+            "description": "Detailed description of the relationship signal"
+          },
+          "strength": {
+            "type": "string",
+            "enum": ["weak", "moderate", "strong"],
+            "description": "Strength of the signal"
+          }
+        },
+        "required": ["type", "description", "strength"]
+      },
+      "minItems": 0,
+      "description": "Signals indicating relationship dynamics"
+    },
+    "opportunities": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 100,
+            "description": "Title of the opportunity"
+          },
+          "description": {
+            "type": "string",
+            "minLength": 20,
+            "maxLength": 500,
+            "description": "Detailed description of the opportunity"
+          },
+          "priority": {
+            "type": "string",
+            "enum": ["low", "medium", "high"],
+            "description": "Priority level of the opportunity"
+          }
+        },
+        "required": ["title", "description", "priority"]
+      },
+      "minItems": 0,
+      "description": "Opportunities for engagement or relationship building"
+    },
+    "risks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 100,
+            "description": "Title of the risk"
+          },
+          "description": {
+            "type": "string",
+            "minLength": 20,
+            "maxLength": 500,
+            "description": "Detailed description of the risk"
+          },
+          "severity": {
+            "type": "string",
+            "enum": ["low", "medium", "high"],
+            "description": "Severity level of the risk"
+          }
+        },
+        "required": ["title", "description", "severity"]
+      },
+      "minItems": 0,
+      "description": "Potential risks or concerns"
+    },
+    "suggestedActions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 200,
+            "description": "Suggested action to take"
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 20,
+            "maxLength": 500,
+            "description": "Reason for suggesting this action"
+          },
+          "urgency": {
+            "type": "string",
+            "enum": ["low", "medium", "high"],
+            "description": "Urgency level of the action"
+          }
+        },
+        "required": ["action", "reason", "urgency"]
+      },
+      "minItems": 0,
+      "description": "Suggested actions to take"
+    },
+    "openingLines": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 10,
+        "maxLength": 200,
+        "description": "A contextually relevant opening line for starting a conversation"
+      },
+      "minItems": 1,
+      "maxItems": 10,
+      "description": "Suggested opening lines for conversations"
+    },
+    "citations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "source": {
+            "type": "string",
+            "description": "Source identifier (e.g., conversation ID, event ID)"
+          },
+          "type": {
+            "type": "string",
+            "enum": ["conversation", "event", "fact", "todo"],
+            "description": "Type of source"
+          },
+          "reference": {
+            "type": "string",
+            "description": "Reference to the specific data point"
+          }
+        },
+        "required": ["source", "type", "reference"]
+      },
+      "minItems": 0,
+      "description": "Citations referencing specific data points used in the analysis"
+    },
+    "confidence": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1,
+      "description": "Overall confidence score for this insight output"
+    },
+    "sourceRefs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string"
+          },
+          "reference": {
+            "type": "string"
+          }
+        },
+        "required": ["type", "reference"]
+      },
+      "minItems": 0,
+      "description": "Normalized source references for traceability"
+    },
+    "evidenceChains": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "summary": {
+            "type": "string",
+            "minLength": 3
+          },
+          "sourceType": {
+            "type": "string"
+          },
+          "sourceRef": {
+            "type": "string"
+          }
+        },
+        "required": ["summary", "sourceType", "sourceRef"]
+      },
+      "minItems": 0,
+      "description": "Summarized evidence chains without exposing full raw message text"
+    },
+    "sourceHash": {
+      "type": "string",
+      "description": "Hash of the source data used for caching"
+    },
+    "generatedAt": {
+      "type": "number",
+      "description": "Timestamp when the insight was generated"
+    },
+    "priorityScore": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 100,
+      "description": "Priority score (0-100) based on relationship health, interaction frequency, and opportunity urgency"
+    },
+    "reasonTags": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Reason tags for categorizing why follow-up or attention is needed (e.g., long_time_no_contact, upcoming_event, stale_commitment, unreciprocated_value)"
+    },
+    "relationshipRiskLevel": {
+      "type": "string",
+      "enum": ["low", "medium", "high"],
+      "description": "Relationship risk level based on relationship health indicators"
+    }
+  },
+  "required": [
+    "profileSummary",
+    "relationshipSignals",
+    "opportunities",
+    "risks",
+    "suggestedActions",
+    "openingLines",
+    "citations",
+    "confidence",
+    "sourceRefs",
+    "evidenceChains",
+    "priorityScore",
+    "reasonTags",
+    "relationshipRiskLevel"
+  ]
+}

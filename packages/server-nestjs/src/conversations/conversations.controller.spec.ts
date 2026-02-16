@@ -1,83 +1,41 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { TypeOrmModule, getRepositoryToken } from '@nestjs/typeorm';
 import { ConversationsController } from './conversations.controller';
 import { ConversationsService } from './conversations.service';
-import { Conversation, User, Contact, Event } from '../entities';
-import { Request } from '@nestjs/common';
-import { v4 as uuidv4 } from 'uuid';
-import { DataSource, Repository } from 'typeorm';
-
-// Mock Request object
-const mockRequest = { user: { id: uuidv4() } } as any;
+import { MessagesService } from './messages.service';
 
 describe('ConversationsController', () => {
   let controller: ConversationsController;
-  let service: ConversationsService;
-  let userId: string;
-  let dataSource: DataSource;
-  let userRepository: Repository<User>;
-  let contactRepository: Repository<Contact>;
-  let mockContactId: string;
+  let conversationsService: {
+    create: jest.Mock;
+    findAll: jest.Mock;
+    findOne: jest.Mock;
+  };
+  let messagesService: {
+    listMessages: jest.Mock;
+  };
+
+  const mockRequest = { user: { id: 'user-1' } };
 
   beforeEach(async () => {
-    dataSource = new DataSource({
-      type: 'postgres',
-      host: 'localhost',
-      port: 5434,
-      username: 'postgres',
-      password: 'postgres',
-      database: 'friends_ai_db',
-      entities: [User, Contact, Conversation, Event],
-      synchronize: true,
-      logging: false,
-    });
-    await dataSource.initialize();
-    await dataSource.dropDatabase();
-    await dataSource.synchronize();
+    conversationsService = {
+      create: jest.fn(),
+      findAll: jest.fn(),
+      findOne: jest.fn(),
+    };
+
+    messagesService = {
+      listMessages: jest.fn(),
+    };
 
     const module: TestingModule = await Test.createTestingModule({
-      imports: [
-        TypeOrmModule.forRoot({
-          type: 'postgres',
-          host: 'localhost',
-          port: 5434,
-          username: 'postgres',
-          password: 'postgres',
-          database: 'friends_ai_db',
-          entities: [User, Contact, Conversation, Event],
-          synchronize: true,
-        }),
-        TypeOrmModule.forFeature([Conversation, User, Contact]),
-      ],
       controllers: [ConversationsController],
-      providers: [ConversationsService],
+      providers: [
+        { provide: ConversationsService, useValue: conversationsService },
+        { provide: MessagesService, useValue: messagesService },
+      ],
     }).compile();
 
     controller = module.get<ConversationsController>(ConversationsController);
-    service = module.get<ConversationsService>(ConversationsService);
-    userRepository = module.get<Repository<User>>(getRepositoryToken(User));
-    contactRepository = module.get<Repository<Contact>>(getRepositoryToken(Contact));
-    userId = mockRequest.user.id;
-
-    const user = userRepository.create({
-      id: userId,
-      email: `${userId}@test.com`,
-      password: 'hashedpassword',
-      name: 'Test User',
-    });
-    await userRepository.save(user);
-
-    const contact = contactRepository.create({
-      id: uuidv4(),
-      name: 'Mock Contact',
-      userId: user.id,
-    });
-    await contactRepository.save(contact);
-    mockContactId = contact.id;
-  });
-
-  afterEach(async () => {
-    await dataSource.destroy();
   });
 
   it('should be defined', () => {
@@ -86,49 +44,90 @@ describe('ConversationsController', () => {
 
   describe('create', () => {
     it('should create a new conversation', async () => {
+      conversationsService.create.mockResolvedValue({
+        id: 'conv-1',
+        content: 'Test conversation content',
+        userId: 'user-1',
+      });
+
       const result = await controller.create(mockRequest, {
         content: 'Test conversation content',
       });
-      expect(result).toHaveProperty('id');
-      expect(result).toHaveProperty('content', 'Test conversation content');
-      expect(result).toHaveProperty('userId', userId);
+
+      expect(conversationsService.create).toHaveBeenCalledWith(
+        { title: undefined, content: 'Test conversation content' },
+        'user-1',
+        undefined,
+      );
+      expect(result).toHaveProperty('id', 'conv-1');
     });
 
     it('should create a new conversation with contactId', async () => {
+      conversationsService.create.mockResolvedValue({
+        id: 'conv-2',
+        content: 'Conversation with contact',
+        userId: 'user-1',
+        contactId: 'contact-1',
+      });
+
       const result = await controller.create(mockRequest, {
         content: 'Conversation with contact',
-        contactId: mockContactId,
+        contactId: 'contact-1',
       });
-      expect(result).toHaveProperty('id');
-      expect(result).toHaveProperty('content', 'Conversation with contact');
-      expect(result).toHaveProperty('contactId', mockContactId);
-      expect(result).toHaveProperty('userId', userId);
+
+      expect(conversationsService.create).toHaveBeenCalledWith(
+        { title: undefined, content: 'Conversation with contact' },
+        'user-1',
+        'contact-1',
+      );
+      expect(result).toHaveProperty('contactId', 'contact-1');
     });
   });
 
   describe('findAll', () => {
     it('should return all conversations', async () => {
-      await controller.create(mockRequest, { content: 'Conv 1' });
-      await controller.create(mockRequest, { content: 'Conv 2' });
+      conversationsService.findAll.mockResolvedValue([
+        { id: 'conv-1', content: 'Conv 1' },
+        { id: 'conv-2', content: 'Conv 2' },
+      ]);
 
-      const result = await controller.findAll();
-      expect(result.length).toBeGreaterThanOrEqual(2);
-      expect(result[0]).toHaveProperty('content');
+      const result = await controller.findAll(mockRequest);
+
+      expect(conversationsService.findAll).toHaveBeenCalledWith('user-1');
+      expect(result).toHaveLength(2);
     });
   });
 
   describe('findOne', () => {
     it('should return a conversation by id', async () => {
-      const created = await controller.create(mockRequest, { content: 'Find me' });
-      const result = await controller.findOne(created.id);
-      expect(result).toHaveProperty('id', created.id);
-      expect(result).toHaveProperty('content', 'Find me');
+      conversationsService.findOne.mockResolvedValue({ id: 'conv-1', content: 'Find me' });
+
+      const result = await controller.findOne(mockRequest, 'conv-1');
+
+      expect(conversationsService.findOne).toHaveBeenCalledWith('conv-1', 'user-1');
+      expect(result).toHaveProperty('id', 'conv-1');
     });
 
-    it('should return null for an invalid id (UUID format)', async () => {
-      const nonExistentUuid = uuidv4();
-      const result = await controller.findOne(nonExistentUuid);
+    it('should return null for a non-existent id', async () => {
+      conversationsService.findOne.mockResolvedValue(null);
+
+      const result = await controller.findOne(mockRequest, 'conv-unknown');
+
       expect(result).toBeNull();
+    });
+  });
+
+  describe('listMessages', () => {
+    it('should list messages with parsed limit', async () => {
+      messagesService.listMessages.mockResolvedValue({ items: [] });
+
+      await controller.listMessages(mockRequest, 'conv-1', '20');
+
+      expect(messagesService.listMessages).toHaveBeenCalledWith('conv-1', {
+        limit: 20,
+        before: undefined,
+        userId: 'user-1',
+      });
     });
   });
 });

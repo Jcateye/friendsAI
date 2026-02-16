@@ -1,0 +1,22 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "required": ["userId", "contactId"],
+  "properties": {
+    "userId": { "type": "string" },
+    "contactId": { "type": "string" },
+    "depth": {
+      "type": "string",
+      "enum": ["brief", "standard", "deep"],
+      "default": "standard"
+    },
+    "forceRefresh": {
+      "type": "boolean",
+      "default": false
+    }
+  }
+}
+
+
+
+

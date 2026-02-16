@@ -1,14 +1,25 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, ManyToOne, JoinColumn } from 'typeorm';
+import { Entity, PrimaryColumn, Column, CreateDateColumn, ManyToOne, JoinColumn, OneToMany, Index, BeforeInsert, BeforeUpdate } from 'typeorm';
+import { uuidv7 } from 'uuidv7';
 import { User } from './user.entity';
 import { Contact } from './contact.entity';
+import { Message } from './message.entity';
+import { timestampMsTransformer } from './timestamp-ms.transformer';
 
-@Entity()
+@Entity({ name: 'conversations' })
+@Index('IDX_conversations_userId', ['userId'])
+@Index('IDX_conversations_contactId', ['contactId'])
 export class Conversation {
-  @PrimaryGeneratedColumn('uuid')
+  @PrimaryColumn('uuid')
   id: string;
 
-  @Column({ type: 'text' })
+  @Column('varchar', { length: 255, nullable: true })
+  title: string | null;
+
+  @Column('text')
   content: string;
+
+  @Column('text', { nullable: true })
+  summary: string | null;
 
   @Column({ type: 'vector', nullable: true })
   embedding: number[] | null;
@@ -19,9 +30,12 @@ export class Conversation {
   @Column({ default: false })
   isArchived: boolean;
 
-  @ManyToOne(() => User, user => user.conversations, { nullable: true })
+  @Column('varchar', { length: 50, default: 'active' })
+  status: string;
+
+  @ManyToOne(() => User, user => user.conversations)
   @JoinColumn({ name: 'userId' })
-  user: User | null;
+  user: User;
 
   @Column()
   userId: string;
@@ -30,12 +44,30 @@ export class Conversation {
   @JoinColumn({ name: 'contactId' })
   contact: Contact | null;
 
-  @Column({ nullable: true })
+  @Column({ type: 'uuid', nullable: true })
   contactId: string | null;
 
-  @CreateDateColumn()
+  @OneToMany(() => Message, message => message.conversation)
+  messages: Message[];
+
+  @Column({ type: 'bigint', transformer: timestampMsTransformer })
   createdAt: Date;
 
-  @UpdateDateColumn()
+  @Column({ type: 'bigint', transformer: timestampMsTransformer })
   updatedAt: Date;
+
+  @BeforeInsert()
+  setCreatedAt() {
+    if (!this.id) {
+      this.id = uuidv7();
+    }
+    const now = new Date();
+    this.createdAt = now;
+    this.updatedAt = now;
+  }
+
+  @BeforeUpdate()
+  updateTimestamp() {
+    this.updatedAt = new Date();
+  }
 }

@@ -1,0 +1,12 @@
+[
+  {
+    "description": "User generates pre-meeting brief",
+    "steps": [
+      "Open contact detail",
+      "Tap refresh brief",
+      "Backend generates brief snapshot",
+      "Brief content is displayed"
+    ],
+    "passes": true
+  }
+]

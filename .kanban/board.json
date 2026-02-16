@@ -1,0 +1,3496 @@
+{
+  "project": "friendsAI",
+  "created": "2026-02-03",
+  "columns": [
+    "backlog",
+    "todo",
+    "in_progress",
+    "review",
+    "done"
+  ],
+  "agents": {
+    "codex": "OpenAI Codex - 适合批量代码生成、类型定义、样板代码",
+    "opencode": "OpenCode - 适合后端逻辑、数据库、API开发",
+    "claude-code": "Claude Code - 适合复杂架构、全栈集成、调试"
+  },
+  "tasks": [
+    {
+      "id": "TASK-001",
+      "title": "Router冲突修复",
+      "phase": "Task 1",
+      "priority": "P0",
+      "status": "todo",
+      "assignee": "opencode",
+      "estimate": "0.5天",
+      "dependencies": [],
+      "files": {
+        "modify": [
+          "packages/server/src/presentation/http/router.ts"
+        ]
+      },
+      "description": "修复 router.ts 中 /contacts 路径重复挂载问题。当前第17行挂载 contactsRouter 到 /contacts，第19行又挂载 contextRouter 到 /contacts，导致路由冲突。",
+      "requirements": {
+        "problem": "router.ts 第17行和第19行都挂载到 /contacts 路径，contextRouter 覆盖了 contactsRouter",
+        "solution": "将 contextRouter 的挂载路径从 /contacts 改为 /context",
+        "api_changes": [
+          {
+            "before": "GET /v1/contacts/:id/context",
+            "after": "GET /v1/context/:contactId/context"
+          },
+          {
+            "before": "GET /v1/contacts/:id/brief",
+            "after": "GET /v1/context/:contactId/brief"
+          }
+        ]
+      },
+      "implementation_steps": [
+        "1. 打开 packages/server/src/presentation/http/router.ts",
+        "2. 找到第19行 router.use('/contacts', contextRouter)",
+        "3. 修改为 router.use('/context', contextRouter)",
+        "4. 检查 contextRouter 内部路由参数名是否需要从 :id 改为 :contactId",
+        "5. 搜索前端代码中调用这些API的地方，同步修改路径"
+      ],
+      "acceptance_criteria": [
+        "GET /v1/contacts 返回联系人列表 (200)",
+        "GET /v1/contacts/:id 返回单个联系人详情 (200)",
+        "GET /v1/context/:contactId/brief 返回简报 (200)",
+        "GET /v1/context/:contactId/context 返回上下文 (200)",
+        "服务器启动无路由冲突警告",
+        "现有单元测试通过"
+      ],
+      "testing": {
+        "manual": [
+          "curl http://localhost:3000/v1/contacts -H 'Authorization: Bearer TOKEN'",
+          "curl http://localhost:3000/v1/context/CONTACT_ID/brief -H 'Authorization: Bearer TOKEN'"
+        ]
+      }
+    },
+    {
+      "id": "TASK-002",
+      "title": "Agent核心类型定义",
+      "phase": "Task 2",
+      "priority": "P0",
+      "status": "todo",
+      "assignee": "codex",
+      "estimate": "0.5天",
+      "dependencies": [],
+      "files": {
+        "create": [
+          "packages/server/src/agent/types.ts"
+        ],
+        "modify": [
+          "packages/server/src/types/index.ts"
+        ]
+      },
+      "description": "定义 Agent 系统核心 TypeScript 类型，包括工具状态机、SSE事件、三层上下文、引用等类型。这些类型是前后端对接的契约。",
+      "requirements": {
+        "types_to_define": [
+          {
+            "name": "ToolState",
+            "type": "union",
+            "values": [
+              "planned",
+              "requires_auth",
+              "requires_confirmation",
+              "executing",
+              "succeeded",
+              "failed"
+            ],
+            "description": "工具执行状态机，planned→requires_auth→requires_confirmation→executing→succeeded/failed"
+          },
+          {
+            "name": "SSEEventType",
+            "type": "union",
+            "values": [
+              "message.delta",
+              "message.final",
+              "ui",
+              "tool.trace",
+              "error"
+            ],
+            "description": "SSE 推送事件类型"
+          },
+          {
+            "name": "SSEEvent",
+            "type": "interface",
+            "fields": {
+              "event": "SSEEventType",
+              "data": "MessageDeltaData | MessageFinalData | A2UIPayload | ToolTrace | ErrorData"
+            }
+          },
+          {
+            "name": "MessageDeltaData",
+            "type": "interface",
+            "fields": {
+              "content": "string - 增量文本片段"
+            }
+          },
+          {
+            "name": "MessageFinalData",
+            "type": "interface",
+            "fields": {
+              "content": "string - 完整消息文本",
+              "citations": "Citation[] | undefined - 来源引用"
+            }
+          },
+          {
+            "name": "ErrorData",
+            "type": "interface",
+            "fields": {
+              "code": "string - 错误码如 AI_ERROR, TOOL_ERROR",
+              "message": "string - 错误描述"
+            }
+          },
+          {
+            "name": "ContextLayers",
+            "type": "interface",
+            "fields": {
+              "L1": "RecentMessages - 最近N条消息(建议20-40条)",
+              "L2": "ConversationSummary | null - 会话摘要(超过阈值时生成)",
+              "L3": "StructuredRecall | null - 联系人相关结构化数据"
+            }
+          },
+          {
+            "name": "RecentMessages",
+            "type": "interface",
+            "fields": {
+              "messages": "Array<{id: string, role: 'user'|'assistant', content: string, createdAt: string}>",
+              "totalCount": "number"
+            }
+          },
+          {
+            "name": "ConversationSummary",
+            "type": "interface",
+            "fields": {
+              "summary": "string - AI生成的会话摘要",
+              "keyTopics": "string[] - 关键话题",
+              "generatedAt": "string - ISO时间戳"
+            }
+          },
+          {
+            "name": "StructuredRecall",
+            "type": "interface",
+            "fields": {
+              "contactId": "string",
+              "events": "TimelineEvent[] - 时间轴事件",
+              "facts": "ContactFact[] - 联系人事实",
+              "todos": "TodoItem[] - 相关待办",
+              "brief": "ContactBrief | null - 简报缓存"
+            }
+          },
+          {
+            "name": "Citation",
+            "type": "interface",
+            "fields": {
+              "sourceMessageIds": "string[] - 引用的源消息ID列表",
+              "spans": "Array<{start: number, end: number, sourceIndex: number}> - 文本中的引用位置"
+            }
+          },
+          {
+            "name": "ToolTrace",
+            "type": "interface",
+            "fields": {
+              "id": "string - 工具调用唯一ID",
+              "name": "string - 工具名称如 feishu_list_templates",
+              "state": "ToolState",
+              "input": "Record<string, unknown> | undefined - 输入参数",
+              "output": "Record<string, unknown> | undefined - 输出结果",
+              "error": "string | undefined - 错误信息",
+              "startedAt": "string - ISO时间戳",
+              "completedAt": "string | undefined"
+            }
+          },
+          {
+            "name": "ToolDefinition",
+            "type": "interface",
+            "fields": {
+              "name": "string - 工具名称",
+              "description": "string - 工具描述(给AI看)",
+              "parameters": "ZodSchema - Zod参数校验schema",
+              "requiresAuth": "boolean - 是否需要连接器授权",
+              "requiresConfirmation": "boolean - 是否需要用户确认(写操作)",
+              "execute": "(params: unknown, context: ToolContext) => Promise<ToolExecutionResult>"
+            }
+          },
+          {
+            "name": "ToolContext",
+            "type": "interface",
+            "fields": {
+              "sessionId": "string",
+              "workspaceId": "string",
+              "userId": "string",
+              "contactId": "string | undefined"
+            }
+          },
+          {
+            "name": "ToolExecutionResult",
+            "type": "interface",
+            "fields": {
+              "success": "boolean",
+              "data": "unknown | undefined",
+              "error": "string | undefined"
+            }
+          }
+        ]
+      },
+      "implementation_steps": [
+        "1. 创建 packages/server/src/agent/types.ts",
+        "2. 按照 types_to_define 逐个定义类型",
+        "3. 添加 JSDoc 注释说明每个类型用途",
+        "4. 在 packages/server/src/types/index.ts 中 re-export",
+        "5. 确保与现有类型(如 TimelineEvent, ContactFact)兼容"
+      ],
+      "acceptance_criteria": [
+        "所有14个类型定义完整",
+        "类型可从 @/agent/types 正常 import",
+        "类型有完整的 JSDoc 注释",
+        "TypeScript 编译无错误",
+        "导出到 types/index.ts"
+      ],
+      "code_example": "// packages/server/src/agent/types.ts\n\n/** 工具执行状态机 */\nexport type ToolState = \n  | 'planned'           // AI规划了调用\n  | 'requires_auth'     // 需要连接器授权\n  | 'requires_confirmation' // 需要用户确认\n  | 'executing'         // 正在执行\n  | 'succeeded'         // 执行成功\n  | 'failed';           // 执行失败\n\n/** SSE事件类型 */\nexport type SSEEventType = \n  | 'message.delta'  // 流式文本增量\n  | 'message.final'  // 完整消息\n  | 'ui'             // A2UI组件\n  | 'tool.trace'     // 工具执行状态\n  | 'error';         // 错误\n\n// ... 其他类型定义"
+    },
+    {
+      "id": "TASK-003",
+      "title": "A2UI Schema定义",
+      "phase": "Task 2",
+      "priority": "P0",
+      "status": "todo",
+      "assignee": "codex",
+      "estimate": "0.5天",
+      "dependencies": [],
+      "files": {
+        "create": [
+          "packages/server/src/types/a2ui.ts",
+          "packages/server/src/types/tooltrace.ts"
+        ],
+        "modify": [
+          "packages/server/src/types/index.ts"
+        ]
+      },
+      "description": "使用 Zod 定义 A2UI 组件的运行时校验 schema。A2UI 是 AI 返回的动态 UI 组件，需要类型安全和运行时校验。",
+      "requirements": {
+        "components": [
+          {
+            "name": "ArchiveReviewCard",
+            "description": "归档确认卡片 - 展示AI提取的事件/事实/行动，用户可编辑后确认",
+            "props": {
+              "contactId": "string - 关联的联系人ID",
+              "contactName": "string - 联系人名称",
+              "extractedItems": "ExtractedItem[] - 提取的内容列表",
+              "onConfirmAction": "string - 确认时调用的action标识",
+              "onEditAction": "string - 编辑时调用的action标识"
+            },
+            "nested_types": {
+              "ExtractedItem": {
+                "id": "string",
+                "type": "'event' | 'fact' | 'action'",
+                "content": "string - 提取的内容",
+                "confidence": "number - 置信度0-1",
+                "sourceMessageIds": "string[] - 来源消息ID",
+                "editable": "boolean - 是否可编辑"
+              }
+            }
+          },
+          {
+            "name": "TemplatePicker",
+            "description": "飞书模板选择器 - 展示可用模板列表供用户选择",
+            "props": {
+              "templates": "TemplateOption[] - 模板列表",
+              "selectedId": "string | undefined - 当前选中",
+              "onSelectAction": "string - 选择时调用的action"
+            },
+            "nested_types": {
+              "TemplateOption": {
+                "id": "string",
+                "name": "string",
+                "description": "string",
+                "category": "string | undefined",
+                "previewUrl": "string | undefined"
+              }
+            }
+          },
+          {
+            "name": "VariableForm",
+            "description": "模板变量填写表单 - 根据模板定义的变量生成表单",
+            "props": {
+              "templateId": "string",
+              "templateName": "string",
+              "variables": "VariableDefinition[] - 变量定义",
+              "values": "Record<string, string> - 当前值",
+              "onChangeAction": "string",
+              "onSubmitAction": "string"
+            },
+            "nested_types": {
+              "VariableDefinition": {
+                "name": "string - 变量名",
+                "label": "string - 显示标签",
+                "type": "'text' | 'textarea' | 'date' | 'select'",
+                "required": "boolean",
+                "placeholder": "string | undefined",
+                "options": "string[] | undefined - select类型的选项"
+              }
+            }
+          },
+          {
+            "name": "DraftPreview",
+            "description": "草稿预览 - 展示AI生成的消息草稿",
+            "props": {
+              "drafts": "DraftOption[] - 草稿选项(可能多个)",
+              "selectedIndex": "number - 当前选中索引",
+              "onSelectAction": "string",
+              "onEditAction": "string",
+              "onConfirmAction": "string"
+            },
+            "nested_types": {
+              "DraftOption": {
+                "content": "string - 草稿内容",
+                "format": "'text' | 'markdown' | 'richtext'",
+                "metadata": "Record<string, unknown> | undefined"
+              }
+            }
+          },
+          {
+            "name": "ConfirmBar",
+            "description": "强确认条 - 固定在底部的确认/取消操作栏",
+            "props": {
+              "title": "string - 确认标题",
+              "description": "string - 操作描述",
+              "confirmLabel": "string - 确认按钮文字，默认'确认'",
+              "cancelLabel": "string - 取消按钮文字，默认'取消'",
+              "confirmStyle": "'primary' | 'danger' - 确认按钮样式",
+              "toolCallId": "string - 关联的工具调用ID",
+              "onConfirmAction": "string",
+              "onCancelAction": "string"
+            }
+          },
+          {
+            "name": "ToolTraceCard",
+            "description": "工具执行状态卡片 - 展示工具调用的实时状态",
+            "props": {
+              "id": "string - 工具调用ID",
+              "name": "string - 工具名称",
+              "displayName": "string - 显示名称(中文)",
+              "state": "ToolState",
+              "input": "Record<string, unknown> | undefined",
+              "output": "Record<string, unknown> | undefined",
+              "error": "string | undefined",
+              "startedAt": "string",
+              "completedAt": "string | undefined",
+              "expandable": "boolean - 是否可展开查看详情"
+            }
+          }
+        ],
+        "payload_structure": {
+          "A2UIPayload": {
+            "type": "A2UIComponentType - 组件类型discriminator",
+            "props": "对应组件的props"
+          },
+          "A2UIComponentType": "union of component names"
+        }
+      },
+      "implementation_steps": [
+        "1. 创建 packages/server/src/types/a2ui.ts",
+        "2. import { z } from 'zod'",
+        "3. 为每个组件定义 Zod schema (如 ArchiveReviewCardSchema)",
+        "4. 使用 z.discriminatedUnion 创建 A2UIPayloadSchema",
+        "5. 使用 z.infer<typeof Schema> 导出 TypeScript 类型",
+        "6. 创建 packages/server/src/types/tooltrace.ts 复用 ToolTrace 类型",
+        "7. 在 types/index.ts 中统一导出"
+      ],
+      "acceptance_criteria": [
+        "6个组件的Zod schema定义完整",
+        "A2UIPayload 使用 discriminatedUnion 按 type 区分",
+        "schema 可用于运行时校验: A2UIPayloadSchema.parse(data)",
+        "TypeScript 类型正确推导",
+        "嵌套类型(ExtractedItem, TemplateOption等)定义完整",
+        "导出到 types/index.ts"
+      ],
+      "code_example": "// packages/server/src/types/a2ui.ts\nimport { z } from 'zod';\nimport type { ToolState } from '@/agent/types';\n\n// 嵌套类型\nconst ExtractedItemSchema = z.object({\n  id: z.string(),\n  type: z.enum(['event', 'fact', 'action']),\n  content: z.string(),\n  confidence: z.number().min(0).max(1),\n  sourceMessageIds: z.array(z.string()),\n  editable: z.boolean()\n});\n\n// 组件Schema\nconst ArchiveReviewCardSchema = z.object({\n  type: z.literal('ArchiveReviewCard'),\n  props: z.object({\n    contactId: z.string(),\n    contactName: z.string(),\n    extractedItems: z.array(ExtractedItemSchema),\n    onConfirmAction: z.string(),\n    onEditAction: z.string()\n  })\n});\n\n// ... 其他组件Schema\n\n// 统一Payload\nexport const A2UIPayloadSchema = z.discriminatedUnion('type', [\n  ArchiveReviewCardSchema,\n  TemplatePickerSchema,\n  VariableFormSchema,\n  DraftPreviewSchema,\n  ConfirmBarSchema,\n  ToolTraceCardSchema\n]);\n\nexport type A2UIPayload = z.infer<typeof A2UIPayloadSchema>;"
+    },
+    {
+      "id": "TASK-004",
+      "title": "数据库迁移-Citations",
+      "phase": "Task 3",
+      "priority": "P1",
+      "status": "todo",
+      "assignee": "opencode",
+      "estimate": "0.2天",
+      "dependencies": [],
+      "files": {
+        "create": [
+          "packages/server/src/infrastructure/db/migrations/006_citations.sql"
+        ]
+      },
+      "description": "为 chat_message 表添加 citations_json 字段，存储AI回复中的来源引用信息。",
+      "requirements": {
+        "table": "chat_message",
+        "changes": [
+          {
+            "action": "ADD COLUMN",
+            "column": "citations_json",
+            "type": "JSONB",
+            "default": "'[]'::jsonb",
+            "nullable": true,
+            "comment": "存储来源引用: [{sourceMessageIds: string[], spans: [{start, end, sourceIndex}]}]"
+          }
+        ],
+        "json_structure": {
+          "citations_json": [
+            {
+              "sourceMessageIds": [
+                "msg-uuid-1",
+                "msg-uuid-2"
+              ],
+              "spans": [
+                {
+                  "start": 10,
+                  "end": 25,
+                  "sourceIndex": 0
+                },
+                {
+                  "start": 50,
+                  "end": 80,
+                  "sourceIndex": 1
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "implementation_steps": [
+        "1. 创建迁移文件 006_citations.sql",
+        "2. 编写 UP 迁移: ALTER TABLE chat_message ADD COLUMN",
+        "3. 编写 DOWN 迁移: ALTER TABLE chat_message DROP COLUMN",
+        "4. 添加 COMMENT ON COLUMN 说明字段用途",
+        "5. 运行 npm run migrate 测试"
+      ],
+      "sql_template": "-- UP\nALTER TABLE chat_message \nADD COLUMN citations_json JSONB DEFAULT '[]'::jsonb;\n\nCOMMENT ON COLUMN chat_message.citations_json IS \n'AI回复的来源引用，结构: [{sourceMessageIds: string[], spans: [{start: number, end: number, sourceIndex: number}]}]';\n\n-- DOWN\nALTER TABLE chat_message DROP COLUMN IF EXISTS citations_json;",
+      "acceptance_criteria": [
+        "迁移脚本语法正确",
+        "npm run migrate 执行成功",
+        "chat_message 表新增 citations_json 列",
+        "列类型为 JSONB，默认值 '[]'",
+        "支持回滚 (down migration)",
+        "现有数据不受影响"
+      ]
+    },
+    {
+      "id": "TASK-005",
+      "title": "数据库迁移-ToolConfirmations",
+      "phase": "Task 3",
+      "priority": "P1",
+      "status": "todo",
+      "assignee": "opencode",
+      "estimate": "0.2天",
+      "dependencies": [],
+      "files": {
+        "create": [
+          "packages/server/src/infrastructure/db/migrations/007_tool_confirmations.sql"
+        ]
+      },
+      "description": "创建 tool_confirmations 表，存储待确认的工具调用。用于实现写操作的用户确认流程。",
+      "requirements": {
+        "table": "tool_confirmations",
+        "columns": [
+          {
+            "name": "id",
+            "type": "UUID",
+            "constraint": "PRIMARY KEY DEFAULT gen_random_uuid()"
+          },
+          {
+            "name": "session_id",
+            "type": "UUID",
+            "constraint": "NOT NULL REFERENCES chat_session(id) ON DELETE CASCADE"
+          },
+          {
+            "name": "tool_call_id",
+            "type": "VARCHAR(255)",
+            "constraint": "NOT NULL UNIQUE",
+            "comment": "AI SDK生成的工具调用ID"
+          },
+          {
+            "name": "tool_name",
+            "type": "VARCHAR(100)",
+            "constraint": "NOT NULL",
+            "comment": "工具名称如 feishu_send_message"
+          },
+          {
+            "name": "params",
+            "type": "JSONB",
+            "constraint": "NOT NULL",
+            "comment": "工具调用参数"
+          },
+          {
+            "name": "state",
+            "type": "VARCHAR(50)",
+            "constraint": "DEFAULT 'pending'",
+            "comment": "pending/confirmed/cancelled/expired"
+          },
+          {
+            "name": "expires_at",
+            "type": "TIMESTAMPTZ",
+            "constraint": "NOT NULL",
+            "comment": "过期时间，默认5分钟后"
+          },
+          {
+            "name": "confirmed_at",
+            "type": "TIMESTAMPTZ",
+            "constraint": "NULL",
+            "comment": "用户确认时间"
+          },
+          {
+            "name": "created_at",
+            "type": "TIMESTAMPTZ",
+            "constraint": "DEFAULT NOW()"
+          }
+        ],
+        "indexes": [
+          {
+            "name": "idx_tool_confirmations_session",
+            "columns": [
+              "session_id"
+            ]
+          },
+          {
+            "name": "idx_tool_confirmations_expires",
+            "columns": [
+              "expires_at"
+            ],
+            "comment": "用于清理过期记录"
+          },
+          {
+            "name": "idx_tool_confirmations_state",
+            "columns": [
+              "state"
+            ]
+          }
+        ],
+        "state_machine": {
+          "pending": "等待用户确认",
+          "confirmed": "用户已确认，工具已执行",
+          "cancelled": "用户已取消",
+          "expired": "超时未确认"
+        }
+      },
+      "sql_template": "-- UP\nCREATE TABLE tool_confirmations (\n  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),\n  session_id UUID NOT NULL REFERENCES chat_session(id) ON DELETE CASCADE,\n  tool_call_id VARCHAR(255) NOT NULL UNIQUE,\n  tool_name VARCHAR(100) NOT NULL,\n  params JSONB NOT NULL,\n  state VARCHAR(50) DEFAULT 'pending' CHECK (state IN ('pending', 'confirmed', 'cancelled', 'expired')),\n  expires_at TIMESTAMPTZ NOT NULL,\n  confirmed_at TIMESTAMPTZ,\n  created_at TIMESTAMPTZ DEFAULT NOW()\n);\n\nCREATE INDEX idx_tool_confirmations_session ON tool_confirmations(session_id);\nCREATE INDEX idx_tool_confirmations_expires ON tool_confirmations(expires_at);\nCREATE INDEX idx_tool_confirmations_state ON tool_confirmations(state);\n\nCOMMENT ON TABLE tool_confirmations IS '工具确认表 - 存储待确认的写操作工具调用';\n\n-- DOWN\nDROP TABLE IF EXISTS tool_confirmations;",
+      "acceptance_criteria": [
+        "表结构符合设计",
+        "外键约束到 chat_session 且级联删除",
+        "tool_call_id 唯一约束",
+        "state 字段有 CHECK 约束",
+        "三个索引创建正确",
+        "支持回滚"
+      ]
+    },
+    {
+      "id": "TASK-006",
+      "title": "数据库迁移-ConnectorTokens",
+      "phase": "Task 3",
+      "priority": "P1",
+      "status": "todo",
+      "assignee": "opencode",
+      "estimate": "0.1天",
+      "dependencies": [],
+      "files": {
+        "create": [
+          "packages/server/src/infrastructure/db/migrations/008_connector_tokens.sql"
+        ]
+      },
+      "description": "创建 connector_tokens 表，存储第三方连接器(飞书/钉钉等)的OAuth令牌。",
+      "requirements": {
+        "table": "connector_tokens",
+        "columns": [
+          {
+            "name": "id",
+            "type": "UUID",
+            "constraint": "PRIMARY KEY DEFAULT gen_random_uuid()"
+          },
+          {
+            "name": "workspace_id",
+            "type": "UUID",
+            "constraint": "NOT NULL REFERENCES workspace(id) ON DELETE CASCADE"
+          },
+          {
+            "name": "provider",
+            "type": "VARCHAR(50)",
+            "constraint": "NOT NULL",
+            "comment": "连接器类型: feishu/dingtalk/wecom"
+          },
+          {
+            "name": "access_token",
+            "type": "TEXT",
+            "constraint": "NOT NULL",
+            "comment": "访问令牌(应用层加密存储)"
+          },
+          {
+            "name": "refresh_token",
+            "type": "TEXT",
+            "constraint": "NULL",
+            "comment": "刷新令牌(应用层加密存储)"
+          },
+          {
+            "name": "token_type",
+            "type": "VARCHAR(50)",
+            "constraint": "DEFAULT 'Bearer'"
+          },
+          {
+            "name": "expires_at",
+            "type": "TIMESTAMPTZ",
+            "constraint": "NULL",
+            "comment": "令牌过期时间"
+          },
+          {
+            "name": "scopes",
+            "type": "TEXT[]",
+            "constraint": "DEFAULT '{}'",
+            "comment": "授权范围"
+          },
+          {
+            "name": "raw_response",
+            "type": "JSONB",
+            "constraint": "NULL",
+            "comment": "OAuth原始响应(调试用)"
+          },
+          {
+            "name": "created_at",
+            "type": "TIMESTAMPTZ",
+            "constraint": "DEFAULT NOW()"
+          },
+          {
+            "name": "updated_at",
+            "type": "TIMESTAMPTZ",
+            "constraint": "DEFAULT NOW()"
+          }
+        ],
+        "constraints": [
+          {
+            "type": "UNIQUE",
+            "columns": [
+              "workspace_id",
+              "provider"
+            ],
+            "comment": "每个workspace每种provider只能有一个token"
+          }
+        ],
+        "indexes": [
+          {
+            "name": "idx_connector_tokens_workspace",
+            "columns": [
+              "workspace_id"
+            ]
+          },
+          {
+            "name": "idx_connector_tokens_expires",
+            "columns": [
+              "expires_at"
+            ]
+          }
+        ],
+        "security_notes": [
+          "access_token 和 refresh_token 必须在应用层使用 AES 加密后存储",
+          "不要在日志中输出这些字段的值",
+          "定期清理过期且未刷新的记录"
+        ]
+      },
+      "sql_template": "-- UP\nCREATE TABLE connector_tokens (\n  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),\n  workspace_id UUID NOT NULL REFERENCES workspace(id) ON DELETE CASCADE,\n  provider VARCHAR(50) NOT NULL,\n  access_token TEXT NOT NULL,\n  refresh_token TEXT,\n  token_type VARCHAR(50) DEFAULT 'Bearer',\n  expires_at TIMESTAMPTZ,\n  scopes TEXT[] DEFAULT '{}',\n  raw_response JSONB,\n  created_at TIMESTAMPTZ DEFAULT NOW(),\n  updated_at TIMESTAMPTZ DEFAULT NOW(),\n  UNIQUE(workspace_id, provider)\n);\n\nCREATE INDEX idx_connector_tokens_workspace ON connector_tokens(workspace_id);\nCREATE INDEX idx_connector_tokens_expires ON connector_tokens(expires_at);\n\n-- 自动更新 updated_at\nCREATE TRIGGER update_connector_tokens_updated_at\n  BEFORE UPDATE ON connector_tokens\n  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();\n\nCOMMENT ON TABLE connector_tokens IS '连接器令牌表 - 存储第三方OAuth令牌(加密)';\nCOMMENT ON COLUMN connector_tokens.access_token IS '访问令牌 - 应用层AES加密';\nCOMMENT ON COLUMN connector_tokens.refresh_token IS '刷新令牌 - 应用层AES加密';\n\n-- DOWN\nDROP TRIGGER IF EXISTS update_connector_tokens_updated_at ON connector_tokens;\nDROP TABLE IF EXISTS connector_tokens;",
+      "acceptance_criteria": [
+        "表结构符合设计",
+        "UNIQUE(workspace_id, provider) 约束生效",
+        "外键级联删除",
+        "updated_at 触发器正常工作",
+        "索引创建正确",
+        "支持回滚"
+      ]
+    },
+    {
+      "id": "TASK-007",
+      "title": "ContextBuilder实现",
+      "phase": "Task 4",
+      "priority": "P0",
+      "status": "backlog",
+      "assignee": "claude-code",
+      "estimate": "1天",
+      "dependencies": [
+        "TASK-002"
+      ],
+      "files": {
+        "create": [
+          "packages/server/src/agent/contextBuilder.ts"
+        ],
+        "reference": [
+          "packages/server/src/infrastructure/repositories/chatRepo.ts",
+          "packages/server/src/infrastructure/repositories/contactRepo.ts",
+          "packages/server/src/application/usecases/actionUsecases.ts"
+        ]
+      },
+      "description": "实现三层上下文构建器，为 Agent 提供对话历史、会话摘要和联系人相关信息。",
+      "requirements": {
+        "class": "ContextBuilder",
+        "constructor_deps": [
+          "chatRepo: ChatRepository",
+          "contactRepo: ContactRepository",
+          "actionUsecases: ActionUsecases",
+          "aiProvider: OpenAICompatProvider"
+        ],
+        "methods": [
+          {
+            "name": "build",
+            "params": "(sessionId: string, contactId?: string)",
+            "returns": "Promise<ContextLayers>",
+            "description": "构建三层上下文，并行获取以优化性能"
+          },
+          {
+            "name": "buildL1",
+            "params": "(sessionId: string)",
+            "returns": "Promise<RecentMessages>",
+            "description": "获取最近N条消息",
+            "config": {
+              "defaultLimit": 20,
+              "maxLimit": 40
+            }
+          },
+          {
+            "name": "buildL2",
+            "params": "(sessionId: string)",
+            "returns": "Promise<ConversationSummary | null>",
+            "description": "消息数超过阈值时生成会话摘要",
+            "config": {
+              "summaryThreshold": 40,
+              "summaryPrompt": "请总结以下对话的主要内容、关键话题和重要决定..."
+            }
+          },
+          {
+            "name": "buildL3",
+            "params": "(contactId: string)",
+            "returns": "Promise<StructuredRecall>",
+            "description": "获取联系人相关的结构化信息"
+          }
+        ],
+        "L1_logic": {
+          "description": "获取当前会话最近的消息",
+          "steps": [
+            "1. 调用 chatRepo.getMessagesBySession(sessionId, {limit: 20, order: 'desc'})",
+            "2. 反转顺序使消息按时间正序",
+            "3. 获取总消息数用于判断是否需要L2"
+          ]
+        },
+        "L2_logic": {
+          "description": "当消息过多时生成摘要以压缩上下文",
+          "steps": [
+            "1. 获取消息总数",
+            "2. 如果 totalCount <= 40，返回 null",
+            "3. 获取较早的消息(排除L1已包含的)",
+            "4. 调用 AI 生成摘要",
+            "5. 缓存摘要结果(可选)"
+          ],
+          "ai_prompt": "请用200字以内总结以下对话内容，提取关键信息:\n1. 讨论的主要话题\n2. 重要的决定或结论\n3. 待跟进事项\n\n对话内容:\n{messages}"
+        },
+        "L3_logic": {
+          "description": "获取与当前联系人相关的所有结构化信息",
+          "steps": [
+            "1. 如果没有 contactId，返回 null",
+            "2. 并行获取: events, facts, todos, brief",
+            "3. events: contactRepo.getTimeline(contactId, {limit: 10})",
+            "4. facts: contactRepo.getFacts(contactId)",
+            "5. todos: actionUsecases.getTodosByContact(contactId)",
+            "6. brief: contactRepo.getBrief(contactId)"
+          ]
+        },
+        "performance": {
+          "parallel_fetch": "使用 Promise.all 并行获取 L1/L2/L3",
+          "caching": "L2摘要可缓存，L3 brief 有现有缓存机制"
+        }
+      },
+      "implementation_steps": [
+        "1. 创建 packages/server/src/agent/contextBuilder.ts",
+        "2. 定义 ContextBuilder 类和构造函数",
+        "3. 实现 buildL1 方法 - 获取最近消息",
+        "4. 实现 buildL2 方法 - 条件生成摘要",
+        "5. 实现 buildL3 方法 - 获取联系人数据",
+        "6. 实现 build 方法 - 并行调用三层",
+        "7. 添加错误处理和日志",
+        "8. 编写单元测试"
+      ],
+      "acceptance_criteria": [
+        "build 方法返回完整的 ContextLayers",
+        "L1 正确获取最近20条消息",
+        "L2 在消息>40时生成摘要，否则返回null",
+        "L3 在有contactId时返回联系人数据",
+        "三层数据并行获取(性能优化)",
+        "异常处理不影响其他层",
+        "单元测试覆盖主要场景"
+      ]
+    },
+    {
+      "id": "TASK-008",
+      "title": "ToolRegistry实现",
+      "phase": "Task 4",
+      "priority": "P0",
+      "status": "backlog",
+      "assignee": "opencode",
+      "estimate": "0.5天",
+      "dependencies": [
+        "TASK-002"
+      ],
+      "files": {
+        "create": [
+          "packages/server/src/agent/toolRegistry.ts"
+        ]
+      },
+      "description": "实现工具注册表，管理 Agent 可用的所有工具，支持注册、查询和转换为 AI SDK 格式。",
+      "requirements": {
+        "class": "ToolRegistry",
+        "properties": {
+          "tools": "Map<string, ToolDefinition> - 工具名称到定义的映射"
+        },
+        "methods": [
+          {
+            "name": "register",
+            "params": "(tool: ToolDefinition)",
+            "returns": "void",
+            "description": "注册一个工具",
+            "validation": "检查名称唯一性，参数schema有效性"
+          },
+          {
+            "name": "registerMany",
+            "params": "(tools: ToolDefinition[])",
+            "returns": "void",
+            "description": "批量注册工具"
+          },
+          {
+            "name": "get",
+            "params": "(name: string)",
+            "returns": "ToolDefinition | undefined",
+            "description": "按名称获取工具"
+          },
+          {
+            "name": "getAll",
+            "params": "()",
+            "returns": "ToolDefinition[]",
+            "description": "获取所有已注册工具"
+          },
+          {
+            "name": "has",
+            "params": "(name: string)",
+            "returns": "boolean",
+            "description": "检查工具是否存在"
+          },
+          {
+            "name": "getForAI",
+            "params": "(filter?: {requiresAuth?: boolean})",
+            "returns": "CoreTool[] - Vercel AI SDK 格式",
+            "description": "转换为 AI SDK 的工具格式，可按条件过滤"
+          },
+          {
+            "name": "unregister",
+            "params": "(name: string)",
+            "returns": "boolean",
+            "description": "取消注册工具"
+          }
+        ],
+        "ai_sdk_format": {
+          "description": "Vercel AI SDK 的 CoreTool 格式",
+          "structure": {
+            "name": "string",
+            "description": "string",
+            "parameters": "Zod schema 转换为 JSON Schema"
+          },
+          "conversion": "使用 zodToJsonSchema 将 Zod schema 转换"
+        },
+        "singleton": "考虑使用单例模式或依赖注入管理全局实例"
+      },
+      "implementation_steps": [
+        "1. 创建 packages/server/src/agent/toolRegistry.ts",
+        "2. 定义 ToolRegistry 类",
+        "3. 实现 register 和 registerMany",
+        "4. 实现 get, getAll, has 方法",
+        "5. 实现 getForAI 转换方法",
+        "6. 添加 zodToJsonSchema 依赖用于转换",
+        "7. 编写单元测试"
+      ],
+      "acceptance_criteria": [
+        "工具可正常注册和查询",
+        "重复注册相同名称抛出错误",
+        "getForAI 返回 AI SDK 兼容格式",
+        "支持按条件过滤工具",
+        "单例/DI 管理正确",
+        "单元测试通过"
+      ],
+      "code_example": "// 使用示例\nconst registry = new ToolRegistry();\n\nregistry.register({\n  name: 'feishu_list_templates',\n  description: '列出可用的飞书消息模板',\n  parameters: z.object({}),\n  requiresAuth: true,\n  requiresConfirmation: false,\n  execute: async (params, ctx) => { ... }\n});\n\n// 获取 AI SDK 格式\nconst aiTools = registry.getForAI();\n// => [{ name: 'feishu_list_templates', description: '...', parameters: {...} }]"
+    },
+    {
+      "id": "TASK-009",
+      "title": "AgentOrchestrator实现",
+      "phase": "Task 4",
+      "priority": "P0",
+      "status": "backlog",
+      "assignee": "claude-code",
+      "estimate": "1.5天",
+      "dependencies": [
+        "TASK-007",
+        "TASK-008"
+      ],
+      "files": {
+        "create": [
+          "packages/server/src/agent/orchestrator.ts",
+          "packages/server/src/agent/index.ts"
+        ]
+      },
+      "description": "实现 Agent 编排核心，管理对话流程、上下文构建、AI调用和工具执行。输出 SSE 事件流。",
+      "requirements": {
+        "class": "AgentOrchestrator",
+        "constructor_deps": [
+          "contextBuilder: ContextBuilder",
+          "toolRegistry: ToolRegistry",
+          "aiProvider: OpenAICompatProvider",
+          "chatRepo: ChatRepository"
+        ],
+        "main_method": {
+          "name": "chat",
+          "params": "(input: AgentChatInput)",
+          "returns": "AsyncGenerator<SSEEvent>",
+          "input_type": {
+            "sessionId": "string",
+            "userMessage": "string",
+            "contactId": "string | undefined",
+            "workspaceId": "string",
+            "userId": "string"
+          }
+        },
+        "flow": [
+          {
+            "step": 1,
+            "action": "保存用户消息",
+            "detail": "将 userMessage 存入 chat_message 表"
+          },
+          {
+            "step": 2,
+            "action": "构建上下文",
+            "detail": "调用 contextBuilder.build(sessionId, contactId)"
+          },
+          {
+            "step": 3,
+            "action": "构建系统提示",
+            "detail": "根据上下文生成 system prompt"
+          },
+          {
+            "step": 4,
+            "action": "调用 AI 流式生成",
+            "detail": "使用 streamText 调用 AI，传入工具定义"
+          },
+          {
+            "step": 5,
+            "action": "处理流式输出",
+            "detail": "yield message.delta 事件"
+          },
+          {
+            "step": 6,
+            "action": "处理工具调用",
+            "detail": "检查权限/确认需求，执行或暂停"
+          },
+          {
+            "step": 7,
+            "action": "生成最终消息",
+            "detail": "yield message.final 事件，保存到数据库"
+          }
+        ],
+        "system_prompt_template": "你是 FriendsAI，一个帮助用户管理人脉关系的AI助手。\n\n## 当前上下文\n{context_summary}\n\n## 可用工具\n你可以使用以下工具来帮助用户:\n{tool_descriptions}\n\n## 注意事项\n- 引用信息时使用 [1], [2] 格式标注来源\n- 执行写操作前需要用户确认\n- 保持回复简洁专业",
+        "tool_execution": {
+          "check_auth": "如果 requiresAuth=true，检查连接器是否已授权",
+          "check_confirmation": "如果 requiresConfirmation=true，创建确认记录",
+          "state_transitions": {
+            "planned": "AI规划了工具调用",
+            "requires_auth": "连接器未授权",
+            "requires_confirmation": "需要用户确认",
+            "executing": "正在执行",
+            "succeeded": "执行成功",
+            "failed": "执行失败"
+          }
+        },
+        "error_handling": {
+          "ai_error": "yield error事件，记录日志",
+          "tool_error": "yield tool.trace事件(state=failed)，继续对话"
+        }
+      },
+      "implementation_steps": [
+        "1. 创建 orchestrator.ts",
+        "2. 定义 AgentOrchestrator 类",
+        "3. 实现 chat AsyncGenerator 方法",
+        "4. 实现 buildSystemPrompt 私有方法",
+        "5. 实现 handleToolCall 私有方法",
+        "6. 实现 saveMessage 私有方法",
+        "7. 添加错误处理和日志",
+        "8. 创建 index.ts 导出模块",
+        "9. 编写集成测试"
+      ],
+      "acceptance_criteria": [
+        "chat 方法返回 AsyncGenerator<SSEEvent>",
+        "正确 yield message.delta 事件(流式)",
+        "正确 yield message.final 事件",
+        "工具调用生成 tool.trace 事件",
+        "错误时生成 error 事件",
+        "消息正确保存到数据库",
+        "上下文正确构建和传递"
+      ],
+      "code_example": "// 使用示例\nconst orchestrator = new AgentOrchestrator(deps);\n\nfor await (const event of orchestrator.chat({\n  sessionId: 'session-123',\n  userMessage: '帮我给张三发个会议邀请',\n  contactId: 'contact-456',\n  workspaceId: 'ws-789',\n  userId: 'user-001'\n})) {\n  switch (event.event) {\n    case 'message.delta':\n      process.stdout.write(event.data.content);\n      break;\n    case 'tool.trace':\n      console.log('工具状态:', event.data.name, event.data.state);\n      break;\n    case 'message.final':\n      console.log('完成:', event.data.content);\n      break;\n  }\n}"
+    },
+    {
+      "id": "TASK-010",
+      "title": "工具执行策略",
+      "phase": "Task 4",
+      "priority": "P0",
+      "status": "backlog",
+      "assignee": "opencode",
+      "estimate": "0.5天",
+      "dependencies": [
+        "TASK-008"
+      ],
+      "files": {
+        "create": [
+          "packages/server/src/agent/policies.ts"
+        ]
+      },
+      "description": "实现工具执行策略，处理权限检查和确认流程。",
+      "requirements": {
+        "functions": [
+          {
+            "name": "checkToolAuthorization",
+            "params": "(tool: ToolDefinition, context: ToolContext)",
+            "returns": "Promise<{authorized: boolean, reason?: string}>",
+            "description": "检查工具是否有执行权限",
+            "logic": [
+              "1. 如果 tool.requiresAuth = false，直接返回 authorized: true",
+              "2. 根据 tool.name 前缀判断需要哪个连接器 (feishu_ -> feishu)",
+              "3. 查询 connector_tokens 表检查是否有有效token",
+              "4. 检查 token 是否过期",
+              "5. 返回结果"
+            ]
+          },
+          {
+            "name": "checkToolConfirmation",
+            "params": "(tool: ToolDefinition, context: ToolContext)",
+            "returns": "{needsConfirmation: boolean}",
+            "description": "检查工具是否需要用户确认",
+            "logic": "直接返回 tool.requiresConfirmation"
+          },
+          {
+            "name": "createConfirmationRequest",
+            "params": "(toolCallId: string, tool: ToolDefinition, params: unknown, context: ToolContext)",
+            "returns": "Promise<ToolConfirmation>",
+            "description": "创建确认请求记录",
+            "logic": [
+              "1. 插入 tool_confirmations 记录",
+              "2. state = 'pending'",
+              "3. expires_at = now + 5分钟",
+              "4. 返回记录"
+            ]
+          },
+          {
+            "name": "getProviderFromToolName",
+            "params": "(toolName: string)",
+            "returns": "string | null",
+            "description": "从工具名称提取连接器类型",
+            "mapping": {
+              "feishu_*": "feishu",
+              "dingtalk_*": "dingtalk",
+              "wecom_*": "wecom"
+            }
+          }
+        ]
+      },
+      "implementation_steps": [
+        "1. 创建 policies.ts",
+        "2. 实现 getProviderFromToolName",
+        "3. 实现 checkToolAuthorization (需要查询数据库)",
+        "4. 实现 checkToolConfirmation",
+        "5. 实现 createConfirmationRequest",
+        "6. 添加单元测试"
+      ],
+      "acceptance_criteria": [
+        "requiresAuth=true 的工具正确检查连接器授权",
+        "未授权时返回 authorized: false 和原因",
+        "requiresConfirmation=true 的工具正确创建确认记录",
+        "确认记录包含正确的过期时间",
+        "工具名称正确解析出 provider"
+      ]
+    },
+    {
+      "id": "TASK-011",
+      "title": "SSE流式API端点",
+      "phase": "Task 5",
+      "priority": "P0",
+      "status": "backlog",
+      "assignee": "opencode",
+      "estimate": "1天",
+      "dependencies": [
+        "TASK-009"
+      ],
+      "files": {
+        "create": [
+          "packages/server/src/presentation/http/routes/agent.ts"
+        ]
+      },
+      "description": "实现 POST /v1/agent/chat SSE 端点，将 AgentOrchestrator 的输出转换为 SSE 响应。",
+      "requirements": {
+        "endpoint": {
+          "method": "POST",
+          "path": "/v1/agent/chat",
+          "auth": "required - Bearer token",
+          "content_type": "application/json"
+        },
+        "request": {
+          "headers": {
+            "Authorization": "Bearer {token}",
+            "Content-Type": "application/json",
+            "X-Workspace-Id": "{workspaceId} - 可选，也可从token解析"
+          },
+          "body": {
+            "sessionId": "string - 会话ID (required)",
+            "message": "string - 用户消息 (required)",
+            "contactId": "string - 关联联系人ID (optional)"
+          }
+        },
+        "response": {
+          "headers": {
+            "Content-Type": "text/event-stream",
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no"
+          },
+          "format": "SSE事件流",
+          "events": [
+            {
+              "event": "message.delta",
+              "data": "{\"content\": \"增量文本\"}"
+            },
+            {
+              "event": "message.final",
+              "data": "{\"content\": \"完整消息\", \"citations\": [...]}"
+            },
+            {
+              "event": "tool.trace",
+              "data": "{\"id\": \"...\", \"name\": \"...\", \"state\": \"...\"}"
+            },
+            {
+              "event": "ui",
+              "data": "{\"type\": \"ConfirmBar\", \"props\": {...}}"
+            },
+            {
+              "event": "error",
+              "data": "{\"code\": \"AI_ERROR\", \"message\": \"...\"}"
+            }
+          ]
+        },
+        "error_responses": {
+          "400": "参数错误",
+          "401": "未授权",
+          "404": "会话不存在",
+          "500": "服务器错误"
+        },
+        "sse_format": "event: {eventType}\\ndata: {json}\\n\\n"
+      },
+      "implementation_steps": [
+        "1. 创建 routes/agent.ts",
+        "2. 定义 POST /chat 路由",
+        "3. 添加认证中间件",
+        "4. 验证请求参数 (sessionId, message)",
+        "5. 设置 SSE 响应头",
+        "6. 创建 AgentOrchestrator 实例",
+        "7. 遍历 AsyncGenerator 写入响应",
+        "8. 处理客户端断开 (req.on('close'))",
+        "9. 错误处理",
+        "10. 导出路由"
+      ],
+      "acceptance_criteria": [
+        "POST /v1/agent/chat 可正常访问",
+        "SSE 响应头正确设置",
+        "message.delta 事件实时推送",
+        "tool.trace 事件包含完整状态",
+        "客户端断开时正确清理",
+        "错误时发送 error 事件",
+        "Nginx 代理下正常工作 (X-Accel-Buffering)"
+      ],
+      "testing": {
+        "curl_test": "curl -N -X POST http://localhost:3000/v1/agent/chat \\\n  -H 'Content-Type: application/json' \\\n  -H 'Authorization: Bearer TOKEN' \\\n  -d '{\"sessionId\": \"xxx\", \"message\": \"你好\"}'"
+      }
+    },
+    {
+      "id": "TASK-012",
+      "title": "注册Agent路由",
+      "phase": "Task 5",
+      "priority": "P0",
+      "status": "backlog",
+      "assignee": "opencode",
+      "estimate": "0.2天",
+      "dependencies": [
+        "TASK-011",
+        "TASK-001"
+      ],
+      "files": {
+        "modify": [
+          "packages/server/src/presentation/http/router.ts"
+        ]
+      },
+      "description": "在主路由中注册 Agent 路由。",
+      "requirements": {
+        "changes": [
+          "import { agentRouter } from './routes/agent'",
+          "router.use('/agent', requireAuth, agentRouter)"
+        ],
+        "position": "在其他路由之后添加"
+      },
+      "acceptance_criteria": [
+        "Agent 路由正确挂载到 /v1/agent",
+        "认证中间件正确应用",
+        "不与其他路由冲突"
+      ]
+    },
+    {
+      "id": "TASK-013",
+      "title": "A2UI Renderer组件",
+      "phase": "Task 6",
+      "priority": "P1",
+      "status": "backlog",
+      "assignee": "codex",
+      "estimate": "0.5天",
+      "dependencies": [
+        "TASK-003"
+      ],
+      "files": {
+        "create": [
+          "packages/client/src/components/A2UI/Renderer.tsx",
+          "packages/client/src/components/A2UI/index.ts",
+          "packages/client/src/components/A2UI/ErrorBoundary.tsx",
+          "packages/client/src/components/A2UI/FallbackCard.tsx"
+        ]
+      },
+      "description": "实现 A2UI 动态组件渲染器，根据 payload.type 分发到对应组件。这是所有 A2UI 组件的入口，负责类型安全的组件分发和错误处理。",
+      "requirements": {
+        "component": "A2UIRenderer",
+        "props": {
+          "payload": "A2UIPayload - 来自后端的UI数据，包含 type 和 props",
+          "onAction": "(action: string, data?: unknown) => void - 统一的动作回调",
+          "className": "string | undefined - 额外的 CSS 类名",
+          "loading": "boolean | undefined - 是否显示加载状态"
+        },
+        "component_mapping": {
+          "ArchiveReviewCard": {
+            "path": "./ArchiveReviewCard",
+            "lazy": false,
+            "description": "归档确认卡片"
+          },
+          "TemplatePicker": {
+            "path": "./TemplatePicker",
+            "lazy": true,
+            "description": "模板选择器（懒加载）"
+          },
+          "VariableForm": {
+            "path": "./VariableForm",
+            "lazy": true,
+            "description": "变量填写表单（懒加载）"
+          },
+          "DraftPreview": {
+            "path": "./DraftPreview",
+            "lazy": true,
+            "description": "草稿预览（懒加载）"
+          },
+          "ConfirmBar": {
+            "path": "./ConfirmBar",
+            "lazy": false,
+            "description": "确认条（常用，不懒加载）"
+          },
+          "ToolTraceCard": {
+            "path": "./ToolTraceCard",
+            "lazy": false,
+            "description": "工具状态卡片（常用，不懒加载）"
+          }
+        },
+        "architecture": {
+          "pattern": "Discriminated Union + Component Map",
+          "type_safety": "使用 TypeScript 的 payload.type 作为 discriminator",
+          "extensibility": "新增组件只需在 componentMap 添加映射"
+        },
+        "error_boundary": {
+          "component": "A2UIErrorBoundary",
+          "behavior": [
+            "捕获子组件渲染错误",
+            "显示友好的错误提示",
+            "提供重试按钮",
+            "记录错误到 console.error"
+          ],
+          "fallback_ui": "显示 '组件加载失败' + 重试按钮"
+        },
+        "fallback_card": {
+          "component": "FallbackCard",
+          "when": "payload.type 不在 componentMap 中",
+          "display": "显示 '未知组件类型: {type}' + JSON 预览"
+        },
+        "loading_state": {
+          "component": "Skeleton 或 Spinner",
+          "when": "loading=true 或懒加载组件正在加载"
+        },
+        "action_handling": {
+          "description": "统一的 action 命名规范",
+          "format": "{action_type}:{identifier}",
+          "examples": [
+            "confirm:tool-call-123",
+            "cancel:tool-call-123",
+            "select:template-456",
+            "edit:item-789",
+            "submit:form-abc"
+          ]
+        }
+      },
+      "implementation_steps": [
+        "1. 创建 components/A2UI/ErrorBoundary.tsx 错误边界",
+        "2. 创建 components/A2UI/FallbackCard.tsx 未知类型降级",
+        "3. 创建 components/A2UI/Renderer.tsx 主渲染器",
+        "4. 定义 componentMap 类型和映射表",
+        "5. 实现 getComponent 函数（支持懒加载）",
+        "6. 包装 ErrorBoundary",
+        "7. 添加 loading 状态处理",
+        "8. 创建 index.ts 统一导出",
+        "9. 添加 Storybook stories（可选）"
+      ],
+      "acceptance_criteria": [
+        "根据 payload.type 正确分发到对应组件",
+        "props 完整传递给子组件（包含 onAction）",
+        "未知 type 显示 FallbackCard 而不是崩溃",
+        "子组件错误被 ErrorBoundary 捕获",
+        "懒加载组件显示 loading 状态",
+        "TypeScript 类型正确推导",
+        "单元测试覆盖各种 type"
+      ],
+      "code_example": "// packages/client/src/components/A2UI/Renderer.tsx\nimport React, { Suspense, lazy } from 'react';\nimport type { A2UIPayload } from '@/types/a2ui';\nimport { A2UIErrorBoundary } from './ErrorBoundary';\nimport { FallbackCard } from './FallbackCard';\nimport { Skeleton } from '@/components/ui/Skeleton';\n\n// 静态导入常用组件\nimport { ArchiveReviewCard } from './ArchiveReviewCard';\nimport { ConfirmBar } from './ConfirmBar';\nimport { ToolTraceCard } from './ToolTraceCard';\n\n// 懒加载不常用组件\nconst TemplatePicker = lazy(() => import('./TemplatePicker'));\nconst VariableForm = lazy(() => import('./VariableForm'));\nconst DraftPreview = lazy(() => import('./DraftPreview'));\n\nconst componentMap = {\n  ArchiveReviewCard,\n  TemplatePicker,\n  VariableForm,\n  DraftPreview,\n  ConfirmBar,\n  ToolTraceCard,\n} as const;\n\ninterface A2UIRendererProps {\n  payload: A2UIPayload;\n  onAction: (action: string, data?: unknown) => void;\n  className?: string;\n  loading?: boolean;\n}\n\nexport function A2UIRenderer({ payload, onAction, className, loading }: A2UIRendererProps) {\n  if (loading) {\n    return <Skeleton className={className} />;\n  }\n  \n  const Component = componentMap[payload.type as keyof typeof componentMap];\n  \n  if (!Component) {\n    return <FallbackCard type={payload.type} payload={payload} />;\n  }\n  \n  return (\n    <A2UIErrorBoundary>\n      <Suspense fallback={<Skeleton />}>\n        <Component {...payload.props} onAction={onAction} className={className} />\n      </Suspense>\n    </A2UIErrorBoundary>\n  );\n}\n\n// packages/client/src/components/A2UI/index.ts\nexport { A2UIRenderer } from './Renderer';\nexport { ArchiveReviewCard } from './ArchiveReviewCard';\nexport { ConfirmBar } from './ConfirmBar';\nexport { ToolTraceCard } from './ToolTraceCard';\n// ... 其他导出",
+      "test_cases": [
+        {
+          "name": "renders ConfirmBar for type ConfirmBar",
+          "input": "{ type: 'ConfirmBar', props: { title: 'Test' } }",
+          "expect": "ConfirmBar component is rendered"
+        },
+        {
+          "name": "renders FallbackCard for unknown type",
+          "input": "{ type: 'UnknownComponent', props: {} }",
+          "expect": "FallbackCard is rendered with type name"
+        },
+        {
+          "name": "catches child component errors",
+          "input": "Component that throws",
+          "expect": "ErrorBoundary fallback is shown"
+        }
+      ]
+    },
+    {
+      "id": "TASK-014",
+      "title": "ArchiveReviewCard组件",
+      "phase": "Task 6",
+      "priority": "P1",
+      "status": "backlog",
+      "assignee": "codex",
+      "estimate": "0.5天",
+      "dependencies": [
+        "TASK-013"
+      ],
+      "files": {
+        "create": [
+          "packages/client/src/components/A2UI/ArchiveReviewCard.tsx"
+        ]
+      },
+      "description": "归档确认卡片组件，展示AI提取的事件/事实/行动，支持编辑和确认。",
+      "requirements": {
+        "props": {
+          "contactId": "string",
+          "contactName": "string",
+          "extractedItems": "ExtractedItem[]",
+          "onConfirmAction": "string",
+          "onEditAction": "string",
+          "onAction": "(action: string, data?: unknown) => void"
+        },
+        "ui_elements": [
+          "联系人头像和名称",
+          "提取项列表 (分类显示: 事件/事实/行动)",
+          "每项的置信度指示器",
+          "可编辑的内容字段",
+          "确认按钮 (触发 onConfirmAction)",
+          "编辑按钮 (触发 onEditAction)"
+        ],
+        "item_display": {
+          "event": "图标: 日历, 颜色: 蓝色",
+          "fact": "图标: 信息, 颜色: 绿色",
+          "action": "图标: 闪电, 颜色: 橙色"
+        },
+        "styling": "参考 Pencil 原型 designs/pencil-friendsAI.pen 中的 '3. Conversation Detail' 屏幕"
+      },
+      "acceptance_criteria": [
+        "正确显示联系人信息",
+        "提取项按类型分组显示",
+        "置信度用颜色/进度条表示",
+        "内容可编辑",
+        "确认/编辑按钮触发正确的 action",
+        "样式与原型一致",
+        "响应式适配"
+      ],
+      "implementation_steps": [
+        "1. 创建 ArchiveReviewCard.tsx 文件",
+        "2. 定义 Props 接口继承 A2UI schema",
+        "3. 实现联系人头像和名称区域",
+        "4. 按 type (event/fact/action) 分组渲染提取项",
+        "5. 实现置信度进度条组件 (0-1 -> 颜色渐变)",
+        "6. 实现可编辑的内容字段 (contentEditable 或 textarea)",
+        "7. 添加编辑/确认按钮，绑定 onAction",
+        "8. 实现编辑模式切换逻辑",
+        "9. 添加动画过渡效果",
+        "10. 响应式适配移动端"
+      ],
+      "code_example": "// packages/client/src/components/A2UI/ArchiveReviewCard.tsx\nimport { useState, useCallback } from 'react';\nimport { Calendar, Info, Zap, Edit2, Check } from 'lucide-react';\n\ninterface ExtractedItem {\n  id: string;\n  type: 'event' | 'fact' | 'action';\n  content: string;\n  confidence: number;\n  sourceMessageIds: string[];\n  editable: boolean;\n}\n\ninterface ArchiveReviewCardProps {\n  contactId: string;\n  contactName: string;\n  extractedItems: ExtractedItem[];\n  onConfirmAction: string;\n  onEditAction: string;\n  onAction: (action: string, data?: unknown) => void;\n}\n\nconst TYPE_CONFIG = {\n  event: { icon: Calendar, color: 'text-blue-500', bg: 'bg-blue-50', label: '事件' },\n  fact: { icon: Info, color: 'text-green-500', bg: 'bg-green-50', label: '事实' },\n  action: { icon: Zap, color: 'text-orange-500', bg: 'bg-orange-50', label: '行动' }\n};\n\nexport function ArchiveReviewCard(props: ArchiveReviewCardProps) {\n  const { contactId, contactName, extractedItems, onConfirmAction, onEditAction, onAction } = props;\n  const [editingId, setEditingId] = useState<string | null>(null);\n  const [editedItems, setEditedItems] = useState<Record<string, string>>({});\n\n  const groupedItems = extractedItems.reduce((acc, item) => {\n    (acc[item.type] ||= []).push(item);\n    return acc;\n  }, {} as Record<string, ExtractedItem[]>);\n\n  const handleEdit = useCallback((itemId: string) => {\n    setEditingId(itemId);\n    onAction(onEditAction, { itemId });\n  }, [onAction, onEditAction]);\n\n  const handleConfirm = useCallback(() => {\n    const finalItems = extractedItems.map(item => ({\n      ...item,\n      content: editedItems[item.id] ?? item.content\n    }));\n    onAction(onConfirmAction, { contactId, items: finalItems });\n  }, [extractedItems, editedItems, onAction, onConfirmAction, contactId]);\n\n  return (\n    <div className=\"bg-white rounded-xl shadow-sm border p-4\">\n      {/* Header */}\n      <div className=\"flex items-center gap-3 mb-4\">\n        <div className=\"w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center\">\n          {contactName[0]}\n        </div>\n        <div>\n          <h3 className=\"font-medium\">{contactName}</h3>\n          <p className=\"text-sm text-gray-500\">AI 提取的内容</p>\n        </div>\n      </div>\n\n      {/* Grouped Items */}\n      {Object.entries(groupedItems).map(([type, items]) => {\n        const config = TYPE_CONFIG[type as keyof typeof TYPE_CONFIG];\n        const Icon = config.icon;\n        return (\n          <div key={type} className=\"mb-4\">\n            <div className={`flex items-center gap-2 mb-2 ${config.color}`}>\n              <Icon size={16} />\n              <span className=\"text-sm font-medium\">{config.label}</span>\n            </div>\n            {items.map(item => (\n              <div key={item.id} className={`${config.bg} rounded-lg p-3 mb-2`}>\n                <div className=\"flex justify-between items-start\">\n                  {editingId === item.id ? (\n                    <textarea\n                      className=\"flex-1 bg-white rounded p-2 text-sm\"\n                      defaultValue={editedItems[item.id] ?? item.content}\n                      onChange={e => setEditedItems(prev => ({...prev, [item.id]: e.target.value}))}\n                      onBlur={() => setEditingId(null)}\n                      autoFocus\n                    />\n                  ) : (\n                    <p className=\"text-sm flex-1\">{editedItems[item.id] ?? item.content}</p>\n                  )}\n                  {item.editable && editingId !== item.id && (\n                    <button onClick={() => handleEdit(item.id)} className=\"p-1 hover:bg-white/50 rounded\">\n                      <Edit2 size={14} />\n                    </button>\n                  )}\n                </div>\n                {/* Confidence Bar */}\n                <div className=\"mt-2 flex items-center gap-2\">\n                  <div className=\"flex-1 h-1 bg-gray-200 rounded-full overflow-hidden\">\n                    <div\n                      className={`h-full ${item.confidence > 0.7 ? 'bg-green-500' : item.confidence > 0.4 ? 'bg-yellow-500' : 'bg-red-500'}`}\n                      style={{ width: `${item.confidence * 100}%` }}\n                    />\n                  </div>\n                  <span className=\"text-xs text-gray-400\">{Math.round(item.confidence * 100)}%</span>\n                </div>\n              </div>\n            ))}\n          </div>\n        );\n      })}\n\n      {/* Actions */}\n      <div className=\"flex gap-2 mt-4\">\n        <button\n          onClick={handleConfirm}\n          className=\"flex-1 bg-primary text-white py-2 rounded-lg flex items-center justify-center gap-2\"\n        >\n          <Check size={16} /> 确认归档\n        </button>\n      </div>\n    </div>\n  );\n}",
+      "test_cases": [
+        {
+          "name": "渲染提取项列表",
+          "scenario": "传入3个不同类型的提取项",
+          "expected": "按 event/fact/action 分组显示，每组有正确图标和颜色"
+        },
+        {
+          "name": "置信度显示",
+          "scenario": "传入 confidence: 0.85 的项",
+          "expected": "进度条显示85%，绿色"
+        },
+        {
+          "name": "编辑功能",
+          "scenario": "点击编辑按钮",
+          "expected": "切换到编辑模式，显示 textarea，触发 onEditAction"
+        },
+        {
+          "name": "确认归档",
+          "scenario": "编辑后点击确认",
+          "expected": "调用 onAction(onConfirmAction, {contactId, items: [...]})，items 包含编辑后内容"
+        },
+        {
+          "name": "空列表处理",
+          "scenario": "extractedItems 为空数组",
+          "expected": "显示空状态提示"
+        }
+      ]
+    },
+    {
+      "id": "TASK-015",
+      "title": "TemplatePicker组件",
+      "phase": "Task 6",
+      "priority": "P1",
+      "status": "backlog",
+      "assignee": "codex",
+      "estimate": "0.3天",
+      "dependencies": [
+        "TASK-013"
+      ],
+      "files": {
+        "create": [
+          "packages/client/src/components/A2UI/TemplatePicker.tsx"
+        ]
+      },
+      "description": "飞书模板选择器组件，展示可用模板列表。",
+      "requirements": {
+        "props": {
+          "templates": "TemplateOption[]",
+          "selectedId": "string | undefined",
+          "onSelectAction": "string",
+          "onAction": "(action: string, data?: unknown) => void"
+        },
+        "ui_elements": [
+          "模板卡片网格/列表",
+          "模板名称和描述",
+          "选中状态高亮",
+          "分类筛选 (可选)"
+        ]
+      },
+      "acceptance_criteria": [
+        "模板列表正确渲染",
+        "点击选中正确触发 action",
+        "选中状态视觉反馈",
+        "空列表状态处理"
+      ],
+      "implementation_steps": [
+        "1. 创建 TemplatePicker.tsx 文件",
+        "2. 定义 Props 接口",
+        "3. 实现模板卡片网格布局",
+        "4. 添加选中状态样式 (border/shadow)",
+        "5. 实现分类筛选 (如果有 category)",
+        "6. 处理空列表状态",
+        "7. 添加加载状态",
+        "8. 响应式适配 (手机单列，桌面2-3列)"
+      ],
+      "code_example": "// packages/client/src/components/A2UI/TemplatePicker.tsx\nimport { useState, useMemo } from 'react';\nimport { FileText, Check } from 'lucide-react';\n\ninterface TemplateOption {\n  id: string;\n  name: string;\n  description: string;\n  category?: string;\n  previewUrl?: string;\n}\n\ninterface TemplatePickerProps {\n  templates: TemplateOption[];\n  selectedId?: string;\n  onSelectAction: string;\n  onAction: (action: string, data?: unknown) => void;\n}\n\nexport function TemplatePicker(props: TemplatePickerProps) {\n  const { templates, selectedId, onSelectAction, onAction } = props;\n  const [filterCategory, setFilterCategory] = useState<string | null>(null);\n\n  const categories = useMemo(() => {\n    const cats = new Set(templates.map(t => t.category).filter(Boolean));\n    return Array.from(cats) as string[];\n  }, [templates]);\n\n  const filteredTemplates = useMemo(() => {\n    if (!filterCategory) return templates;\n    return templates.filter(t => t.category === filterCategory);\n  }, [templates, filterCategory]);\n\n  const handleSelect = (templateId: string) => {\n    onAction(onSelectAction, { templateId });\n  };\n\n  if (templates.length === 0) {\n    return (\n      <div className=\"text-center py-8 text-gray-500\">\n        <FileText size={48} className=\"mx-auto mb-2 opacity-50\" />\n        <p>暂无可用模板</p>\n      </div>\n    );\n  }\n\n  return (\n    <div className=\"space-y-4\">\n      {/* Category Filter */}\n      {categories.length > 0 && (\n        <div className=\"flex gap-2 overflow-x-auto pb-2\">\n          <button\n            onClick={() => setFilterCategory(null)}\n            className={`px-3 py-1 rounded-full text-sm whitespace-nowrap ${\n              !filterCategory ? 'bg-primary text-white' : 'bg-gray-100'}`}\n          >\n            全部\n          </button>\n          {categories.map(cat => (\n            <button\n              key={cat}\n              onClick={() => setFilterCategory(cat)}\n              className={`px-3 py-1 rounded-full text-sm whitespace-nowrap ${\n                filterCategory === cat ? 'bg-primary text-white' : 'bg-gray-100'}`}\n            >\n              {cat}\n            </button>\n          ))}\n        </div>\n      )}\n\n      {/* Template Grid */}\n      <div className=\"grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3\">\n        {filteredTemplates.map(template => (\n          <button\n            key={template.id}\n            onClick={() => handleSelect(template.id)}\n            className={`text-left p-4 rounded-xl border-2 transition-all ${\n              selectedId === template.id\n                ? 'border-primary bg-primary/5 shadow-md'\n                : 'border-gray-200 hover:border-gray-300'}`}\n          >\n            <div className=\"flex items-start justify-between\">\n              <div className=\"flex-1\">\n                <h4 className=\"font-medium text-sm\">{template.name}</h4>\n                <p className=\"text-xs text-gray-500 mt-1 line-clamp-2\">\n                  {template.description}\n                </p>\n              </div>\n              {selectedId === template.id && (\n                <Check size={18} className=\"text-primary flex-shrink-0\" />\n              )}\n            </div>\n            {template.previewUrl && (\n              <img\n                src={template.previewUrl}\n                alt={template.name}\n                className=\"mt-2 w-full h-20 object-cover rounded\"\n              />\n            )}\n          </button>\n        ))}\n      </div>\n    </div>\n  );\n}",
+      "test_cases": [
+        {
+          "name": "渲染模板列表",
+          "scenario": "传入5个模板",
+          "expected": "显示5张模板卡片，网格布局"
+        },
+        {
+          "name": "选中状态",
+          "scenario": "selectedId 匹配某个模板",
+          "expected": "该模板卡片有高亮边框和勾选图标"
+        },
+        {
+          "name": "点击选择",
+          "scenario": "点击未选中的模板",
+          "expected": "调用 onAction(onSelectAction, {templateId})"
+        },
+        {
+          "name": "分类筛选",
+          "scenario": "点击分类按钮",
+          "expected": "只显示该分类的模板"
+        },
+        {
+          "name": "空列表",
+          "scenario": "templates 为空",
+          "expected": "显示空状态图标和文字"
+        }
+      ]
+    },
+    {
+      "id": "TASK-016",
+      "title": "ToolTraceCard组件",
+      "phase": "Task 6",
+      "priority": "P1",
+      "status": "backlog",
+      "assignee": "codex",
+      "estimate": "0.4天",
+      "dependencies": [
+        "TASK-013"
+      ],
+      "files": {
+        "create": [
+          "packages/client/src/components/A2UI/ToolTraceCard.tsx",
+          "packages/client/src/components/A2UI/ToolTraceCard.module.scss"
+        ]
+      },
+      "description": "工具执行状态卡片，实时展示工具调用状态。这是聊天中显示 AI 工具调用进度的核心组件，需要支持 6 种状态和实时更新。",
+      "requirements": {
+        "props": {
+          "id": "string - 工具调用唯一ID",
+          "name": "string - 工具技术名称如 feishu_send_message",
+          "displayName": "string - 显示名称如 '发送飞书消息'",
+          "state": "ToolState - 当前状态",
+          "input": "Record<string, unknown> | undefined - 输入参数",
+          "output": "Record<string, unknown> | undefined - 输出结果",
+          "error": "string | undefined - 错误信息",
+          "startedAt": "string - ISO时间戳",
+          "completedAt": "string | undefined - 完成时间",
+          "expandable": "boolean - 是否可展开查看详情，默认 true",
+          "className": "string | undefined - 额外 CSS 类名"
+        },
+        "state_machine": {
+          "planned": {
+            "icon": "Clock",
+            "iconColor": "text-gray-400",
+            "bgColor": "bg-gray-50",
+            "label": "计划中",
+            "description": "AI 已规划调用此工具"
+          },
+          "requires_auth": {
+            "icon": "Lock",
+            "iconColor": "text-yellow-500",
+            "bgColor": "bg-yellow-50",
+            "label": "需要授权",
+            "description": "请先连接相关服务",
+            "action_button": "去授权"
+          },
+          "requires_confirmation": {
+            "icon": "AlertTriangle",
+            "iconColor": "text-orange-500",
+            "bgColor": "bg-orange-50",
+            "label": "待确认",
+            "description": "此操作需要您的确认"
+          },
+          "executing": {
+            "icon": "Loader2",
+            "iconColor": "text-blue-500",
+            "bgColor": "bg-blue-50",
+            "label": "执行中",
+            "description": "正在执行...",
+            "animation": "animate-spin"
+          },
+          "succeeded": {
+            "icon": "CheckCircle",
+            "iconColor": "text-green-500",
+            "bgColor": "bg-green-50",
+            "label": "成功",
+            "description": "执行完成"
+          },
+          "failed": {
+            "icon": "XCircle",
+            "iconColor": "text-red-500",
+            "bgColor": "bg-red-50",
+            "label": "失败",
+            "description": "执行失败"
+          }
+        },
+        "layout": {
+          "structure": "水平布局: [状态图标] [内容区] [展开按钮]",
+          "content_area": {
+            "line1": "displayName + 状态标签",
+            "line2": "状态描述或错误信息",
+            "line3": "执行时间（如果已完成）"
+          },
+          "expandable_section": {
+            "input_section": "JSON 格式显示输入参数",
+            "output_section": "JSON 格式显示输出结果",
+            "collapsed_by_default": true
+          }
+        },
+        "time_display": {
+          "format": "相对时间 + 绝对时间悬浮提示",
+          "examples": [
+            "刚刚",
+            "5秒前",
+            "1分钟前"
+          ],
+          "duration": "如果有 completedAt，显示耗时如 '耗时 2.3s'"
+        },
+        "tool_name_mapping": {
+          "description": "将技术名称转换为友好显示名称",
+          "mapping": {
+            "feishu_list_templates": "获取飞书模板",
+            "feishu_get_template": "查看模板详情",
+            "feishu_create_instance": "创建消息实例",
+            "feishu_send_message": "发送飞书消息"
+          },
+          "fallback": "使用 name 并移除下划线首字母大写"
+        },
+        "error_display": {
+          "position": "状态描述下方",
+          "style": "text-red-600 text-sm",
+          "truncate": "超过 100 字符截断，展开后显示完整",
+          "copy_button": "支持复制错误信息"
+        },
+        "animations": {
+          "state_change": "fade 过渡动画 200ms",
+          "expand_collapse": "height 过渡动画 300ms ease-out",
+          "executing_icon": "spin 动画 1s linear infinite"
+        },
+        "accessibility": {
+          "aria_label": "工具调用状态: {displayName} - {状态}",
+          "aria_expanded": "展开/收起状态",
+          "keyboard": "Enter/Space 切换展开"
+        }
+      },
+      "implementation_steps": [
+        "1. 创建 ToolTraceCard.tsx 组件文件",
+        "2. 定义 STATE_CONFIG 常量对象（图标、颜色、标签映射）",
+        "3. 定义 TOOL_NAME_MAP 常量对象（名称映射）",
+        "4. 实现 getDisplayName 函数",
+        "5. 实现 formatDuration 函数（计算耗时）",
+        "6. 实现 formatRelativeTime 函数",
+        "7. 实现主组件结构",
+        "8. 添加展开/收起交互（useState）",
+        "9. 添加 JSON 预览组件",
+        "10. 添加 CSS 动画样式",
+        "11. 添加 aria 属性",
+        "12. 编写单元测试"
+      ],
+      "acceptance_criteria": [
+        "6 种状态正确显示对应图标和颜色",
+        "executing 状态图标有旋转动画",
+        "状态变化有平滑过渡动画",
+        "点击可展开查看输入/输出 JSON",
+        "错误信息红色突出显示",
+        "时间显示友好格式（相对时间）",
+        "完成后显示耗时",
+        "工具名称显示友好中文",
+        "键盘可操作展开/收起",
+        "响应式布局适配移动端"
+      ],
+      "code_example": "// packages/client/src/components/A2UI/ToolTraceCard.tsx\nimport { useState, useMemo } from 'react';\nimport { Clock, Lock, AlertTriangle, Loader2, CheckCircle, XCircle, ChevronDown } from 'lucide-react';\nimport type { ToolState } from '@/types';\nimport { cn } from '@/lib/utils';\nimport { formatRelativeTime, formatDuration } from '@/lib/time';\n\nconst STATE_CONFIG = {\n  planned: { icon: Clock, color: 'text-gray-400', bg: 'bg-gray-50', label: '计划中' },\n  requires_auth: { icon: Lock, color: 'text-yellow-500', bg: 'bg-yellow-50', label: '需要授权' },\n  requires_confirmation: { icon: AlertTriangle, color: 'text-orange-500', bg: 'bg-orange-50', label: '待确认' },\n  executing: { icon: Loader2, color: 'text-blue-500', bg: 'bg-blue-50', label: '执行中', spin: true },\n  succeeded: { icon: CheckCircle, color: 'text-green-500', bg: 'bg-green-50', label: '成功' },\n  failed: { icon: XCircle, color: 'text-red-500', bg: 'bg-red-50', label: '失败' },\n} as const;\n\nconst TOOL_NAME_MAP: Record<string, string> = {\n  feishu_list_templates: '获取飞书模板',\n  feishu_send_message: '发送飞书消息',\n  // ...\n};\n\ninterface ToolTraceCardProps {\n  id: string;\n  name: string;\n  displayName?: string;\n  state: ToolState;\n  input?: Record<string, unknown>;\n  output?: Record<string, unknown>;\n  error?: string;\n  startedAt: string;\n  completedAt?: string;\n  expandable?: boolean;\n  className?: string;\n}\n\nexport function ToolTraceCard({\n  name,\n  displayName,\n  state,\n  input,\n  output,\n  error,\n  startedAt,\n  completedAt,\n  expandable = true,\n  className,\n}: ToolTraceCardProps) {\n  const [expanded, setExpanded] = useState(false);\n  \n  const config = STATE_CONFIG[state];\n  const Icon = config.icon;\n  const toolDisplayName = displayName || TOOL_NAME_MAP[name] || name.replace(/_/g, ' ');\n  \n  const duration = useMemo(() => {\n    if (completedAt && startedAt) {\n      return formatDuration(new Date(startedAt), new Date(completedAt));\n    }\n    return null;\n  }, [startedAt, completedAt]);\n  \n  return (\n    <div\n      className={cn(\n        'rounded-lg border p-3 transition-colors duration-200',\n        config.bg,\n        className\n      )}\n      role=\"status\"\n      aria-label={`工具调用: ${toolDisplayName} - ${config.label}`}\n    >\n      <div className=\"flex items-start gap-3\">\n        {/* 状态图标 */}\n        <Icon\n          className={cn(\n            'h-5 w-5 mt-0.5',\n            config.color,\n            config.spin && 'animate-spin'\n          )}\n        />\n        \n        {/* 内容区 */}\n        <div className=\"flex-1 min-w-0\">\n          <div className=\"flex items-center gap-2\">\n            <span className=\"font-medium truncate\">{toolDisplayName}</span>\n            <span className={cn('text-xs px-1.5 py-0.5 rounded', config.color, config.bg)}>\n              {config.label}\n            </span>\n          </div>\n          \n          {error && (\n            <p className=\"text-sm text-red-600 mt-1 line-clamp-2\">{error}</p>\n          )}\n          \n          {duration && (\n            <p className=\"text-xs text-gray-500 mt-1\">耗时 {duration}</p>\n          )}\n        </div>\n        \n        {/* 展开按钮 */}\n        {expandable && (input || output) && (\n          <button\n            onClick={() => setExpanded(!expanded)}\n            className=\"p-1 hover:bg-gray-200 rounded\"\n            aria-expanded={expanded}\n          >\n            <ChevronDown className={cn('h-4 w-4 transition-transform', expanded && 'rotate-180')} />\n          </button>\n        )}\n      </div>\n      \n      {/* 展开内容 */}\n      {expanded && (\n        <div className=\"mt-3 pt-3 border-t text-xs space-y-2\">\n          {input && (\n            <div>\n              <span className=\"font-medium\">输入:</span>\n              <pre className=\"mt-1 p-2 bg-white rounded overflow-x-auto\">\n                {JSON.stringify(input, null, 2)}\n              </pre>\n            </div>\n          )}\n          {output && (\n            <div>\n              <span className=\"font-medium\">输出:</span>\n              <pre className=\"mt-1 p-2 bg-white rounded overflow-x-auto\">\n                {JSON.stringify(output, null, 2)}\n              </pre>\n            </div>\n          )}\n        </div>\n      )}\n    </div>\n  );\n}",
+      "test_cases": [
+        {
+          "name": "renders correct state for each ToolState",
+          "setup": "Render with state='succeeded'",
+          "expect": "Shows green CheckCircle icon and '成功' label"
+        },
+        {
+          "name": "shows spinning animation for executing state",
+          "setup": "Render with state='executing'",
+          "expect": "Loader2 icon has animate-spin class"
+        },
+        {
+          "name": "expands to show input/output JSON",
+          "setup": "Render with input and output, click expand button",
+          "expect": "JSON formatted input and output are visible"
+        },
+        {
+          "name": "displays error message in red",
+          "setup": "Render with state='failed' and error='Connection timeout'",
+          "expect": "Error text is visible with red color"
+        },
+        {
+          "name": "shows duration when completed",
+          "setup": "Render with startedAt and completedAt 2 seconds apart",
+          "expect": "Shows '耗时 2.0s'"
+        }
+      ]
+    },
+    {
+      "id": "TASK-017",
+      "title": "ConfirmBar组件",
+      "phase": "Task 6",
+      "priority": "P1",
+      "status": "backlog",
+      "assignee": "codex",
+      "estimate": "0.3天",
+      "dependencies": [
+        "TASK-013"
+      ],
+      "files": {
+        "create": [
+          "packages/client/src/components/A2UI/ConfirmBar.tsx",
+          "packages/client/src/components/A2UI/ConfirmBar.module.scss"
+        ]
+      },
+      "description": "强确认条组件，固定在底部用于确认危险操作。这是写操作（如发送消息、创建记录）的必经确认步骤，需要使用 Portal 渲染以覆盖整个页面。",
+      "requirements": {
+        "props": {
+          "title": "string - 确认标题，如 '确认发送消息'",
+          "description": "string - 操作描述，如 '即将向张三发送飞书消息'",
+          "confirmLabel": "string - 确认按钮文字，默认 '确认'",
+          "cancelLabel": "string - 取消按钮文字，默认 '取消'",
+          "confirmStyle": "'primary' | 'danger' - 确认按钮样式",
+          "toolCallId": "string - 关联的工具调用ID，用于 action",
+          "onConfirmAction": "string - 确认时的 action 标识",
+          "onCancelAction": "string - 取消时的 action 标识",
+          "onAction": "(action: string, data?: unknown) => void - 统一回调",
+          "loading": "boolean | undefined - 是否显示加载状态",
+          "disabled": "boolean | undefined - 是否禁用按钮"
+        },
+        "layout": {
+          "overlay": {
+            "position": "fixed inset-0",
+            "background": "bg-black/50 backdrop-blur-sm",
+            "z_index": "z-50",
+            "click_behavior": "点击遮罩不关闭（防止误操作）"
+          },
+          "bar": {
+            "position": "fixed bottom-0 left-0 right-0",
+            "background": "bg-white",
+            "shadow": "shadow-lg",
+            "padding": "p-4 pb-safe（适配 iPhone 底部安全区）",
+            "border": "border-t border-gray-200",
+            "animation": "从底部滑入 slide-up 300ms"
+          },
+          "content": {
+            "max_width": "max-w-lg mx-auto",
+            "structure": "[标题] [描述] [按钮组]"
+          },
+          "buttons": {
+            "layout": "flex gap-3",
+            "cancel": "flex-1 border border-gray-300 bg-white hover:bg-gray-50",
+            "confirm_primary": "flex-1 bg-primary text-white hover:bg-primary-dark",
+            "confirm_danger": "flex-1 bg-red-600 text-white hover:bg-red-700"
+          }
+        },
+        "portal": {
+          "target": "document.body",
+          "implementation": "使用 React Portal 或 Radix Dialog",
+          "cleanup": "组件卸载时移除 Portal 节点"
+        },
+        "body_scroll_lock": {
+          "on_mount": "document.body.style.overflow = 'hidden'",
+          "on_unmount": "document.body.style.overflow = ''",
+          "library": "可使用 body-scroll-lock 库"
+        },
+        "button_states": {
+          "normal": "可点击",
+          "loading": "显示 Spinner，文字变为 '处理中...'，禁用点击",
+          "disabled": "灰色，不可点击"
+        },
+        "action_format": {
+          "confirm": "onAction('confirm:{toolCallId}', { confirmed: true })",
+          "cancel": "onAction('cancel:{toolCallId}', { confirmed: false })"
+        },
+        "animations": {
+          "enter": {
+            "overlay": "fade-in 200ms",
+            "bar": "slide-up 300ms cubic-bezier(0.32, 0.72, 0, 1)"
+          },
+          "exit": {
+            "overlay": "fade-out 150ms",
+            "bar": "slide-down 200ms"
+          }
+        },
+        "accessibility": {
+          "role": "alertdialog",
+          "aria_modal": "true",
+          "aria_labelledby": "confirm-title",
+          "aria_describedby": "confirm-description",
+          "focus_trap": "焦点限制在 ConfirmBar 内",
+          "initial_focus": "取消按钮（更安全的默认选择）",
+          "escape_key": "触发取消操作"
+        },
+        "responsive": {
+          "mobile": "全宽显示，按钮垂直堆叠",
+          "desktop": "max-w-lg 居中，按钮水平排列"
+        }
+      },
+      "implementation_steps": [
+        "1. 创建 ConfirmBar.tsx 组件文件",
+        "2. 实现 Portal 渲染逻辑",
+        "3. 实现遮罩层和确认条布局",
+        "4. 添加 body scroll lock",
+        "5. 实现按钮状态（normal/loading/disabled）",
+        "6. 添加进入/退出动画",
+        "7. 实现 focus trap",
+        "8. 添加 Escape 键处理",
+        "9. 添加 aria 属性",
+        "10. 添加移动端适配（safe-area）",
+        "11. 编写单元测试"
+      ],
+      "acceptance_criteria": [
+        "使用 Portal 渲染到 body",
+        "固定在页面底部，遮罩覆盖全屏",
+        "点击遮罩不关闭",
+        "确认/取消按钮触发正确 action",
+        "confirmStyle='danger' 时按钮为红色",
+        "loading 状态显示 Spinner",
+        "Escape 键触发取消",
+        "焦点陷阱正常工作",
+        "进入/退出有动画",
+        "iPhone 底部安全区适配"
+      ],
+      "code_example": "// packages/client/src/components/A2UI/ConfirmBar.tsx\nimport { useEffect, useCallback } from 'react';\nimport { createPortal } from 'react-dom';\nimport { Loader2 } from 'lucide-react';\nimport { cn } from '@/lib/utils';\nimport { Button } from '@/components/ui/Button';\n\ninterface ConfirmBarProps {\n  title: string;\n  description: string;\n  confirmLabel?: string;\n  cancelLabel?: string;\n  confirmStyle?: 'primary' | 'danger';\n  toolCallId: string;\n  onConfirmAction: string;\n  onCancelAction: string;\n  onAction: (action: string, data?: unknown) => void;\n  loading?: boolean;\n  disabled?: boolean;\n}\n\nexport function ConfirmBar({\n  title,\n  description,\n  confirmLabel = '确认',\n  cancelLabel = '取消',\n  confirmStyle = 'primary',\n  toolCallId,\n  onAction,\n  loading = false,\n  disabled = false,\n}: ConfirmBarProps) {\n  // Lock body scroll\n  useEffect(() => {\n    const originalOverflow = document.body.style.overflow;\n    document.body.style.overflow = 'hidden';\n    return () => {\n      document.body.style.overflow = originalOverflow;\n    };\n  }, []);\n  \n  // Handle Escape key\n  useEffect(() => {\n    const handleKeyDown = (e: KeyboardEvent) => {\n      if (e.key === 'Escape' && !loading) {\n        handleCancel();\n      }\n    };\n    document.addEventListener('keydown', handleKeyDown);\n    return () => document.removeEventListener('keydown', handleKeyDown);\n  }, [loading]);\n  \n  const handleConfirm = useCallback(() => {\n    if (loading || disabled) return;\n    onAction(`confirm:${toolCallId}`, { confirmed: true });\n  }, [loading, disabled, onAction, toolCallId]);\n  \n  const handleCancel = useCallback(() => {\n    if (loading) return;\n    onAction(`cancel:${toolCallId}`, { confirmed: false });\n  }, [loading, onAction, toolCallId]);\n  \n  return createPortal(\n    <div\n      className=\"fixed inset-0 z-50 flex flex-col justify-end\"\n      role=\"alertdialog\"\n      aria-modal=\"true\"\n      aria-labelledby=\"confirm-title\"\n      aria-describedby=\"confirm-description\"\n    >\n      {/* Overlay */}\n      <div className=\"absolute inset-0 bg-black/50 backdrop-blur-sm animate-fade-in\" />\n      \n      {/* Bar */}\n      <div className=\"relative bg-white border-t shadow-lg p-4 pb-safe animate-slide-up\">\n        <div className=\"max-w-lg mx-auto\">\n          <h2 id=\"confirm-title\" className=\"text-lg font-semibold\">\n            {title}\n          </h2>\n          <p id=\"confirm-description\" className=\"text-sm text-gray-600 mt-1\">\n            {description}\n          </p>\n          \n          <div className=\"flex gap-3 mt-4\">\n            <Button\n              variant=\"outline\"\n              className=\"flex-1\"\n              onClick={handleCancel}\n              disabled={loading}\n            >\n              {cancelLabel}\n            </Button>\n            <Button\n              variant={confirmStyle === 'danger' ? 'destructive' : 'default'}\n              className=\"flex-1\"\n              onClick={handleConfirm}\n              disabled={loading || disabled}\n            >\n              {loading ? (\n                <>\n                  <Loader2 className=\"h-4 w-4 mr-2 animate-spin\" />\n                  处理中...\n                </>\n              ) : (\n                confirmLabel\n              )}\n            </Button>\n          </div>\n        </div>\n      </div>\n    </div>,\n    document.body\n  );\n}",
+      "test_cases": [
+        {
+          "name": "renders in portal to document.body",
+          "setup": "Render ConfirmBar",
+          "expect": "Component is rendered as child of document.body"
+        },
+        {
+          "name": "calls onAction with confirm action on confirm click",
+          "setup": "Render and click confirm button",
+          "expect": "onAction called with 'confirm:{toolCallId}'"
+        },
+        {
+          "name": "calls onAction with cancel action on Escape key",
+          "setup": "Render and press Escape",
+          "expect": "onAction called with 'cancel:{toolCallId}'"
+        },
+        {
+          "name": "shows loading state on confirm button",
+          "setup": "Render with loading=true",
+          "expect": "Confirm button shows spinner and '处理中...'"
+        },
+        {
+          "name": "locks body scroll on mount",
+          "setup": "Render ConfirmBar",
+          "expect": "document.body.style.overflow === 'hidden'"
+        }
+      ]
+    },
+    {
+      "id": "TASK-018",
+      "title": "其他A2UI组件",
+      "phase": "Task 6",
+      "priority": "P1",
+      "status": "backlog",
+      "assignee": "codex",
+      "estimate": "0.5天",
+      "dependencies": [
+        "TASK-013"
+      ],
+      "files": {
+        "create": [
+          "packages/client/src/components/A2UI/VariableForm.tsx",
+          "packages/client/src/components/A2UI/DraftPreview.tsx",
+          "packages/client/src/components/A2UI/styles.scss"
+        ]
+      },
+      "description": "实现 VariableForm 和 DraftPreview 组件，以及统一样式。",
+      "requirements": {
+        "VariableForm": {
+          "description": "模板变量填写表单",
+          "props": {
+            "templateId": "string",
+            "templateName": "string",
+            "variables": "VariableDefinition[]",
+            "values": "Record<string, string>",
+            "onChangeAction": "string",
+            "onSubmitAction": "string"
+          },
+          "features": [
+            "根据变量类型渲染不同输入控件",
+            "必填项标记",
+            "实时验证",
+            "提交按钮"
+          ]
+        },
+        "DraftPreview": {
+          "description": "消息草稿预览",
+          "props": {
+            "drafts": "DraftOption[]",
+            "selectedIndex": "number",
+            "onSelectAction": "string",
+            "onEditAction": "string",
+            "onConfirmAction": "string"
+          },
+          "features": [
+            "多个草稿切换",
+            "Markdown 渲染",
+            "编辑/确认按钮"
+          ]
+        },
+        "styles": "统一的 A2UI 组件样式变量和基础类"
+      },
+      "acceptance_criteria": [
+        "VariableForm 支持 text/textarea/date/select 类型",
+        "DraftPreview 正确渲染 Markdown",
+        "多草稿可切换",
+        "样式统一美观"
+      ],
+      "implementation_steps": [
+        "1. 创建 VariableForm.tsx 组件",
+        "2. 根据 variable.type 渲染不同输入控件 (text/textarea/date/select)",
+        "3. 实现必填项验证逻辑",
+        "4. 实现实时 onChange 回调",
+        "5. 添加提交按钮和验证",
+        "6. 创建 DraftPreview.tsx 组件",
+        "7. 实现多草稿切换 Tab/Carousel",
+        "8. 集成 Markdown 渲染器 (react-markdown)",
+        "9. 添加编辑/确认按钮",
+        "10. 创建 styles.scss 统一样式变量",
+        "11. 定义 A2UI 主题色、间距、圆角等 CSS 变量"
+      ],
+      "code_example": "// packages/client/src/components/A2UI/VariableForm.tsx\nimport { useState, useCallback } from 'react';\n\ninterface VariableDefinition {\n  name: string;\n  label: string;\n  type: 'text' | 'textarea' | 'date' | 'select';\n  required: boolean;\n  placeholder?: string;\n  options?: string[];\n}\n\ninterface VariableFormProps {\n  templateId: string;\n  templateName: string;\n  variables: VariableDefinition[];\n  values: Record<string, string>;\n  onChangeAction: string;\n  onSubmitAction: string;\n  onAction: (action: string, data?: unknown) => void;\n}\n\nexport function VariableForm(props: VariableFormProps) {\n  const { templateName, variables, values, onChangeAction, onSubmitAction, onAction } = props;\n  const [localValues, setLocalValues] = useState<Record<string, string>>(values);\n  const [errors, setErrors] = useState<Record<string, string>>({});\n\n  const handleChange = useCallback((name: string, value: string) => {\n    setLocalValues(prev => ({ ...prev, [name]: value }));\n    setErrors(prev => ({ ...prev, [name]: '' }));\n    onAction(onChangeAction, { name, value });\n  }, [onAction, onChangeAction]);\n\n  const validate = useCallback(() => {\n    const newErrors: Record<string, string> = {};\n    variables.forEach(v => {\n      if (v.required && !localValues[v.name]?.trim()) {\n        newErrors[v.name] = `${v.label}为必填项`;\n      }\n    });\n    setErrors(newErrors);\n    return Object.keys(newErrors).length === 0;\n  }, [variables, localValues]);\n\n  const handleSubmit = useCallback(() => {\n    if (validate()) {\n      onAction(onSubmitAction, { values: localValues });\n    }\n  }, [validate, onAction, onSubmitAction, localValues]);\n\n  const renderInput = (variable: VariableDefinition) => {\n    const value = localValues[variable.name] || '';\n    const baseClass = \"w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/50\";\n    const errorClass = errors[variable.name] ? \"border-red-500\" : \"border-gray-300\";\n\n    switch (variable.type) {\n      case 'textarea':\n        return <textarea className={`${baseClass} ${errorClass} min-h-[100px]`} value={value} onChange={e => handleChange(variable.name, e.target.value)} placeholder={variable.placeholder} />;\n      case 'date':\n        return <input type=\"date\" className={`${baseClass} ${errorClass}`} value={value} onChange={e => handleChange(variable.name, e.target.value)} />;\n      case 'select':\n        return (\n          <select className={`${baseClass} ${errorClass}`} value={value} onChange={e => handleChange(variable.name, e.target.value)}>\n            <option value=\"\">请选择</option>\n            {variable.options?.map(opt => <option key={opt} value={opt}>{opt}</option>)}\n          </select>\n        );\n      default:\n        return <input type=\"text\" className={`${baseClass} ${errorClass}`} value={value} onChange={e => handleChange(variable.name, e.target.value)} placeholder={variable.placeholder} />;\n    }\n  };\n\n  return (\n    <div className=\"bg-white rounded-xl shadow-sm border p-4\">\n      <h3 className=\"font-medium mb-4\">{templateName} - 填写变量</h3>\n      <div className=\"space-y-4\">\n        {variables.map(variable => (\n          <div key={variable.name}>\n            <label className=\"block text-sm font-medium mb-1\">\n              {variable.label}\n              {variable.required && <span className=\"text-red-500 ml-1\">*</span>}\n            </label>\n            {renderInput(variable)}\n            {errors[variable.name] && <p className=\"text-red-500 text-xs mt-1\">{errors[variable.name]}</p>}\n          </div>\n        ))}\n      </div>\n      <button onClick={handleSubmit} className=\"w-full mt-4 bg-primary text-white py-2 rounded-lg\">提交</button>\n    </div>\n  );\n}\n\n// packages/client/src/components/A2UI/DraftPreview.tsx\nimport ReactMarkdown from 'react-markdown';\nimport { ChevronLeft, ChevronRight, Edit2, Check } from 'lucide-react';\n\ninterface DraftOption {\n  content: string;\n  format: 'text' | 'markdown' | 'richtext';\n  metadata?: Record<string, unknown>;\n}\n\ninterface DraftPreviewProps {\n  drafts: DraftOption[];\n  selectedIndex: number;\n  onSelectAction: string;\n  onEditAction: string;\n  onConfirmAction: string;\n  onAction: (action: string, data?: unknown) => void;\n}\n\nexport function DraftPreview(props: DraftPreviewProps) {\n  const { drafts, selectedIndex, onSelectAction, onEditAction, onConfirmAction, onAction } = props;\n  const currentDraft = drafts[selectedIndex];\n\n  return (\n    <div className=\"bg-white rounded-xl shadow-sm border p-4\">\n      {/* Draft Navigation */}\n      {drafts.length > 1 && (\n        <div className=\"flex items-center justify-between mb-3\">\n          <button disabled={selectedIndex === 0} onClick={() => onAction(onSelectAction, { index: selectedIndex - 1 })} className=\"p-1 disabled:opacity-30\">\n            <ChevronLeft size={20} />\n          </button>\n          <span className=\"text-sm text-gray-500\">草稿 {selectedIndex + 1} / {drafts.length}</span>\n          <button disabled={selectedIndex === drafts.length - 1} onClick={() => onAction(onSelectAction, { index: selectedIndex + 1 })} className=\"p-1 disabled:opacity-30\">\n            <ChevronRight size={20} />\n          </button>\n        </div>\n      )}\n      {/* Content */}\n      <div className=\"prose prose-sm max-w-none p-3 bg-gray-50 rounded-lg min-h-[120px]\">\n        {currentDraft?.format === 'markdown' ? (\n          <ReactMarkdown>{currentDraft.content}</ReactMarkdown>\n        ) : (\n          <p className=\"whitespace-pre-wrap\">{currentDraft?.content}</p>\n        )}\n      </div>\n      {/* Actions */}\n      <div className=\"flex gap-2 mt-3\">\n        <button onClick={() => onAction(onEditAction, { index: selectedIndex })} className=\"flex-1 py-2 border rounded-lg flex items-center justify-center gap-1\">\n          <Edit2 size={16} /> 编辑\n        </button>\n        <button onClick={() => onAction(onConfirmAction, { index: selectedIndex, content: currentDraft?.content })} className=\"flex-1 py-2 bg-primary text-white rounded-lg flex items-center justify-center gap-1\">\n          <Check size={16} /> 使用此草稿\n        </button>\n      </div>\n    </div>\n  );\n}",
+      "test_cases": [
+        {
+          "name": "VariableForm 渲染不同类型",
+          "scenario": "传入 text/textarea/date/select 四种变量",
+          "expected": "分别渲染 input/textarea/date-picker/select"
+        },
+        {
+          "name": "必填项验证",
+          "scenario": "required 字段为空时提交",
+          "expected": "显示错误提示，不触发 onSubmitAction"
+        },
+        {
+          "name": "DraftPreview 多草稿切换",
+          "scenario": "传入3个草稿",
+          "expected": "显示导航箭头，可左右切换"
+        },
+        {
+          "name": "Markdown 渲染",
+          "scenario": "草稿 format 为 markdown",
+          "expected": "正确渲染标题、列表、粗体等"
+        },
+        {
+          "name": "确认草稿",
+          "scenario": "点击使用此草稿",
+          "expected": "调用 onAction(onConfirmAction, {index, content})"
+        }
+      ]
+    },
+    {
+      "id": "TASK-019",
+      "title": "useAgentChat Hook",
+      "phase": "Task 7",
+      "priority": "P0",
+      "status": "backlog",
+      "assignee": "claude-code",
+      "estimate": "1天",
+      "dependencies": [
+        "TASK-011"
+      ],
+      "files": {
+        "create": [
+          "packages/client/src/hooks/useAgentChat.ts"
+        ],
+        "reference": [
+          "packages/client/src/types/chat.ts",
+          "packages/server/src/agent/types.ts"
+        ]
+      },
+      "description": "实现 SSE 聊天 React Hook，管理消息状态和流式响应。这是前端与 Agent 交互的核心接口。",
+      "requirements": {
+        "hook": "useAgentChat",
+        "params": {
+          "sessionId": "string - 会话ID",
+          "options": {
+            "autoReconnect": "boolean - 断线是否自动重连，默认 false",
+            "maxReconnectAttempts": "number - 最大重连次数，默认 3",
+            "reconnectInterval": "number - 重连间隔毫秒，默认 1000"
+          }
+        },
+        "returns": {
+          "messages": "ChatMessage[] - 完整消息列表（包含历史）",
+          "isStreaming": "boolean - 是否正在流式接收",
+          "currentDelta": "string - 当前流式增量文本（拼接后的）",
+          "pendingUI": "A2UIPayload | null - 待渲染的A2UI组件",
+          "toolTraces": "Map<string, ToolTrace> - 工具执行状态，key为toolCallId",
+          "error": "AgentError | null - 错误状态",
+          "connectionState": "'idle' | 'connecting' | 'connected' | 'error' - 连接状态",
+          "sendMessage": "(content: string, contactId?: string) => Promise<void>",
+          "clearPendingUI": "() => void",
+          "confirmTool": "(toolCallId: string, confirmed: boolean) => Promise<ToolConfirmResult>",
+          "abort": "() => void - 中断当前请求"
+        },
+        "types": {
+          "ChatMessage": {
+            "id": "string",
+            "role": "'user' | 'assistant'",
+            "content": "string",
+            "citations": "Citation[] | undefined",
+            "toolTraces": "ToolTrace[] | undefined",
+            "createdAt": "string"
+          },
+          "AgentError": {
+            "code": "'NETWORK_ERROR' | 'AUTH_ERROR' | 'AI_ERROR' | 'TOOL_ERROR' | 'PARSE_ERROR'",
+            "message": "string",
+            "retryable": "boolean"
+          },
+          "ToolConfirmResult": {
+            "success": "boolean",
+            "newState": "ToolState",
+            "output": "unknown | undefined",
+            "error": "string | undefined"
+          }
+        },
+        "internal_state": {
+          "abortControllerRef": "React.MutableRefObject<AbortController | null>",
+          "readerRef": "React.MutableRefObject<ReadableStreamDefaultReader | null>",
+          "reconnectAttemptsRef": "React.MutableRefObject<number>",
+          "deltaBufferRef": "React.MutableRefObject<string> - 用于拼接增量文本"
+        },
+        "sse_parsing": {
+          "format": "event: {eventType}\\ndata: {json}\\n\\n",
+          "parser_logic": [
+            "1. 使用 TextDecoder 解码 Uint8Array",
+            "2. 按 \\n\\n 分割事件块",
+            "3. 解析 event: 和 data: 行",
+            "4. JSON.parse data 部分",
+            "5. 处理不完整的事件块（跨 chunk）"
+          ],
+          "edge_cases": [
+            "事件跨多个 chunk 时需要缓存拼接",
+            "空行和注释行需要跳过",
+            "JSON 解析失败时记录错误但继续"
+          ]
+        },
+        "event_handling": {
+          "message.delta": {
+            "action": "追加到 deltaBufferRef 和 currentDelta",
+            "state_update": "setCurrentDelta(prev => prev + data.content)"
+          },
+          "message.final": {
+            "action": "创建完整消息，清空 delta",
+            "state_update": [
+              "setMessages(prev => [...prev, newMessage])",
+              "setCurrentDelta('')",
+              "setIsStreaming(false)"
+            ]
+          },
+          "ui": {
+            "action": "设置 pendingUI",
+            "state_update": "setPendingUI(data as A2UIPayload)"
+          },
+          "tool.trace": {
+            "action": "更新 toolTraces Map",
+            "state_update": "setToolTraces(prev => new Map(prev).set(data.id, data))",
+            "note": "同一个 toolCallId 可能收到多次（状态变化）"
+          },
+          "error": {
+            "action": "设置错误状态，停止流",
+            "state_update": [
+              "setError({ code: data.code, message: data.message, retryable: isRetryable(data.code) })",
+              "setIsStreaming(false)"
+            ]
+          }
+        },
+        "sendMessage_implementation": {
+          "steps": [
+            "1. 如果 isStreaming 为 true，先 abort 当前请求",
+            "2. 创建新的 AbortController",
+            "3. 设置 isStreaming = true, error = null, currentDelta = ''",
+            "4. 添加用户消息到 messages 列表（乐观更新）",
+            "5. 发起 fetch POST /v1/agent/chat",
+            "6. 获取 response.body.getReader()",
+            "7. 循环读取并解析 SSE 事件",
+            "8. catch 中处理网络错误，设置 error 状态"
+          ],
+          "fetch_options": {
+            "method": "POST",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer {token}",
+              "Accept": "text/event-stream"
+            },
+            "body": "JSON.stringify({ sessionId, message: content, contactId })",
+            "signal": "abortController.signal"
+          }
+        },
+        "confirmTool_implementation": {
+          "steps": [
+            "1. 发起 POST /v1/tool-runs/:toolCallId/confirm",
+            "2. body: { confirmed: boolean }",
+            "3. 更新 toolTraces 中对应记录的状态",
+            "4. 如果确认成功且有后续响应，继续处理"
+          ]
+        },
+        "lifecycle": {
+          "mount": "无需初始化加载，按需发送",
+          "unmount": "abort 当前请求，清理 reader",
+          "sessionId_change": "清空所有状态，重新初始化"
+        },
+        "error_recovery": {
+          "NETWORK_ERROR": "可重试，显示重连按钮",
+          "AUTH_ERROR": "跳转登录页",
+          "AI_ERROR": "显示错误信息，允许重发",
+          "PARSE_ERROR": "记录日志，继续处理后续事件"
+        }
+      },
+      "implementation_steps": [
+        "1. 创建 hooks/useAgentChat.ts",
+        "2. 定义 ChatMessage, AgentError, ToolConfirmResult 类型",
+        "3. 实现 parseSSEChunk 函数处理流式数据",
+        "4. 实现 useAgentChat hook 主体",
+        "5. 实现 sendMessage 函数（fetch + ReadableStream）",
+        "6. 实现各事件类型的处理器",
+        "7. 实现 confirmTool 函数",
+        "8. 实现 abort 和清理逻辑",
+        "9. 添加 sessionId 变化的 effect",
+        "10. 编写单元测试（mock fetch）"
+      ],
+      "acceptance_criteria": [
+        "sendMessage 正确发起 SSE 请求",
+        "流式文本实时追加到 currentDelta（无丢失）",
+        "message.final 后完整消息加入 messages 列表",
+        "pendingUI 在收到 ui 事件后立即可用",
+        "toolTraces 按 toolCallId 正确更新状态",
+        "组件卸载时 abort 请求，无内存泄漏",
+        "网络错误时 error 状态正确设置",
+        "sessionId 变化时状态正确重置",
+        "confirmTool 返回正确结果"
+      ],
+      "code_example": "// packages/client/src/hooks/useAgentChat.ts\nimport { useState, useRef, useCallback, useEffect } from 'react';\nimport type { A2UIPayload, ToolTrace, Citation } from '@/types';\n\nexport interface ChatMessage {\n  id: string;\n  role: 'user' | 'assistant';\n  content: string;\n  citations?: Citation[];\n  toolTraces?: ToolTrace[];\n  createdAt: string;\n}\n\nexport interface AgentError {\n  code: 'NETWORK_ERROR' | 'AUTH_ERROR' | 'AI_ERROR' | 'TOOL_ERROR' | 'PARSE_ERROR';\n  message: string;\n  retryable: boolean;\n}\n\nexport function useAgentChat(sessionId: string) {\n  const [messages, setMessages] = useState<ChatMessage[]>([]);\n  const [isStreaming, setIsStreaming] = useState(false);\n  const [currentDelta, setCurrentDelta] = useState('');\n  const [pendingUI, setPendingUI] = useState<A2UIPayload | null>(null);\n  const [toolTraces, setToolTraces] = useState<Map<string, ToolTrace>>(new Map());\n  const [error, setError] = useState<AgentError | null>(null);\n  \n  const abortControllerRef = useRef<AbortController | null>(null);\n  const deltaBufferRef = useRef('');\n  \n  const sendMessage = useCallback(async (content: string, contactId?: string) => {\n    // 1. Abort existing request\n    abortControllerRef.current?.abort();\n    abortControllerRef.current = new AbortController();\n    \n    // 2. Reset state\n    setIsStreaming(true);\n    setError(null);\n    setCurrentDelta('');\n    deltaBufferRef.current = '';\n    \n    // 3. Optimistic update - add user message\n    const userMessage: ChatMessage = {\n      id: `temp-${Date.now()}`,\n      role: 'user',\n      content,\n      createdAt: new Date().toISOString()\n    };\n    setMessages(prev => [...prev, userMessage]);\n    \n    try {\n      const response = await fetch('/v1/agent/chat', {\n        method: 'POST',\n        headers: {\n          'Content-Type': 'application/json',\n          'Authorization': `Bearer ${getToken()}`,\n          'Accept': 'text/event-stream'\n        },\n        body: JSON.stringify({ sessionId, message: content, contactId }),\n        signal: abortControllerRef.current.signal\n      });\n      \n      if (!response.ok) {\n        throw new Error(`HTTP ${response.status}`);\n      }\n      \n      const reader = response.body!.getReader();\n      const decoder = new TextDecoder();\n      let buffer = '';\n      \n      while (true) {\n        const { done, value } = await reader.read();\n        if (done) break;\n        \n        buffer += decoder.decode(value, { stream: true });\n        const events = parseSSEBuffer(buffer);\n        buffer = events.remainder;\n        \n        for (const event of events.parsed) {\n          handleSSEEvent(event);\n        }\n      }\n    } catch (err) {\n      if (err.name !== 'AbortError') {\n        setError({\n          code: 'NETWORK_ERROR',\n          message: err.message,\n          retryable: true\n        });\n      }\n    } finally {\n      setIsStreaming(false);\n    }\n  }, [sessionId]);\n  \n  // ... handleSSEEvent, confirmTool, etc.\n  \n  return {\n    messages,\n    isStreaming,\n    currentDelta,\n    pendingUI,\n    toolTraces,\n    error,\n    sendMessage,\n    clearPendingUI: () => setPendingUI(null),\n    confirmTool,\n    abort: () => abortControllerRef.current?.abort()\n  };\n}",
+      "test_cases": [
+        {
+          "name": "should stream message deltas correctly",
+          "setup": "Mock fetch to return SSE stream with message.delta events",
+          "verify": "currentDelta contains concatenated content"
+        },
+        {
+          "name": "should handle message.final and update messages list",
+          "setup": "Mock fetch to return message.final event",
+          "verify": "messages array has new assistant message"
+        },
+        {
+          "name": "should update toolTraces on tool.trace events",
+          "setup": "Mock fetch to return tool.trace with state changes",
+          "verify": "toolTraces map has correct state progression"
+        },
+        {
+          "name": "should abort on unmount",
+          "setup": "Start streaming, unmount component",
+          "verify": "AbortController.abort was called"
+        },
+        {
+          "name": "should handle network errors",
+          "setup": "Mock fetch to reject",
+          "verify": "error state is set with NETWORK_ERROR"
+        }
+      ]
+    },
+    {
+      "id": "TASK-020",
+      "title": "聊天页SSE集成",
+      "phase": "Task 7",
+      "priority": "P0",
+      "status": "backlog",
+      "assignee": "claude-code",
+      "estimate": "1天",
+      "dependencies": [
+        "TASK-019",
+        "TASK-013"
+      ],
+      "files": {
+        "modify": [
+          "packages/client/src/pages/conversation-chat/index.tsx"
+        ],
+        "create": [
+          "packages/client/src/pages/conversation-chat/components/StreamingMessage.tsx"
+        ],
+        "reference": [
+          "packages/client/src/components/A2UI/",
+          "packages/client/src/hooks/useAgentChat.ts"
+        ]
+      },
+      "description": "将 SSE 流式聊天和 A2UI 组件集成到聊天页面。这是用户与 Agent 交互的主界面，需要处理流式消息、工具状态、确认流程等复杂交互。",
+      "requirements": {
+        "component_structure": {
+          "ConversationChatPage": {
+            "description": "聊天页面主组件",
+            "state": {
+              "contactId": "string | undefined - 当前关联的联系人",
+              "inputValue": "string - 输入框内容"
+            },
+            "hooks": [
+              "useAgentChat(sessionId) - SSE 聊天核心",
+              "useParams() - 获取 sessionId",
+              "useScrollToBottom() - 自动滚动到底部"
+            ]
+          },
+          "MessageList": {
+            "description": "消息列表区域",
+            "props": {
+              "messages": "ChatMessage[]",
+              "currentDelta": "string",
+              "isStreaming": "boolean",
+              "toolTraces": "Map<string, ToolTrace>"
+            }
+          },
+          "StreamingMessage": {
+            "description": "流式消息气泡（新建组件）",
+            "props": {
+              "content": "string - currentDelta",
+              "isComplete": "boolean"
+            },
+            "features": [
+              "打字机效果光标",
+              "Markdown 实时渲染",
+              "代码块语法高亮"
+            ]
+          },
+          "InputArea": {
+            "description": "输入区域",
+            "props": {
+              "value": "string",
+              "onChange": "(value: string) => void",
+              "onSend": "() => void",
+              "disabled": "boolean - isStreaming 时禁用",
+              "placeholder": "string"
+            }
+          }
+        },
+        "layout": {
+          "structure": "flex flex-col h-full",
+          "header": "联系人信息 + 会话标题",
+          "message_area": "flex-1 overflow-y-auto",
+          "a2ui_area": "动态高度，根据 pendingUI 显示",
+          "input_area": "固定底部",
+          "confirm_bar": "Portal 到 body，覆盖在最上层"
+        },
+        "message_rendering": {
+          "user_message": {
+            "alignment": "右对齐",
+            "style": "bg-primary text-white rounded-lg",
+            "avatar": "用户头像"
+          },
+          "assistant_message": {
+            "alignment": "左对齐",
+            "style": "bg-gray-100 rounded-lg",
+            "avatar": "AI 头像",
+            "features": [
+              "Markdown 渲染",
+              "代码块复制按钮",
+              "Citations 高亮（如果有）"
+            ]
+          },
+          "streaming_message": {
+            "condition": "isStreaming && currentDelta",
+            "style": "与 assistant_message 相同",
+            "extra": "闪烁光标 + loading 指示器"
+          },
+          "tool_trace_display": {
+            "position": "在触发工具调用的消息下方",
+            "component": "ToolTraceCard",
+            "update": "实时更新状态"
+          }
+        },
+        "a2ui_integration": {
+          "pendingUI_handling": {
+            "condition": "pendingUI !== null",
+            "render": "<A2UIRenderer payload={pendingUI} onAction={handleA2UIAction} />",
+            "position": "消息列表下方，输入框上方"
+          },
+          "handleA2UIAction": {
+            "signature": "(action: string, data?: unknown) => void",
+            "actions": {
+              "confirm": "调用 confirmTool(toolCallId, true)",
+              "cancel": "调用 confirmTool(toolCallId, false)",
+              "edit": "打开编辑模式（根据具体组件）",
+              "select": "处理选择事件"
+            }
+          },
+          "ConfirmBar_special": {
+            "description": "ConfirmBar 需要特殊处理",
+            "behavior": [
+              "使用 Portal 渲染到 body",
+              "禁用页面滚动",
+              "确认/取消后自动关闭",
+              "显示加载状态"
+            ]
+          }
+        },
+        "confirm_flow_detail": {
+          "step_1": {
+            "trigger": "收到 tool.trace 事件，state = 'requires_confirmation'",
+            "action": "更新 toolTraces Map，ToolTraceCard 显示待确认状态"
+          },
+          "step_2": {
+            "trigger": "收到 ui 事件，type = 'ConfirmBar'",
+            "action": "设置 pendingUI，渲染 ConfirmBar"
+          },
+          "step_3": {
+            "trigger": "用户点击确认按钮",
+            "action": [
+              "显示按钮 loading 状态",
+              "调用 confirmTool(toolCallId, true)",
+              "等待响应"
+            ]
+          },
+          "step_4": {
+            "trigger": "confirmTool 返回成功",
+            "action": [
+              "清除 pendingUI",
+              "更新 toolTraces 状态为 'executing' -> 'succeeded'",
+              "可能收到后续的 message.delta/final"
+            ]
+          },
+          "step_5_cancel": {
+            "trigger": "用户点击取消按钮",
+            "action": [
+              "调用 confirmTool(toolCallId, false)",
+              "清除 pendingUI",
+              "更新 toolTraces 状态为 'cancelled'"
+            ]
+          }
+        },
+        "scroll_behavior": {
+          "auto_scroll": "新消息到达时自动滚动到底部",
+          "user_scroll_up": "用户向上滚动时暂停自动滚动",
+          "new_message_indicator": "有新消息时显示'↓ 新消息'按钮",
+          "streaming_scroll": "流式消息期间持续滚动"
+        },
+        "error_handling": {
+          "network_error": {
+            "display": "Toast 提示 + 重试按钮",
+            "action": "显示最后发送的消息为'发送失败'状态"
+          },
+          "ai_error": {
+            "display": "在消息列表中显示错误卡片",
+            "action": "允许重新发送"
+          },
+          "confirm_error": {
+            "display": "ConfirmBar 显示错误状态",
+            "action": "允许重试"
+          }
+        },
+        "loading_states": {
+          "initial_load": "加载历史消息时显示骨架屏",
+          "sending": "输入框禁用 + 发送按钮 loading",
+          "streaming": "显示流式消息 + 打字效果",
+          "confirming": "ConfirmBar 按钮 loading"
+        },
+        "keyboard_shortcuts": {
+          "Enter": "发送消息（无 Shift）",
+          "Shift+Enter": "换行",
+          "Escape": "取消当前确认（如果有 ConfirmBar）"
+        }
+      },
+      "implementation_steps": [
+        "1. 导入 useAgentChat hook 和 A2UIRenderer 组件",
+        "2. 替换现有消息状态管理为 useAgentChat",
+        "3. 创建 StreamingMessage 组件处理流式渲染",
+        "4. 修改 MessageList 渲染逻辑，区分历史/流式消息",
+        "5. 在消息下方添加 ToolTraceCard 渲染逻辑",
+        "6. 添加 A2UI 渲染区域和 handleA2UIAction",
+        "7. 实现 ConfirmBar 的 Portal 渲染和交互",
+        "8. 添加自动滚动逻辑 useScrollToBottom",
+        "9. 添加 loading 和 error 状态处理",
+        "10. 添加键盘快捷键支持",
+        "11. 测试完整聊天流程",
+        "12. 测试工具确认流程"
+      ],
+      "acceptance_criteria": [
+        "发送消息后实时显示流式回复（无延迟感）",
+        "流式消息有打字机效果光标",
+        "工具调用时在消息下方显示 ToolTraceCard",
+        "ToolTraceCard 状态实时更新（planned -> executing -> succeeded）",
+        "需要确认时 ConfirmBar 正确显示在底部",
+        "确认后工具执行，状态正确更新",
+        "取消后状态正确更新为 cancelled",
+        "A2UI 其他组件（ArchiveReviewCard 等）正确渲染",
+        "新消息自动滚动到底部",
+        "用户向上滚动时不强制滚动",
+        "页面切换时 SSE 连接正确清理",
+        "网络错误时显示重试选项",
+        "Enter 发送，Shift+Enter 换行"
+      ],
+      "code_example": "// packages/client/src/pages/conversation-chat/index.tsx\nimport { useState, useCallback } from 'react';\nimport { useParams } from 'react-router-dom';\nimport { useAgentChat } from '@/hooks/useAgentChat';\nimport { A2UIRenderer } from '@/components/A2UI';\nimport { MessageList } from './components/MessageList';\nimport { StreamingMessage } from './components/StreamingMessage';\nimport { InputArea } from './components/InputArea';\nimport { ToolTraceCard } from '@/components/A2UI/ToolTraceCard';\n\nexport function ConversationChatPage() {\n  const { sessionId } = useParams<{ sessionId: string }>();\n  const [inputValue, setInputValue] = useState('');\n  const [contactId, setContactId] = useState<string | undefined>();\n  \n  const {\n    messages,\n    isStreaming,\n    currentDelta,\n    pendingUI,\n    toolTraces,\n    error,\n    sendMessage,\n    clearPendingUI,\n    confirmTool\n  } = useAgentChat(sessionId!);\n  \n  const handleSend = useCallback(async () => {\n    if (!inputValue.trim() || isStreaming) return;\n    const content = inputValue;\n    setInputValue('');\n    await sendMessage(content, contactId);\n  }, [inputValue, isStreaming, sendMessage, contactId]);\n  \n  const handleA2UIAction = useCallback(async (action: string, data?: unknown) => {\n    if (action.startsWith('confirm:')) {\n      const toolCallId = action.split(':')[1];\n      await confirmTool(toolCallId, true);\n      clearPendingUI();\n    } else if (action.startsWith('cancel:')) {\n      const toolCallId = action.split(':')[1];\n      await confirmTool(toolCallId, false);\n      clearPendingUI();\n    }\n    // ... handle other actions\n  }, [confirmTool, clearPendingUI]);\n  \n  return (\n    <div className=\"flex flex-col h-full\">\n      {/* Header */}\n      <ChatHeader contactId={contactId} />\n      \n      {/* Message List */}\n      <div className=\"flex-1 overflow-y-auto p-4\">\n        <MessageList messages={messages} toolTraces={toolTraces} />\n        \n        {/* Streaming Message */}\n        {isStreaming && currentDelta && (\n          <StreamingMessage content={currentDelta} />\n        )}\n        \n        {/* Error Display */}\n        {error && <ErrorCard error={error} onRetry={() => {}} />}\n      </div>\n      \n      {/* A2UI Area */}\n      {pendingUI && (\n        <div className=\"border-t p-4\">\n          <A2UIRenderer payload={pendingUI} onAction={handleA2UIAction} />\n        </div>\n      )}\n      \n      {/* Input Area */}\n      <InputArea\n        value={inputValue}\n        onChange={setInputValue}\n        onSend={handleSend}\n        disabled={isStreaming}\n      />\n    </div>\n  );\n}",
+      "test_scenarios": [
+        {
+          "name": "基础对话流程",
+          "steps": [
+            "1. 进入聊天页面",
+            "2. 输入'你好'并发送",
+            "3. 观察流式回复显示",
+            "4. 验证消息列表更新"
+          ]
+        },
+        {
+          "name": "工具确认流程",
+          "steps": [
+            "1. 发送'帮我给张三发消息'",
+            "2. 观察 ToolTraceCard 显示",
+            "3. 等待 ConfirmBar 出现",
+            "4. 点击确认",
+            "5. 验证工具执行成功"
+          ]
+        },
+        {
+          "name": "取消工具流程",
+          "steps": [
+            "1. 触发需要确认的工具",
+            "2. 点击取消",
+            "3. 验证状态更新为 cancelled"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "TASK-021",
+      "title": "飞书OAuth流程",
+      "phase": "Task 8",
+      "priority": "P1",
+      "status": "backlog",
+      "assignee": "opencode",
+      "estimate": "1.5天",
+      "dependencies": [
+        "TASK-006"
+      ],
+      "files": {
+        "create": [
+          "packages/server/src/infrastructure/connectors/feishu/oauth.ts",
+          "packages/server/src/infrastructure/connectors/feishu/types.ts"
+        ]
+      },
+      "description": "实现飞书 OAuth 2.0 授权流程，包括发起授权、回调处理、Token 存储和刷新。",
+      "requirements": {
+        "env_vars": {
+          "FEISHU_APP_ID": "飞书应用 App ID",
+          "FEISHU_APP_SECRET": "飞书应用 App Secret",
+          "FEISHU_REDIRECT_URI": "OAuth 回调地址"
+        },
+        "functions": [
+          {
+            "name": "initiateOAuth",
+            "params": "(workspaceId: string, redirectUri: string)",
+            "returns": "Promise<{authUrl: string, state: string}>",
+            "description": "生成飞书授权 URL",
+            "steps": [
+              "1. 生成随机 state (32字节 hex)",
+              "2. 将 state -> workspaceId 映射存入 Redis (TTL 10分钟)",
+              "3. 构建飞书授权 URL",
+              "4. 返回 authUrl 和 state"
+            ],
+            "auth_url_template": "https://open.feishu.cn/open-apis/authen/v1/authorize?app_id={app_id}&redirect_uri={redirect_uri}&state={state}"
+          },
+          {
+            "name": "handleCallback",
+            "params": "(code: string, state: string)",
+            "returns": "Promise<{success: boolean, workspaceId: string}>",
+            "description": "处理 OAuth 回调",
+            "steps": [
+              "1. 从 Redis 获取 state 对应的 workspaceId",
+              "2. 如果不存在，抛出 InvalidStateError",
+              "3. 用 code 换取 access_token",
+              "4. 加密 token 并存入 connector_tokens 表",
+              "5. 删除 Redis 中的 state",
+              "6. 返回成功"
+            ]
+          },
+          {
+            "name": "exchangeToken",
+            "params": "(code: string)",
+            "returns": "Promise<FeishuTokenResponse>",
+            "description": "用授权码换取令牌",
+            "api": "POST https://open.feishu.cn/open-apis/authen/v1/access_token"
+          },
+          {
+            "name": "refreshToken",
+            "params": "(workspaceId: string)",
+            "returns": "Promise<void>",
+            "description": "刷新过期令牌",
+            "api": "POST https://open.feishu.cn/open-apis/authen/v1/refresh_access_token"
+          },
+          {
+            "name": "revokeToken",
+            "params": "(workspaceId: string)",
+            "returns": "Promise<void>",
+            "description": "撤销并删除令牌"
+          }
+        ],
+        "token_encryption": {
+          "algorithm": "AES-256-GCM",
+          "key_env": "TOKEN_ENCRYPTION_KEY"
+        },
+        "token_response": {
+          "access_token": "string",
+          "refresh_token": "string",
+          "token_type": "Bearer",
+          "expires_in": "number (秒)",
+          "scope": "string (空格分隔)"
+        }
+      },
+      "acceptance_criteria": [
+        "initiateOAuth 生成正确的授权 URL",
+        "state 正确存入 Redis",
+        "handleCallback 正确验证 state",
+        "Token 加密存储",
+        "Token 刷新正常工作",
+        "撤销删除记录"
+      ],
+      "implementation_steps": [
+        "1. 创建 oauth.ts 和 types.ts 文件",
+        "2. 定义 FeishuTokenResponse 接口",
+        "3. 实现 initiateOAuth: 生成 state, 存 Redis, 构建 URL",
+        "4. 实现 handleCallback: 验证 state, 换 token, 加密存储",
+        "5. 实现 exchangeToken: POST 到飞书 API",
+        "6. 实现 refreshToken: 刷新过期 token",
+        "7. 实现 revokeToken: 删除 token",
+        "8. 实现 AES-256-GCM 加密/解密函数",
+        "9. 添加错误处理和日志",
+        "10. 编写单元测试"
+      ],
+      "code_example": "// packages/server/src/infrastructure/connectors/feishu/oauth.ts\nimport crypto from \"crypto\";\nimport { redis } from \"@/infrastructure/cache\";\nimport { db } from \"@/infrastructure/db\";\n\nconst FEISHU_AUTH_URL = \"https://open.feishu.cn/open-apis/authen/v1/authorize\";\nconst FEISHU_TOKEN_URL = \"https://open.feishu.cn/open-apis/authen/v1/access_token\";\nconst STATE_TTL = 600; // 10 minutes\n\nexport async function initiateOAuth(workspaceId: string, redirectUri: string) {\n  const state = crypto.randomBytes(32).toString(\"hex\");\n  await redis.setex(`feishu:oauth:${state}`, STATE_TTL, workspaceId);\n  \n  const authUrl = new URL(FEISHU_AUTH_URL);\n  authUrl.searchParams.set(\"app_id\", process.env.FEISHU_APP_ID!);\n  authUrl.searchParams.set(\"redirect_uri\", redirectUri);\n  authUrl.searchParams.set(\"state\", state);\n  \n  return { authUrl: authUrl.toString(), state };\n}\n\nexport async function handleCallback(code: string, state: string) {\n  const workspaceId = await redis.get(`feishu:oauth:${state}`);\n  if (!workspaceId) throw new Error(\"Invalid or expired state\");\n  \n  const tokenResponse = await exchangeToken(code);\n  const encrypted = encryptToken(JSON.stringify(tokenResponse));\n  \n  await db.query(\n    `INSERT INTO connector_tokens (workspace_id, connector_type, encrypted_token, expires_at)\n     VALUES ($1, $2, $3, $4)\n     ON CONFLICT (workspace_id, connector_type) DO UPDATE SET encrypted_token = $3, expires_at = $4`,\n    [workspaceId, \"feishu\", encrypted, new Date(Date.now() + tokenResponse.expires_in * 1000)]\n  );\n  \n  await redis.del(`feishu:oauth:${state}`);\n  return { success: true, workspaceId };\n}\n\nfunction encryptToken(plaintext: string): string {\n  const key = Buffer.from(process.env.TOKEN_ENCRYPTION_KEY!, \"hex\");\n  const iv = crypto.randomBytes(12);\n  const cipher = crypto.createCipheriv(\"aes-256-gcm\", key, iv);\n  const encrypted = Buffer.concat([cipher.update(plaintext, \"utf8\"), cipher.final()]);\n  const tag = cipher.getAuthTag();\n  return Buffer.concat([iv, tag, encrypted]).toString(\"base64\");\n}",
+      "test_cases": [
+        {
+          "name": "initiateOAuth 生成正确 URL",
+          "expected": "URL 包含 app_id, redirect_uri, state"
+        },
+        {
+          "name": "handleCallback 验证 state",
+          "expected": "无效 state 抛出错误"
+        },
+        {
+          "name": "Token 加密存储",
+          "expected": "数据库中存储的是加密后的 base64"
+        },
+        {
+          "name": "refreshToken 更新数据库",
+          "expected": "新 token 正确覆盖"
+        }
+      ]
+    },
+    {
+      "id": "TASK-022",
+      "title": "飞书API客户端",
+      "phase": "Task 8",
+      "priority": "P1",
+      "status": "backlog",
+      "assignee": "opencode",
+      "estimate": "0.5天",
+      "dependencies": [
+        "TASK-021"
+      ],
+      "files": {
+        "create": [
+          "packages/server/src/infrastructure/connectors/feishu/client.ts"
+        ]
+      },
+      "description": "封装飞书 Open API 客户端，支持自动 Token 刷新。",
+      "requirements": {
+        "class": "FeishuClient",
+        "constructor": "(workspaceId: string)",
+        "methods": [
+          {
+            "name": "getAccessToken",
+            "returns": "Promise<string>",
+            "description": "获取有效的 access_token，自动刷新过期 token"
+          },
+          {
+            "name": "request",
+            "params": "(method: string, path: string, data?: unknown)",
+            "returns": "Promise<T>",
+            "description": "发起 API 请求，自动添加认证头"
+          },
+          {
+            "name": "listBitableTemplates",
+            "returns": "Promise<TemplateOption[]>",
+            "description": "获取多维表格模板列表"
+          },
+          {
+            "name": "getBitableTemplate",
+            "params": "(templateId: string)",
+            "returns": "Promise<TemplateDetail>",
+            "description": "获取模板详情和变量"
+          },
+          {
+            "name": "sendMessage",
+            "params": "(receiverId: string, content: string)",
+            "returns": "Promise<{messageId: string}>",
+            "description": "发送消息"
+          }
+        ],
+        "factory": {
+          "name": "getFeishuClient",
+          "params": "(workspaceId: string)",
+          "returns": "Promise<FeishuClient>",
+          "description": "获取或创建客户端实例"
+        },
+        "error_handling": {
+          "token_expired": "自动刷新重试",
+          "rate_limit": "抛出 RateLimitError",
+          "api_error": "抛出 FeishuAPIError"
+        }
+      },
+      "acceptance_criteria": [
+        "自动刷新过期 token",
+        "API 请求自带认证头",
+        "错误正确封装",
+        "支持重试机制"
+      ],
+      "implementation_steps": [
+        "1. 创建 FeishuClient class",
+        "2. 实现 getAccessToken: 从 DB 获取并解密",
+        "3. 实现自动刷新逻辑 (过期前5分钟)",
+        "4. 实现 request 方法: 统一 HTTP 请求",
+        "5. 实现 listBitableTemplates",
+        "6. 实现 getBitableTemplate",
+        "7. 实现 sendMessage",
+        "8. 创建工厂函数 getFeishuClient",
+        "9. 添加重试和错误处理"
+      ],
+      "code_example": "// packages/server/src/infrastructure/connectors/feishu/client.ts\nexport class FeishuClient {\n  constructor(private workspaceId: string) {}\n\n  async getAccessToken(): Promise<string> {\n    const row = await db.query(\n      \"SELECT encrypted_token, expires_at FROM connector_tokens WHERE workspace_id = $1 AND connector_type = $2\",\n      [this.workspaceId, \"feishu\"]\n    );\n    if (!row) throw new Error(\"Feishu not connected\");\n    \n    const expiresAt = new Date(row.expires_at);\n    if (expiresAt.getTime() - Date.now() < 5 * 60 * 1000) {\n      await refreshToken(this.workspaceId);\n      return this.getAccessToken();\n    }\n    \n    return JSON.parse(decryptToken(row.encrypted_token)).access_token;\n  }\n\n  async request<T>(method: string, path: string, data?: unknown): Promise<T> {\n    const token = await this.getAccessToken();\n    const res = await fetch(`https://open.feishu.cn/open-apis${path}`, {\n      method,\n      headers: { Authorization: `Bearer ${token}`, \"Content-Type\": \"application/json\" },\n      body: data ? JSON.stringify(data) : undefined\n    });\n    const json = await res.json();\n    if (json.code !== 0) throw new FeishuAPIError(json.code, json.msg);\n    return json.data;\n  }\n\n  async sendMessage(receiverId: string, content: string) {\n    return this.request<{message_id: string}>(\"POST\", \"/im/v1/messages\", {\n      receive_id_type: \"user_id\",\n      receive_id: receiverId,\n      msg_type: \"text\",\n      content: JSON.stringify({ text: content })\n    });\n  }\n}",
+      "test_cases": [
+        {
+          "name": "自动刷新 token",
+          "expected": "过期前5分钟自动刷新"
+        },
+        {
+          "name": "API 错误处理",
+          "expected": "抛出 FeishuAPIError 包含 code 和 msg"
+        },
+        {
+          "name": "未连接时报错",
+          "expected": "抛出 Feishu not connected"
+        }
+      ]
+    },
+    {
+      "id": "TASK-023",
+      "title": "飞书路由更新",
+      "phase": "Task 8",
+      "priority": "P1",
+      "status": "backlog",
+      "assignee": "opencode",
+      "estimate": "0.3天",
+      "dependencies": [
+        "TASK-021"
+      ],
+      "files": {
+        "modify": [
+          "packages/server/src/presentation/http/routes/feishu.ts"
+        ]
+      },
+      "description": "更新飞书连接器路由，添加 OAuth 相关端点。",
+      "requirements": {
+        "endpoints": [
+          {
+            "method": "POST",
+            "path": "/connect",
+            "description": "发起连接",
+            "request": {
+              "redirectUri": "string"
+            },
+            "response": {
+              "authUrl": "string"
+            }
+          },
+          {
+            "method": "GET",
+            "path": "/callback",
+            "description": "OAuth 回调",
+            "query": {
+              "code": "string",
+              "state": "string"
+            },
+            "response": "重定向到前端"
+          },
+          {
+            "method": "POST",
+            "path": "/disconnect",
+            "description": "断开连接",
+            "response": {
+              "success": true
+            }
+          },
+          {
+            "method": "GET",
+            "path": "/status",
+            "description": "连接状态",
+            "response": {
+              "connected": "boolean",
+              "expiresAt": "string?",
+              "scopes": "string[]?"
+            }
+          }
+        ]
+      },
+      "acceptance_criteria": [
+        "4个端点都正常工作",
+        "callback 正确重定向",
+        "status 返回正确状态"
+      ],
+      "implementation_steps": [
+        "1. 在 feishu.ts 路由文件中添加 4 个端点",
+        "2. POST /connect: 调用 initiateOAuth, 返回 authUrl",
+        "3. GET /callback: 调用 handleCallback, 重定向到前端",
+        "4. POST /disconnect: 调用 revokeToken",
+        "5. GET /status: 查询 connector_tokens 表返回状态",
+        "6. 添加错误处理中间件",
+        "7. 添加请求验证 (zod)"
+      ],
+      "code_example": "// packages/server/src/presentation/http/routes/feishu.ts\nimport { Router } from \"express\";\nimport { initiateOAuth, handleCallback, revokeToken } from \"@/infrastructure/connectors/feishu/oauth\";\n\nconst router = Router();\n\nrouter.post(\"/connect\", async (req, res) => {\n  const { redirectUri } = req.body;\n  const { authUrl } = await initiateOAuth(req.workspaceId, redirectUri);\n  res.json({ authUrl });\n});\n\nrouter.get(\"/callback\", async (req, res) => {\n  const { code, state } = req.query;\n  await handleCallback(code, state);\n  res.redirect(process.env.FRONTEND_URL + \"/settings/connectors?status=success\");\n});\n\nrouter.post(\"/disconnect\", async (req, res) => {\n  await revokeToken(req.workspaceId);\n  res.json({ success: true });\n});\n\nrouter.get(\"/status\", async (req, res) => {\n  const token = await db.query(\"SELECT expires_at FROM connector_tokens WHERE workspace_id = $1\", [req.workspaceId]);\n  res.json({ connected: Boolean(token), expiresAt: token?.expires_at });\n});\n\nexport default router;",
+      "test_cases": [
+        {
+          "name": "POST /connect 返回 authUrl",
+          "expected": "200 + {authUrl: string}"
+        },
+        {
+          "name": "GET /callback 重定向",
+          "expected": "302 到前端 settings 页"
+        },
+        {
+          "name": "GET /status 未连接",
+          "expected": "{connected: false}"
+        }
+      ]
+    },
+    {
+      "id": "TASK-024",
+      "title": "飞书工具定义",
+      "phase": "Task 9",
+      "priority": "P1",
+      "status": "backlog",
+      "assignee": "codex",
+      "estimate": "0.5天",
+      "dependencies": [
+        "TASK-008"
+      ],
+      "files": {
+        "create": [
+          "packages/server/src/agent/tools/feishuTools.ts"
+        ]
+      },
+      "description": "定义4个飞书相关的 Agent 工具。",
+      "requirements": {
+        "tools": [
+          {
+            "name": "feishu_list_templates",
+            "description": "列出可用的飞书消息模板",
+            "parameters": {},
+            "requiresAuth": true,
+            "requiresConfirmation": false,
+            "returns": "{templates: Array<{id, name, description}>}"
+          },
+          {
+            "name": "feishu_get_template",
+            "description": "获取指定飞书模板的详情和变量",
+            "parameters": {
+              "templateId": "z.string()"
+            },
+            "requiresAuth": true,
+            "requiresConfirmation": false,
+            "returns": "{id, name, description, variables: Array<{name, type, required}>}"
+          },
+          {
+            "name": "feishu_create_instance",
+            "description": "使用模板创建消息实例",
+            "parameters": {
+              "templateId": "z.string()",
+              "variables": "z.record(z.string())"
+            },
+            "requiresAuth": true,
+            "requiresConfirmation": true,
+            "returns": "{instanceId, previewUrl}"
+          },
+          {
+            "name": "feishu_send_message",
+            "description": "发送飞书消息给指定用户",
+            "parameters": {
+              "receiverId": "z.string()",
+              "content": "z.string()"
+            },
+            "requiresAuth": true,
+            "requiresConfirmation": true,
+            "returns": "{messageId, status}"
+          }
+        ],
+        "export": "registerFeishuTools(registry: ToolRegistry)"
+      },
+      "acceptance_criteria": [
+        "4个工具定义完整",
+        "参数 schema 正确",
+        "requiresConfirmation 正确设置",
+        "有 registerFeishuTools 函数"
+      ],
+      "implementation_steps": [
+        "1. 创建 feishuTools.ts",
+        "2. 定义 feishu_list_templates 工具",
+        "3. 定义 feishu_get_template 工具",
+        "4. 定义 feishu_create_instance 工具 (requiresConfirmation: true)",
+        "5. 定义 feishu_send_message 工具 (requiresConfirmation: true)",
+        "6. 创建 registerFeishuTools 函数",
+        "7. 使用 zod 定义参数 schema"
+      ],
+      "code_example": "// packages/server/src/agent/tools/feishuTools.ts\nimport { z } from \"zod\";\nimport type { ToolDefinition, ToolRegistry } from \"@/agent/types\";\n\nconst feishuSendMessage: ToolDefinition = {\n  name: \"feishu_send_message\",\n  description: \"发送飞书消息给指定用户\",\n  parameters: z.object({\n    receiverId: z.string().describe(\"接收者用户ID\"),\n    content: z.string().describe(\"消息内容\")\n  }),\n  requiresAuth: true,\n  requiresConfirmation: true,\n  execute: async (params, ctx) => {\n    const client = await getFeishuClient(ctx.workspaceId);\n    const result = await client.sendMessage(params.receiverId, params.content);\n    return { success: true, data: { messageId: result.message_id } };\n  }\n};\n\nexport function registerFeishuTools(registry: ToolRegistry) {\n  registry.register(feishuListTemplates);\n  registry.register(feishuGetTemplate);\n  registry.register(feishuCreateInstance);\n  registry.register(feishuSendMessage);\n}",
+      "test_cases": [
+        {
+          "name": "工具参数校验",
+          "expected": "无效参数抛出 ZodError"
+        },
+        {
+          "name": "requiresConfirmation 正确",
+          "expected": "send_message 和 create_instance 为 true"
+        }
+      ]
+    },
+    {
+      "id": "TASK-025",
+      "title": "飞书工具注册",
+      "phase": "Task 9",
+      "priority": "P1",
+      "status": "backlog",
+      "assignee": "opencode",
+      "estimate": "0.3天",
+      "dependencies": [
+        "TASK-024",
+        "TASK-022"
+      ],
+      "files": {
+        "create": [
+          "packages/server/src/agent/tools/index.ts"
+        ],
+        "modify": [
+          "packages/server/src/agent/orchestrator.ts"
+        ]
+      },
+      "description": "将飞书工具注册到 ToolRegistry，并接入 FeishuClient。",
+      "requirements": {
+        "tasks": [
+          "创建 tools/index.ts 统一导出",
+          "实现工具的 execute 函数，调用 FeishuClient",
+          "在 orchestrator 初始化时注册工具"
+        ]
+      },
+      "acceptance_criteria": [
+        "工具正确注册",
+        "execute 调用 FeishuClient",
+        "未授权时返回正确状态"
+      ],
+      "implementation_steps": [
+        "1. 创建 tools/index.ts 统一导出",
+        "2. 在 orchestrator 初始化时调用 registerFeishuTools",
+        "3. 实现工具权限检查 (是否已连接飞书)",
+        "4. 未授权时返回 requires_auth 状态"
+      ],
+      "code_example": "// packages/server/src/agent/tools/index.ts\nimport { ToolRegistry } from \"@/agent/toolRegistry\";\nimport { registerFeishuTools } from \"./feishuTools\";\n\nexport function initializeTools(registry: ToolRegistry) {\n  registerFeishuTools(registry);\n}\n\n// orchestrator.ts 中调用\nthis.toolRegistry = new ToolRegistry();\ninitializeTools(this.toolRegistry);",
+      "test_cases": [
+        {
+          "name": "工具注册成功",
+          "expected": "registry.get(feishu_send_message) 返回工具"
+        },
+        {
+          "name": "未授权检查",
+          "expected": "未连接飞书时返回 requires_auth"
+        }
+      ]
+    },
+    {
+      "id": "TASK-026",
+      "title": "Citations后端实现",
+      "phase": "Task 10",
+      "priority": "P1",
+      "status": "backlog",
+      "assignee": "claude-code",
+      "estimate": "1天",
+      "dependencies": [
+        "TASK-004",
+        "TASK-009"
+      ],
+      "files": {
+        "modify": [
+          "packages/server/src/agent/orchestrator.ts",
+          "packages/server/src/infrastructure/repositories/chatRepo.ts"
+        ]
+      },
+      "description": "在 AI 回复中生成来源引用，并存储到数据库。",
+      "requirements": {
+        "prompt_addition": "在 system prompt 中添加: '引用信息时使用 [1], [2] 格式标注来源编号'",
+        "extraction": {
+          "description": "从 AI 输出提取引用标记",
+          "regex": "/\\[(\\d+)\\]/g",
+          "mapping": "将编号映射到 L1 消息列表的索引"
+        },
+        "storage": "将 citations 存入 chat_message.citations_json"
+      },
+      "acceptance_criteria": [
+        "AI 回复包含 [1], [2] 引用",
+        "正确提取并映射到源消息",
+        "citations 存入数据库"
+      ],
+      "implementation_steps": [
+        "1. 修改 system prompt 添加引用格式说明",
+        "2. 在 AI 回复后提取 [1], [2] 引用标记",
+        "3. 将引用编号映射到 L1 消息列表索引",
+        "4. 构建 Citation 对象 (sourceMessageIds, spans)",
+        "5. 将 citations 存入 chat_message.citations_json",
+        "6. 修改消息查询返回 citations 字段"
+      ],
+      "code_example": "// packages/server/src/agent/orchestrator.ts\nconst CITATION_PROMPT = `\n当引用用户之前的消息时，使用 [1], [2] 格式标注来源编号。\n编号对应最近消息列表的顺序（1=最近一条）。\n`;\n\nfunction extractCitations(content: string, recentMessages: Message[]): Citation[] {\n  const regex = /\\[(\\d+)\\]/g;\n  const citations: Citation[] = [];\n  let match;\n  \n  while ((match = regex.exec(content)) !== null) {\n    const index = parseInt(match[1]) - 1;\n    if (index >= 0 && index < recentMessages.length) {\n      citations.push({\n        sourceMessageIds: [recentMessages[index].id],\n        spans: [{ start: match.index, end: match.index + match[0].length, sourceIndex: 0 }]\n      });\n    }\n  }\n  return citations;\n}",
+      "test_cases": [
+        {
+          "name": "提取单个引用",
+          "scenario": "回复包含 [1]",
+          "expected": "返回 1 个 Citation"
+        },
+        {
+          "name": "提取多个引用",
+          "scenario": "回复包含 [1], [2], [3]",
+          "expected": "返回 3 个 Citation"
+        },
+        {
+          "name": "无效引用忽略",
+          "scenario": "[99] 超出范围",
+          "expected": "不生成 Citation"
+        }
+      ]
+    },
+    {
+      "id": "TASK-027",
+      "title": "CitationHighlight组件",
+      "phase": "Task 10",
+      "priority": "P1",
+      "status": "backlog",
+      "assignee": "codex",
+      "estimate": "0.5天",
+      "dependencies": [
+        "TASK-003"
+      ],
+      "files": {
+        "create": [
+          "packages/client/src/components/A2UI/CitationHighlight.tsx"
+        ]
+      },
+      "description": "引用高亮组件，在文本中高亮显示引用并支持点击跳转。",
+      "requirements": {
+        "props": {
+          "text": "string",
+          "citations": "Citation[]",
+          "onCitationClick": "(messageId: string) => void"
+        },
+        "features": [
+          "根据 spans 分段渲染文本",
+          "引用部分添加高亮和上标编号",
+          "点击跳转到源消息"
+        ]
+      },
+      "acceptance_criteria": [
+        "引用正确高亮",
+        "点击触发回调",
+        "无引用时正常显示"
+      ],
+      "implementation_steps": [
+        "1. 创建 CitationHighlight.tsx",
+        "2. 根据 spans 分段渲染文本",
+        "3. 引用部分添加高亮背景和上标编号",
+        "4. 实现点击跳转回调",
+        "5. 添加 hover 效果显示来源预览"
+      ],
+      "code_example": "// packages/client/src/components/A2UI/CitationHighlight.tsx\nimport { Fragment } from \"react\";\n\ninterface Citation {\n  sourceMessageIds: string[];\n  spans: Array<{ start: number; end: number; sourceIndex: number }>;\n}\n\ninterface Props {\n  text: string;\n  citations: Citation[];\n  onCitationClick: (messageId: string) => void;\n}\n\nexport function CitationHighlight({ text, citations, onCitationClick }: Props) {\n  if (!citations.length) return <span>{text}</span>;\n\n  const allSpans = citations.flatMap((c, ci) => \n    c.spans.map(s => ({ ...s, citationIndex: ci, messageId: c.sourceMessageIds[s.sourceIndex] }))\n  ).sort((a, b) => a.start - b.start);\n\n  const segments: React.ReactNode[] = [];\n  let lastEnd = 0;\n\n  allSpans.forEach((span, i) => {\n    if (span.start > lastEnd) {\n      segments.push(<Fragment key={`t${i}`}>{text.slice(lastEnd, span.start)}</Fragment>);\n    }\n    segments.push(\n      <button\n        key={`c${i}`}\n        onClick={() => onCitationClick(span.messageId)}\n        className=\"bg-yellow-100 hover:bg-yellow-200 px-0.5 rounded cursor-pointer\"\n      >\n        {text.slice(span.start, span.end)}\n        <sup className=\"text-xs text-blue-500\">{span.citationIndex + 1}</sup>\n      </button>\n    );\n    lastEnd = span.end;\n  });\n\n  if (lastEnd < text.length) {\n    segments.push(<Fragment key=\"last\">{text.slice(lastEnd)}</Fragment>);\n  }\n\n  return <span>{segments}</span>;\n}",
+      "test_cases": [
+        {
+          "name": "渲染引用高亮",
+          "expected": "引用部分有黄色背景"
+        },
+        {
+          "name": "点击跳转",
+          "expected": "触发 onCitationClick(messageId)"
+        },
+        {
+          "name": "无引用正常显示",
+          "expected": "纯文本无样式"
+        }
+      ]
+    },
+    {
+      "id": "TASK-028",
+      "title": "工具确认后端",
+      "phase": "Task 11",
+      "priority": "P1",
+      "status": "backlog",
+      "assignee": "opencode",
+      "estimate": "1天",
+      "dependencies": [
+        "TASK-005",
+        "TASK-010"
+      ],
+      "files": {
+        "create": [
+          "packages/server/src/agent/toolConfirmation.ts"
+        ],
+        "modify": [
+          "packages/server/src/presentation/http/routes/toolRuns.ts"
+        ]
+      },
+      "description": "实现工具确认流程的后端逻辑。",
+      "requirements": {
+        "functions": [
+          {
+            "name": "createConfirmation",
+            "description": "创建待确认记录"
+          },
+          {
+            "name": "confirmTool",
+            "description": "确认并执行工具"
+          },
+          {
+            "name": "cancelTool",
+            "description": "取消工具调用"
+          },
+          {
+            "name": "expireConfirmations",
+            "description": "定时任务: 过期超时记录"
+          }
+        ],
+        "api": {
+          "endpoint": "POST /v1/tool-runs/:toolCallId/confirm",
+          "body": {
+            "confirmed": "boolean"
+          },
+          "response": {
+            "state": "ToolState",
+            "output": "unknown?",
+            "error": "string?"
+          }
+        }
+      },
+      "acceptance_criteria": [
+        "确认后工具执行",
+        "取消后状态更新",
+        "超时自动过期",
+        "API 正常工作"
+      ],
+      "implementation_steps": [
+        "1. 创建 toolConfirmation.ts 模块",
+        "2. 实现 createConfirmation: 插入 pending 记录",
+        "3. 实现 confirmTool: 更新状态并执行工具",
+        "4. 实现 cancelTool: 更新状态为 cancelled",
+        "5. 实现 expireConfirmations: 定时任务清理过期",
+        "6. 添加 API 端点 POST /tool-runs/:id/confirm"
+      ],
+      "code_example": "// packages/server/src/agent/toolConfirmation.ts\nexport async function createConfirmation(sessionId: string, toolCallId: string, toolName: string, params: unknown) {\n  const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5分钟\n  await db.query(\n    `INSERT INTO tool_confirmations (session_id, tool_call_id, tool_name, params, expires_at) VALUES ($1, $2, $3, $4, $5)`,\n    [sessionId, toolCallId, toolName, JSON.stringify(params), expiresAt]\n  );\n}\n\nexport async function confirmTool(toolCallId: string, confirmed: boolean) {\n  const record = await db.query(\"SELECT * FROM tool_confirmations WHERE tool_call_id = $1\", [toolCallId]);\n  if (!record || record.state !== \"pending\") throw new Error(\"Invalid confirmation\");\n  \n  if (confirmed) {\n    await db.query(\"UPDATE tool_confirmations SET state = $1, confirmed_at = NOW() WHERE tool_call_id = $2\", [\"confirmed\", toolCallId]);\n    const tool = toolRegistry.get(record.tool_name);\n    return await tool.execute(JSON.parse(record.params), { sessionId: record.session_id });\n  } else {\n    await db.query(\"UPDATE tool_confirmations SET state = $1 WHERE tool_call_id = $2\", [\"cancelled\", toolCallId]);\n    return { state: \"cancelled\" };\n  }\n}",
+      "test_cases": [
+        {
+          "name": "确认执行工具",
+          "expected": "状态更新为 confirmed, 工具执行"
+        },
+        {
+          "name": "取消工具",
+          "expected": "状态更新为 cancelled"
+        },
+        {
+          "name": "超时过期",
+          "expected": "5分钟后状态为 expired"
+        }
+      ]
+    },
+    {
+      "id": "TASK-029",
+      "title": "工具确认前端",
+      "phase": "Task 11",
+      "priority": "P1",
+      "status": "backlog",
+      "assignee": "claude-code",
+      "estimate": "0.5天",
+      "dependencies": [
+        "TASK-017",
+        "TASK-020"
+      ],
+      "files": {
+        "modify": [
+          "packages/client/src/pages/conversation-chat/index.tsx"
+        ]
+      },
+      "description": "在聊天页面集成工具确认交互。",
+      "requirements": {
+        "integration": [
+          "监听 tool.trace 的 requires_confirmation 状态",
+          "显示 ConfirmBar",
+          "调用 confirmTool API",
+          "更新 ToolTraceCard 状态"
+        ]
+      },
+      "acceptance_criteria": [
+        "ConfirmBar 正确显示",
+        "确认后状态更新",
+        "取消后状态更新"
+      ],
+      "implementation_steps": [
+        "1. 在聊天页监听 tool.trace 的 requires_confirmation",
+        "2. 当收到确认请求时显示 ConfirmBar",
+        "3. 确认按钮调用 POST /tool-runs/:id/confirm",
+        "4. 取消按钮调用同一 API (confirmed: false)",
+        "5. 更新 ToolTraceCard 状态显示"
+      ],
+      "code_example": "// 在 useAgentChat 中添加\nconst confirmTool = async (toolCallId: string, confirmed: boolean) => {\n  setConfirming(true);\n  try {\n    const res = await fetch(`/api/v1/tool-runs/${toolCallId}/confirm`, {\n      method: \"POST\",\n      headers: { \"Content-Type\": \"application/json\" },\n      body: JSON.stringify({ confirmed })\n    });\n    const data = await res.json();\n    updateToolTrace(toolCallId, { state: data.state });\n  } finally {\n    setConfirming(false);\n    clearPendingUI();\n  }\n};",
+      "test_cases": [
+        {
+          "name": "显示确认栏",
+          "expected": "收到 requires_confirmation 时显示 ConfirmBar"
+        },
+        {
+          "name": "确认后状态更新",
+          "expected": "ToolTraceCard 显示 executing -> succeeded"
+        },
+        {
+          "name": "取消后状态更新",
+          "expected": "ToolTraceCard 显示 cancelled"
+        }
+      ]
+    },
+    {
+      "id": "TASK-030",
+      "title": "单元测试-Agent",
+      "phase": "Task 12",
+      "priority": "P2",
+      "status": "backlog",
+      "assignee": "claude-code",
+      "estimate": "1.5天",
+      "dependencies": [
+        "TASK-009",
+        "TASK-007",
+        "TASK-008"
+      ],
+      "files": {
+        "create": [
+          "packages/server/src/__tests__/unit/agent/orchestrator.test.ts",
+          "packages/server/src/__tests__/unit/agent/contextBuilder.test.ts",
+          "packages/server/src/__tests__/unit/agent/toolRegistry.test.ts"
+        ]
+      },
+      "description": "Agent 核心模块的单元测试。",
+      "requirements": {
+        "coverage_target": "90%",
+        "test_cases": {
+          "contextBuilder": [
+            "L1 获取最近消息",
+            "L2 阈值判断",
+            "L3 联系人数据获取",
+            "并行性能"
+          ],
+          "toolRegistry": [
+            "注册/查询",
+            "重复注册",
+            "getForAI 转换"
+          ],
+          "orchestrator": [
+            "正常对话流程",
+            "工具调用流程",
+            "错误处理"
+          ]
+        }
+      },
+      "acceptance_criteria": [
+        "覆盖率 >= 90%",
+        "所有测试通过",
+        "Mock 合理"
+      ],
+      "implementation_steps": [
+        "1. 创建 orchestrator.test.ts",
+        "2. Mock AI SDK 和数据库",
+        "3. 测试正常对话流程",
+        "4. 测试工具调用流程",
+        "5. 测试错误处理",
+        "6. 创建 contextBuilder.test.ts",
+        "7. 测试 L1/L2/L3 获取逻辑",
+        "8. 创建 toolRegistry.test.ts",
+        "9. 测试注册/查询/转换",
+        "10. 确保覆盖率 >= 90%"
+      ],
+      "code_example": "// packages/server/src/__tests__/unit/agent/orchestrator.test.ts\nimport { AgentOrchestrator } from \"@/agent/orchestrator\";\nimport { mockAI, mockDB } from \"../mocks\";\n\ndescribe(\"AgentOrchestrator\", () => {\n  let orchestrator: AgentOrchestrator;\n\n  beforeEach(() => {\n    orchestrator = new AgentOrchestrator();\n    mockAI.reset();\n    mockDB.reset();\n  });\n\n  describe(\"chat\", () => {\n    it(\"should stream response correctly\", async () => {\n      mockAI.setResponse(\"Hello, how can I help?\");\n      const events: any[] = [];\n      \n      for await (const event of orchestrator.chat(\"sessionId\", \"Hi\")) {\n        events.push(event);\n      }\n\n      expect(events).toContainEqual({ event: \"message.delta\", data: { content: \"Hello\" } });\n      expect(events).toContainEqual({ event: \"message.final\", data: expect.any(Object) });\n    });\n\n    it(\"should handle tool calls\", async () => {\n      mockAI.setToolCall(\"feishu_list_templates\", {});\n      const events: any[] = [];\n      \n      for await (const event of orchestrator.chat(\"sessionId\", \"列出模板\")) {\n        events.push(event);\n      }\n\n      expect(events).toContainEqual({ event: \"tool.trace\", data: expect.objectContaining({ name: \"feishu_list_templates\" }) });\n    });\n\n    it(\"should handle AI errors gracefully\", async () => {\n      mockAI.setError(new Error(\"API rate limit\"));\n      const events: any[] = [];\n      \n      for await (const event of orchestrator.chat(\"sessionId\", \"test\")) {\n        events.push(event);\n      }\n\n      expect(events).toContainEqual({ event: \"error\", data: { code: \"AI_ERROR\", message: expect.any(String) } });\n    });\n  });\n});",
+      "test_cases": [
+        {
+          "name": "正常对话流",
+          "file": "orchestrator.test.ts",
+          "count": 5
+        },
+        {
+          "name": "工具调用流",
+          "file": "orchestrator.test.ts",
+          "count": 4
+        },
+        {
+          "name": "上下文构建",
+          "file": "contextBuilder.test.ts",
+          "count": 6
+        },
+        {
+          "name": "工具注册",
+          "file": "toolRegistry.test.ts",
+          "count": 4
+        }
+      ]
+    },
+    {
+      "id": "TASK-031",
+      "title": "集成测试-API",
+      "phase": "Task 12",
+      "priority": "P2",
+      "status": "backlog",
+      "assignee": "opencode",
+      "estimate": "1天",
+      "dependencies": [
+        "TASK-011",
+        "TASK-023"
+      ],
+      "files": {
+        "create": [
+          "packages/server/src/__tests__/integration/agent.test.ts",
+          "packages/server/src/__tests__/integration/feishu.test.ts"
+        ]
+      },
+      "description": "API 端点的集成测试。",
+      "requirements": {
+        "test_cases": {
+          "agent_chat": [
+            "SSE 流正确",
+            "消息保存",
+            "工具调用"
+          ],
+          "feishu": [
+            "OAuth 流程 (Mock)",
+            "工具调用 (Mock API)"
+          ]
+        }
+      },
+      "acceptance_criteria": [
+        "SSE 测试通过",
+        "Mock 服务正常",
+        "覆盖主要场景"
+      ],
+      "implementation_steps": [
+        "1. 创建 agent.test.ts 集成测试",
+        "2. 使用 supertest 测试 SSE 端点",
+        "3. 验证 SSE 事件格式正确",
+        "4. 测试消息持久化",
+        "5. 创建 feishu.test.ts",
+        "6. Mock 飞书 API",
+        "7. 测试 OAuth 流程",
+        "8. 测试工具调用"
+      ],
+      "code_example": "// packages/server/src/__tests__/integration/agent.test.ts\nimport request from \"supertest\";\nimport { app } from \"@/app\";\nimport { mockFeishuAPI } from \"../mocks/feishu\";\n\ndescribe(\"Agent API Integration\", () => {\n  beforeAll(() => {\n    mockFeishuAPI.start();\n  });\n\n  afterAll(() => {\n    mockFeishuAPI.stop();\n  });\n\n  it(\"POST /v1/agent/chat should return SSE stream\", async () => {\n    const res = await request(app)\n      .post(\"/v1/agent/chat\")\n      .set(\"Authorization\", \"Bearer test-token\")\n      .send({ sessionId: \"test-session\", message: \"Hello\" })\n      .expect(200)\n      .expect(\"Content-Type\", /text\\/event-stream/);\n\n    expect(res.text).toContain(\"event: message.delta\");\n    expect(res.text).toContain(\"event: message.final\");\n  });\n\n  it(\"should persist messages to database\", async () => {\n    await request(app)\n      .post(\"/v1/agent/chat\")\n      .set(\"Authorization\", \"Bearer test-token\")\n      .send({ sessionId: \"test-session\", message: \"Save this\" });\n\n    const messages = await db.query(\"SELECT * FROM chat_message WHERE session_id = $1\", [\"test-session\"]);\n    expect(messages.length).toBeGreaterThan(0);\n  });\n});",
+      "test_cases": [
+        {
+          "name": "SSE 流格式正确",
+          "endpoint": "POST /v1/agent/chat"
+        },
+        {
+          "name": "消息持久化",
+          "endpoint": "POST /v1/agent/chat"
+        },
+        {
+          "name": "飞书 OAuth 流程",
+          "endpoint": "GET /v1/connectors/feishu/callback"
+        },
+        {
+          "name": "工具确认 API",
+          "endpoint": "POST /v1/tool-runs/:id/confirm"
+        }
+      ]
+    },
+    {
+      "id": "TASK-032",
+      "title": "E2E测试",
+      "phase": "Task 12",
+      "priority": "P2",
+      "status": "backlog",
+      "assignee": "claude-code",
+      "estimate": "1.5天",
+      "dependencies": [
+        "TASK-020",
+        "TASK-029"
+      ],
+      "files": {
+        "create": [
+          "packages/e2e/chat.spec.ts"
+        ]
+      },
+      "description": "端到端用户流程测试。",
+      "requirements": {
+        "tool": "Playwright",
+        "test_flows": [
+          "登录 -> 发送消息 -> 收到回复",
+          "发送归档请求 -> 确认归档",
+          "飞书连接 -> 发送模板消息 -> 确认"
+        ]
+      },
+      "acceptance_criteria": [
+        "三个流程测试通过",
+        "截图/视频记录",
+        "CI 集成"
+      ],
+      "implementation_steps": [
+        "1. 安装 Playwright: pnpm add -D @playwright/test",
+        "2. 创建 playwright.config.ts",
+        "3. 创建 chat.spec.ts",
+        "4. 实现登录流程测试",
+        "5. 实现发送消息测试",
+        "6. 实现归档确认测试",
+        "7. 实现飞书连接测试 (Mock OAuth)",
+        "8. 配置 CI 集成",
+        "9. 添加截图和视频录制"
+      ],
+      "code_example": "// packages/e2e/chat.spec.ts\nimport { test, expect } from \"@playwright/test\";\n\ntest.describe(\"Chat Flow\", () => {\n  test.beforeEach(async ({ page }) => {\n    await page.goto(\"/login\");\n    await page.fill(\"[data-testid=email]\", \"test@example.com\");\n    await page.fill(\"[data-testid=password]\", \"password\");\n    await page.click(\"[data-testid=submit]\");\n    await page.waitForURL(\"/chat\");\n  });\n\n  test(\"should send message and receive streaming response\", async ({ page }) => {\n    await page.fill(\"[data-testid=chat-input]\", \"Hello AI\");\n    await page.click(\"[data-testid=send-button]\");\n\n    // Wait for streaming response\n    await expect(page.locator(\"[data-testid=streaming-message]\")).toBeVisible();\n    await expect(page.locator(\"[data-testid=assistant-message]\")).toBeVisible({ timeout: 30000 });\n  });\n\n  test(\"should show confirm bar for tool calls\", async ({ page }) => {\n    await page.fill(\"[data-testid=chat-input]\", \"帮我发送消息给张三\");\n    await page.click(\"[data-testid=send-button]\");\n\n    // Wait for confirm bar\n    await expect(page.locator(\"[data-testid=confirm-bar]\")).toBeVisible({ timeout: 10000 });\n    \n    // Click confirm\n    await page.click(\"[data-testid=confirm-button]\");\n    \n    // Verify tool executed\n    await expect(page.locator(\"[data-testid=tool-trace-card]\")).toContainText(\"已完成\");\n  });\n\n  test(\"should handle archive flow\", async ({ page }) => {\n    await page.fill(\"[data-testid=chat-input]\", \"归档这段对话\");\n    await page.click(\"[data-testid=send-button]\");\n\n    // Wait for archive review card\n    await expect(page.locator(\"[data-testid=archive-review-card]\")).toBeVisible();\n    \n    // Confirm archive\n    await page.click(\"[data-testid=confirm-archive]\");\n    await expect(page.locator(\".toast-success\")).toBeVisible();\n  });\n});",
+      "test_cases": [
+        {
+          "name": "登录->发消息->收回复",
+          "flow": "基础对话"
+        },
+        {
+          "name": "发送归档请求->确认归档",
+          "flow": "归档流程"
+        },
+        {
+          "name": "触发工具->确认执行",
+          "flow": "工具确认"
+        },
+        {
+          "name": "飞书连接->发送模板消息",
+          "flow": "飞书集成"
+        }
+      ]
+    },
+    {
+      "id": "TASK-033",
+      "title": "SSE 流式回复重复消息",
+      "phase": "Bug",
+      "priority": "P1",
+      "status": "backlog",
+      "assignee": "claude-code",
+      "estimate": "0.5天",
+      "dependencies": [],
+      "files": {
+        "modify": [
+          "packages/server-nestjs/src/**/*.ts",
+          "packages/client/src/hooks/useAgentChat.ts",
+          "packages/client/src/pages/conversation-chat/index.tsx"
+        ]
+      },
+      "description": "在 /v1/agent/chat SSE 流式返回时，客户端显示了两条相同的助手消息。怀疑流式消息处理或 message.final/agent.message 合并逻辑有问题。",
+      "requirements": {
+        "repro": {
+          "url": "http://192.168.1.68:3000/v1/agent/chat",
+          "example_events": [
+            "event: agent.start",
+            "event: agent.delta (multiple)",
+            "event: agent.message (full content)",
+            "event: agent.end"
+          ],
+          "observed": "UI 中出现两条相同助手消息。"
+        },
+        "expected": "同一 runId 只渲染一条助手消息；delta 只用于流式更新，不生成第二条独立消息。"
+      },
+      "implementation_steps": [
+        "1. 复现问题并记录一次完整 SSE 事件序列（包含 runId、message id、event 顺序）",
+        "2. 检查前端 SSE 事件处理逻辑：delta 累积与 final/message 合并是否重复插入",
+        "3. 检查后端事件发送：agent.message 与 agent.delta 是否同时触发了两次入库/推送",
+        "4. 统一事件协议：确保只在终态创建/追加消息实体",
+        "5. 增加防重复保护（基于 message id/runId 去重）"
+      ],
+      "acceptance_criteria": [
+        "同一 runId 的一次回复在 UI 中只出现一条助手消息",
+        "SSE 流式显示过程中不出现重复消息",
+        "message.final 或 agent.message 与 delta 合并逻辑一致",
+        "新增或更新测试覆盖流式去重"
+      ],
+      "testing": {
+        "manual": [
+          "curl -N http://192.168.1.68:3000/v1/agent/chat -H 'Content-Type: application/json' -d '{...}'",
+          "在聊天页发送消息，观察流式与最终消息渲染"
+        ]
+      }
+    }
+  ],
+  "milestones": [
+    {
+      "id": "M1",
+      "name": "基础可用",
+      "target_day": 6,
+      "description": "SSE 聊天 API 可用，Agent 核心完成",
+      "tasks": [
+        "TASK-001",
+        "TASK-002",
+        "TASK-003",
+        "TASK-004",
+        "TASK-005",
+        "TASK-006",
+        "TASK-007",
+        "TASK-008",
+        "TASK-009",
+        "TASK-010",
+        "TASK-011",
+        "TASK-012"
+      ]
+    },
+    {
+      "id": "M2",
+      "name": "V0 MVP",
+      "target_day": 8,
+      "description": "前端集成完成，可进行完整聊天",
+      "tasks": [
+        "TASK-013",
+        "TASK-014",
+        "TASK-015",
+        "TASK-016",
+        "TASK-017",
+        "TASK-018",
+        "TASK-019",
+        "TASK-020"
+      ]
+    },
+    {
+      "id": "M3",
+      "name": "V1 飞书只读",
+      "target_day": 10,
+      "description": "飞书连接器完成，可查询模板",
+      "tasks": [
+        "TASK-021",
+        "TASK-022",
+        "TASK-023",
+        "TASK-024",
+        "TASK-025"
+      ]
+    },
+    {
+      "id": "M4",
+      "name": "V2 飞书写操作",
+      "target_day": 14,
+      "description": "飞书写操作完成，有确认流程",
+      "tasks": [
+        "TASK-026",
+        "TASK-027",
+        "TASK-028",
+        "TASK-029"
+      ]
+    },
+    {
+      "id": "M5",
+      "name": "生产就绪",
+      "target_day": 18,
+      "description": "测试覆盖 80%+，可上线",
+      "tasks": [
+        "TASK-030",
+        "TASK-031",
+        "TASK-032"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,41 @@
+[
+  {
+    "description": "User registers and is auto logged in",
+    "steps": [
+      "Open login page and switch to register mode",
+      "Enter name + email/phone + password and submit",
+      "Backend returns access/refresh tokens",
+      "Client stores tokens + workspaceId and redirects to conversation tab"
+    ],
+    "passes": true
+  },
+  {
+    "description": "User can see tool task execution results",
+    "steps": [
+      "Open action tab",
+      "See pending tool tasks and confirm one",
+      "Worker runs the confirmed task and records tool_execution",
+      "Action tab shows recent executed tool tasks and can view response"
+    ],
+    "passes": true
+  },
+  {
+    "description": "AI extraction uses strict schema and does not crash",
+    "steps": [
+      "Trigger journal extraction against an OpenAI-compatible LLM server",
+      "Server validates output against schema and stores extracted_item rows",
+      "If model output is invalid, server returns empty items instead of 500"
+    ],
+    "passes": true
+  },
+  {
+    "description": "Developer can run MVP with docker compose + env example",
+    "steps": [
+      "Start Postgres via docker compose",
+      "Create packages/server-nestjs/.env and set DATABASE_URL/JWT_SECRET/OPENAI_API_KEY",
+      "Run migrations and start server + client",
+      "Login/register and use core MVP flow end-to-end"
+    ],
+    "passes": true
+  }
+]

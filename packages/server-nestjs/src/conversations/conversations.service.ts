@@ -10,24 +10,53 @@ export class ConversationsService {
     private conversationRepository: Repository<Conversation>,
   ) {}
 
-  async create(content: string, userId: string, contactId?: string): Promise<Conversation> {
+  async create(
+    input: { content?: string; title?: string },
+    userId: string,
+    contactId?: string,
+  ): Promise<Conversation> {
+    const nowMs = Date.now();
     const conversation = this.conversationRepository.create({
-      content,
+      title: input.title ?? null,
+      content: input.content ?? input.title ?? '',
       userId,
       contactId,
+      createdAt: nowMs as any,
+      updatedAt: nowMs as any,
     });
-    return this.conversationRepository.save(conversation);
+    try {
+      const saved = await this.conversationRepository.save(conversation);
+      return saved;
+    } catch (error) {
+      throw error;
+    }
   }
 
-  async findAll(): Promise<Conversation[]> {
-    return this.conversationRepository.find({
-      order: { createdAt: 'DESC' },
-    });
+  async findAll(userId?: string): Promise<Conversation[]> {
+    const queryOptions = {
+      where: userId ? { userId } : undefined,
+      order: { updatedAt: 'DESC' as const },
+    };
+    return this.conversationRepository.find(queryOptions);
   }
 
-  async findOne(id: string): Promise<Conversation | null> {
+  async findOne(id: string, userId?: string): Promise<Conversation | null> {
     return this.conversationRepository.findOne({
-      where: { id },
+      where: userId ? { id, userId } : { id },
     });
+  }
+
+  async updateSummary(conversationId: string, summary: string): Promise<Conversation> {
+    const conversation = await this.conversationRepository.findOne({
+      where: { id: conversationId },
+    });
+
+    if (!conversation) {
+      throw new Error(`Conversation ${conversationId} not found`);
+    }
+
+    conversation.summary = summary;
+    conversation.updatedAt = new Date();
+    return this.conversationRepository.save(conversation);
   }
 }

@@ -1,0 +1,18 @@
+{
+  "type": "object",
+  "properties": {
+    "response": {
+      "type": "string"
+    },
+    "confidence": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    }
+  },
+  "required": ["response"]
+}
+
+
+
+
