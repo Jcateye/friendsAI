@@ -153,6 +153,50 @@
       "minItems": 0,
       "description": "Citations referencing specific data points used in the analysis"
     },
+    "confidence": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1,
+      "description": "Overall confidence score for this insight output"
+    },
+    "sourceRefs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string"
+          },
+          "reference": {
+            "type": "string"
+          }
+        },
+        "required": ["type", "reference"]
+      },
+      "minItems": 0,
+      "description": "Normalized source references for traceability"
+    },
+    "evidenceChains": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "summary": {
+            "type": "string",
+            "minLength": 3
+          },
+          "sourceType": {
+            "type": "string"
+          },
+          "sourceRef": {
+            "type": "string"
+          }
+        },
+        "required": ["summary", "sourceType", "sourceRef"]
+      },
+      "minItems": 0,
+      "description": "Summarized evidence chains without exposing full raw message text"
+    },
     "sourceHash": {
       "type": "string",
       "description": "Hash of the source data used for caching"
@@ -188,6 +232,9 @@
     "suggestedActions",
     "openingLines",
     "citations",
+    "confidence",
+    "sourceRefs",
+    "evidenceChains",
     "priorityScore",
     "reasonTags",
     "relationshipRiskLevel"

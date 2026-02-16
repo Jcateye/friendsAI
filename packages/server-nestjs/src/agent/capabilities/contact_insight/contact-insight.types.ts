@@ -19,6 +19,16 @@ export interface ContactInsightOutput {
   suggestedActions: SuggestedAction[];
   openingLines: OpeningLine[];
   citations: Citation[];
+  confidence: number;
+  sourceRefs: Array<{
+    type: string;
+    reference: string;
+  }>;
+  evidenceChains: Array<{
+    summary: string;
+    sourceType: string;
+    sourceRef: string;
+  }>;
   // V1 闭环功能字段
   priority_score: number;           // 0-100，用于排序
   reason_tags: string[];            // 原因标签，如 ['long_time_no_contact', 'upcoming_event']
@@ -124,6 +134,5 @@ export interface ContactInsightContext {
     daysUntilEvent: number;
   }>;
 }
-
 
 

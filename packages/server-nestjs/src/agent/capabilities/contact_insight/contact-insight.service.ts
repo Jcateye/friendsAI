@@ -44,6 +44,16 @@ export interface ContactInsightOutput {
     type: string;
     reference: string;
   }>;
+  confidence: number;
+  sourceRefs: Array<{
+    type: string;
+    reference: string;
+  }>;
+  evidenceChains: Array<{
+    summary: string;
+    sourceType: string;
+    sourceRef: string;
+  }>;
   sourceHash: string;
   generatedAt: number;
 }
@@ -57,6 +67,7 @@ export class ContactInsightService {
   private readonly logger = new Logger(ContactInsightService.name);
   private readonly agentId = 'contact_insight';
   private readonly ttlSeconds = 21600; // 6 hours
+  private readonly traceabilityEnabled = process.env.INSIGHT_TRACEABILITY_ENABLED !== 'false';
 
   constructor(
     @Inject(forwardRef(() => AgentRuntimeExecutor))
@@ -104,8 +115,9 @@ export class ContactInsightService {
 
       if (cached.cached && cached.snapshot) {
         this.logger.debug(`Using cached insight for contact ${contactId}`);
+        const cachedOutput = this.ensureTraceabilityFields(cached.snapshot.output as ContactInsightOutput);
         return {
-          ...(cached.snapshot.output as ContactInsightOutput),
+          ...cachedOutput,
           sourceHash,
           generatedAt: cached.snapshot.createdAt.getTime(),
         };
@@ -134,7 +146,7 @@ export class ContactInsightService {
 
     // 格式化输出
     const output: ContactInsightOutput = {
-      ...(executionResult.data as unknown as ContactInsightOutput),
+      ...this.ensureTraceabilityFields(executionResult.data as unknown as ContactInsightOutput),
       sourceHash,
       generatedAt: Date.now(),
     };
@@ -154,6 +166,59 @@ export class ContactInsightService {
     });
 
     return output;
+  }
+
+  private ensureTraceabilityFields(output: ContactInsightOutput): ContactInsightOutput {
+    if (!this.traceabilityEnabled) {
+      return {
+        ...output,
+        confidence: typeof output.confidence === 'number' ? output.confidence : 0.5,
+        sourceRefs: output.sourceRefs ?? [],
+        evidenceChains: output.evidenceChains ?? [],
+      };
+    }
+
+    const sourceRefs =
+      output.sourceRefs ??
+      (output.citations ?? []).map((citation) => ({
+        type: citation.type,
+        reference: citation.reference,
+      }));
+
+    const evidenceChains =
+      output.evidenceChains ??
+      (output.citations ?? []).slice(0, 5).map((citation) => ({
+        summary: this.safeEvidenceSummary(citation.reference),
+        sourceType: citation.type,
+        sourceRef: citation.reference,
+      }));
+
+    const confidence = typeof output.confidence === 'number'
+      ? output.confidence
+      : this.computeConfidence(output);
+
+    return {
+      ...output,
+      confidence: Number(Math.max(0, Math.min(1, confidence)).toFixed(2)),
+      sourceRefs,
+      evidenceChains,
+    };
+  }
+
+  private safeEvidenceSummary(reference: string): string {
+    if (!reference) {
+      return '关联来源摘要';
+    }
+    const normalized = reference.replace(/\s+/g, ' ').trim();
+    return normalized.length <= 120 ? normalized : `${normalized.slice(0, 117)}...`;
+  }
+
+  private computeConfidence(output: ContactInsightOutput): number {
+    const signalStrength = output.relationshipSignals?.length ?? 0;
+    const citationCount = output.citations?.length ?? 0;
+    const actionCount = output.suggestedActions?.length ?? 0;
+    const raw = 0.45 + Math.min(signalStrength, 4) * 0.08 + Math.min(citationCount, 5) * 0.05 + Math.min(actionCount, 3) * 0.04;
+    return Math.min(0.95, raw);
   }
 
   /**
