@@ -352,6 +352,40 @@ export function ContactDetailPage() {
                     </ul>
                   </div>
                 )}
+
+                <div>
+                  <h4 className="text-[13px] font-semibold text-text-secondary font-primary mb-2">洞察可信度</h4>
+                  <p className="text-[14px] text-text-primary font-primary">
+                    {Math.round((insight.confidence || 0) * 100)}%
+                  </p>
+                </div>
+
+                {insight.evidenceChains?.length > 0 && (
+                  <div>
+                    <h4 className="text-[13px] font-semibold text-text-secondary font-primary mb-2">证据摘要链路</h4>
+                    <ul className="list-disc list-inside text-[14px] text-text-primary font-primary">
+                      {insight.evidenceChains.map((evidence, index) => (
+                        <li key={`${evidence.sourceRef}-${index}`}>
+                          <span className="font-medium">[{evidence.sourceType}] </span>
+                          <span>{evidence.summary}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {insight.sourceRefs?.length > 0 && (
+                  <div>
+                    <h4 className="text-[13px] font-semibold text-text-secondary font-primary mb-2">来源引用</h4>
+                    <ul className="list-disc list-inside text-[13px] text-text-muted font-primary">
+                      {insight.sourceRefs.map((source, index) => (
+                        <li key={`${source.type}-${source.reference}-${index}`}>
+                          {source.type}: {source.reference}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
               </>
             ) : (
               <>

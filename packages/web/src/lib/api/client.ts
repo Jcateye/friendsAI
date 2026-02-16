@@ -30,7 +30,16 @@ import type {
   CreateToolConfirmationRequest,
   ConfirmToolRequest,
   RejectToolRequest,
+  BatchConfirmToolRequest,
+  BatchRejectToolRequest,
+  ToolConfirmationBatchResult,
   ToolConfirmationStatus,
+  DailyActionDigest,
+  RelationshipHealthSummary,
+  RelationshipRiskQueue,
+  FeishuMessageTemplate,
+  SendFeishuTemplateMessageRequest,
+  SendFeishuTemplateMessageResponse,
 } from './types';
 import type {
   AgentRunResponse,
@@ -487,6 +496,28 @@ export const api = {
       });
       return handleResponse<ToolConfirmation>(response);
     },
+
+    /**
+     * 批量确认工具执行
+     */
+    async batchConfirm(request: BatchConfirmToolRequest): Promise<ToolConfirmationBatchResult> {
+      const response = await fetchWithAuth(`${API_BASE}/tool-confirmations/batch/confirm`, {
+        method: 'POST',
+        body: JSON.stringify(request),
+      });
+      return handleResponse<ToolConfirmationBatchResult>(response);
+    },
+
+    /**
+     * 批量拒绝工具执行
+     */
+    async batchReject(request: BatchRejectToolRequest): Promise<ToolConfirmationBatchResult> {
+      const response = await fetchWithAuth(`${API_BASE}/tool-confirmations/batch/reject`, {
+        method: 'POST',
+        body: JSON.stringify(request),
+      });
+      return handleResponse<ToolConfirmationBatchResult>(response);
+    },
   },
 
   /**
@@ -642,6 +673,119 @@ export const api = {
       });
 
       return handleResponse<AgentRunResponse<NetworkActionData>>(response);
+    },
+  },
+
+  /**
+   * 每日行动简报
+   */
+  actionDigest: {
+    async getToday(): Promise<DailyActionDigest> {
+      const response = await fetchWithAuth(`${API_BASE}/action-digest/today`);
+      return handleResponse<DailyActionDigest>(response);
+    },
+
+    async refresh(): Promise<DailyActionDigest> {
+      const response = await fetchWithAuth(`${API_BASE}/action-digest/refresh`, {
+        method: 'POST',
+      });
+      return handleResponse<DailyActionDigest>(response);
+    },
+  },
+
+  /**
+   * 关系健康与风险队列
+   */
+  relationships: {
+    async getHealth(params?: {
+      forceRecompute?: boolean;
+      highRiskThreshold?: number;
+      mediumRiskThreshold?: number;
+      ruleWeight?: number;
+      llmWeight?: number;
+    }): Promise<RelationshipHealthSummary> {
+      const search = new URLSearchParams();
+      if (params?.forceRecompute) search.set('forceRecompute', 'true');
+      if (params?.highRiskThreshold !== undefined) search.set('highRiskThreshold', String(params.highRiskThreshold));
+      if (params?.mediumRiskThreshold !== undefined) search.set('mediumRiskThreshold', String(params.mediumRiskThreshold));
+      if (params?.ruleWeight !== undefined) search.set('ruleWeight', String(params.ruleWeight));
+      if (params?.llmWeight !== undefined) search.set('llmWeight', String(params.llmWeight));
+
+      const query = search.toString();
+      const response = await fetchWithAuth(`${API_BASE}/relationships/health${query ? `?${query}` : ''}`);
+      return handleResponse<RelationshipHealthSummary>(response);
+    },
+
+    async getRiskQueue(params?: {
+      forceRecompute?: boolean;
+      highRiskThreshold?: number;
+      mediumRiskThreshold?: number;
+      ruleWeight?: number;
+      llmWeight?: number;
+    }): Promise<RelationshipRiskQueue> {
+      const search = new URLSearchParams();
+      if (params?.forceRecompute) search.set('forceRecompute', 'true');
+      if (params?.highRiskThreshold !== undefined) search.set('highRiskThreshold', String(params.highRiskThreshold));
+      if (params?.mediumRiskThreshold !== undefined) search.set('mediumRiskThreshold', String(params.mediumRiskThreshold));
+      if (params?.ruleWeight !== undefined) search.set('ruleWeight', String(params.ruleWeight));
+      if (params?.llmWeight !== undefined) search.set('llmWeight', String(params.llmWeight));
+
+      const query = search.toString();
+      const response = await fetchWithAuth(`${API_BASE}/relationships/risk-queue${query ? `?${query}` : ''}`);
+      return handleResponse<RelationshipRiskQueue>(response);
+    },
+  },
+
+  feishu: {
+    async listTemplates(): Promise<FeishuMessageTemplate[]> {
+      const response = await fetchWithAuth(`${API_BASE}/connectors/feishu/templates`);
+      return handleResponse<FeishuMessageTemplate[]>(response);
+    },
+
+    async createTemplate(request: {
+      title: string;
+      content: string;
+      variables?: string[];
+      status?: 'active' | 'disabled' | 'archived';
+    }): Promise<FeishuMessageTemplate> {
+      const response = await fetchWithAuth(`${API_BASE}/connectors/feishu/templates`, {
+        method: 'POST',
+        body: JSON.stringify(request),
+      });
+      return handleResponse<FeishuMessageTemplate>(response);
+    },
+
+    async updateTemplate(
+      id: string,
+      request: {
+        title?: string;
+        content?: string;
+        variables?: string[];
+        status?: 'active' | 'disabled' | 'archived';
+      },
+    ): Promise<FeishuMessageTemplate> {
+      const response = await fetchWithAuth(`${API_BASE}/connectors/feishu/templates/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(request),
+      });
+      return handleResponse<FeishuMessageTemplate>(response);
+    },
+
+    async deleteTemplate(id: string): Promise<{ success: boolean }> {
+      const response = await fetchWithAuth(`${API_BASE}/connectors/feishu/templates/${id}`, {
+        method: 'DELETE',
+      });
+      return handleResponse<{ success: boolean }>(response);
+    },
+
+    async sendByTemplate(
+      request: SendFeishuTemplateMessageRequest,
+    ): Promise<SendFeishuTemplateMessageResponse> {
+      const response = await fetchWithAuth(`${API_BASE}/connectors/feishu/messages/template-send`, {
+        method: 'POST',
+        body: JSON.stringify(request),
+      });
+      return handleResponse<SendFeishuTemplateMessageResponse>(response);
     },
   },
 };

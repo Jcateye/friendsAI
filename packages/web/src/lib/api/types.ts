@@ -262,7 +262,7 @@ export interface ConversationArchiveResponse {
 
 // ==================== Tool Confirmation ====================
 
-export type ToolConfirmationStatus = 'pending' | 'confirmed' | 'rejected';
+export type ToolConfirmationStatus = 'pending' | 'confirmed' | 'rejected' | 'failed';
 
 export interface ToolConfirmation {
   id: string;
@@ -293,6 +293,34 @@ export interface RejectToolRequest {
   reason?: string;
 }
 
+export interface BatchConfirmToolRequest {
+  items: Array<{
+    id: string;
+    payload?: Record<string, any>;
+  }>;
+}
+
+export interface BatchRejectToolRequest {
+  templateReason?: string;
+  items: Array<{
+    id: string;
+    reason?: string;
+  }>;
+}
+
+export interface ToolConfirmationBatchResult {
+  total: number;
+  succeeded: number;
+  failed: number;
+  items: Array<{
+    id: string;
+    success: boolean;
+    status?: ToolConfirmationStatus;
+    code?: string;
+    message?: string;
+  }>;
+}
+
 // ==================== Legacy (for backward compatibility) ====================
 
 export interface ToolState {
@@ -307,4 +335,87 @@ export interface ToolState {
     code: string;
     message: string;
   };
+}
+
+// ==================== Daily Action Digest ====================
+
+export interface DailyActionDigestItem {
+  id: string;
+  rank: number;
+  actionType: string;
+  sourceAgentId: string;
+  sourceRef: string | null;
+  title: string;
+  description: string;
+  priorityScore: number;
+  confidence: number | null;
+  payload: Record<string, unknown> | null;
+}
+
+export interface DailyActionDigest {
+  date: string;
+  generatedAt: string;
+  items: DailyActionDigestItem[];
+}
+
+// ==================== Relationship Health ====================
+
+export interface RelationshipHealthSummary {
+  averageScore: number;
+  highRiskCount: number;
+  mediumRiskCount: number;
+  lowRiskCount: number;
+  totalContacts: number;
+  generatedAt: string;
+}
+
+export interface RelationshipRiskQueueItem {
+  contactId: string;
+  contactName: string;
+  score: number;
+  riskLevel: 'low' | 'medium' | 'high';
+  suggestedAction: string;
+  factors: Array<{
+    key: string;
+    weight: number;
+    value: number;
+    reason: string;
+  }>;
+}
+
+export interface RelationshipRiskQueue {
+  generatedAt: string;
+  items: RelationshipRiskQueueItem[];
+}
+
+// ==================== Feishu Closed Loop ====================
+
+export interface FeishuMessageTemplate {
+  id: string;
+  userId: string;
+  title: string;
+  content: string;
+  variables: string[] | null;
+  status: 'active' | 'disabled' | 'archived';
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SendFeishuTemplateMessageRequest {
+  templateId: string;
+  recipientOpenId: string;
+  variables?: Record<string, string>;
+  conversationId?: string;
+  archiveId?: string;
+  toolConfirmationId?: string;
+}
+
+export interface SendFeishuTemplateMessageResponse {
+  success: boolean;
+  deliveryId: string;
+  messageId?: string;
+  status: 'pending' | 'sent' | 'delivered' | 'read' | 'failed';
+  retryable: boolean;
+  errorCode?: string;
+  error?: string;
 }

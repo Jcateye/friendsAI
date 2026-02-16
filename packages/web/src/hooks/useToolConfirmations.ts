@@ -40,6 +40,14 @@ export interface UseToolConfirmationsReturn {
    * 清除所有待确认项
    */
   clear: () => void;
+  /**
+   * 批量确认
+   */
+  confirmBatch: (items: Array<{ confirmationId: string; payload?: Record<string, any> }>) => Promise<void>;
+  /**
+   * 批量拒绝
+   */
+  rejectBatch: (items: Array<{ confirmationId: string; reason?: string }>, templateReason?: string) => Promise<void>;
 }
 
 /**
@@ -120,11 +128,46 @@ export function useToolConfirmations(
     setPending([]);
   }, []);
 
+  const confirmBatch = useCallback(
+    async (items: Array<{ confirmationId: string; payload?: Record<string, any> }>) => {
+      if (items.length === 0) return;
+      await api.toolConfirmations.batchConfirm({
+        items: items.map((item) => ({
+          id: item.confirmationId,
+          payload: item.payload,
+        })),
+      });
+      const ids = new Set(items.map((item) => item.confirmationId));
+      setPending((prev) => prev.filter((item) => !ids.has(item.confirmationId)));
+    },
+    [],
+  );
+
+  const rejectBatch = useCallback(
+    async (
+      items: Array<{ confirmationId: string; reason?: string }>,
+      templateReason?: string,
+    ) => {
+      if (items.length === 0) return;
+      await api.toolConfirmations.batchReject({
+        templateReason,
+        items: items.map((item) => ({
+          id: item.confirmationId,
+          reason: item.reason,
+        })),
+      });
+      const ids = new Set(items.map((item) => item.confirmationId));
+      setPending((prev) => prev.filter((item) => !ids.has(item.confirmationId)));
+    },
+    [],
+  );
+
   return {
     pending,
     confirm,
     reject,
     clear,
+    confirmBatch,
+    rejectBatch,
   };
 }
-

@@ -35,8 +35,24 @@ export interface ContactInsightData {
     type: string;
     reference: string;
   }>;
+  confidence: number;
+  sourceRefs: Array<{
+    type: string;
+    reference: string;
+  }>;
+  evidenceChains: Array<{
+    summary: string;
+    sourceType: string;
+    sourceRef: string;
+  }>;
   sourceHash: string;
   generatedAt: number;
+  priority_score?: number;
+  priorityScore?: number;
+  reason_tags?: string[];
+  reasonTags?: string[];
+  relationship_risk_level?: 'low' | 'medium' | 'high';
+  relationshipRiskLevel?: 'low' | 'medium' | 'high';
 }
 
 /**
@@ -106,12 +122,16 @@ export interface NetworkActionData {
     reason: string;
     priority: 'high' | 'medium' | 'low';
     suggestedAction: string;
+    timing_reason: string;
+    value_first_suggestion: string;
+    followup_plan: string;
   }>;
   recommendations: Array<{
     type: 'connection' | 'followup' | 'introduction';
     description: string;
     contacts: string[];
     confidence: number;
+    reason: string;
   }>;
   synthesis: string;
   nextActions: Array<{
@@ -139,5 +159,4 @@ export interface AgentRunResponse<TData> {
   generatedAtMs?: number;
   data: TData;
 }
-
 
