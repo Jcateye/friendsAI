@@ -1,6 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
-import { readdirSync, existsSync, readFileSync } from 'fs';
-import { join } from 'path';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import { AgentDefinitionRegistry } from './runtime/agent-definition-registry.service';
 import type { SupportedAgentId } from './agent.types';
 import type {
@@ -8,6 +6,8 @@ import type {
   AgentOperationDto,
   AgentListResponseDto,
 } from './dto/agent-list.dto';
+import { SkillsService } from '../skills/skills.service';
+import type { SkillActionOptionV2 } from '../skills/skills.types';
 
 /**
  * Agent 元数据配置
@@ -76,12 +76,16 @@ const AGENT_METADATA: Record<
 export class AgentListService {
   private readonly logger = new Logger(AgentListService.name);
 
-  constructor(private readonly definitionRegistry: AgentDefinitionRegistry) {}
+  constructor(
+    private readonly definitionRegistry: AgentDefinitionRegistry,
+    @Optional()
+    private readonly skillsService?: SkillsService,
+  ) {}
 
   /**
    * 获取所有 Agent 的列表信息
    */
-  async getAgentList(): Promise<AgentListResponseDto> {
+  async getAgentList(userId?: string): Promise<AgentListResponseDto> {
     const supportedAgents: SupportedAgentId[] = [
       'chat_conversation',
       'archive_brief',
@@ -90,11 +94,12 @@ export class AgentListService {
       'contact_insight',
     ];
 
+    const skillsByAgent = await this.buildSkillActionsMap(userId);
     const agents: AgentInfoDto[] = [];
 
     for (const agentId of supportedAgents) {
       try {
-        const agentInfo = await this.getAgentInfo(agentId);
+        const agentInfo = await this.getAgentInfo(agentId, skillsByAgent.get(agentId));
         agents.push(agentInfo);
       } catch (error) {
         this.logger.warn(`Failed to load agent info for ${agentId}: ${error instanceof Error ? error.message : String(error)}`);
@@ -113,6 +118,7 @@ export class AgentListService {
             name: op.name,
             description: op.description,
           })),
+          skillActions: skillsByAgent.get(agentId),
         });
       }
     }
@@ -123,10 +129,51 @@ export class AgentListService {
     };
   }
 
+  private async buildSkillActionsMap(userId?: string): Promise<Map<string, SkillActionOptionV2[]>> {
+    const map = new Map<string, SkillActionOptionV2[]>();
+
+    if (!this.skillsService || !userId) {
+      return map;
+    }
+
+    try {
+      const catalog = await this.skillsService.getCatalog(userId);
+      for (const item of catalog.items) {
+        for (const action of item.actions) {
+          const agentId = action.run.agentId;
+          const existing = map.get(agentId) ?? [];
+          existing.push(action);
+          map.set(agentId, existing);
+
+          // chat_conversation 入口可触发所有 skills
+          const chatActions = map.get('chat_conversation') ?? [];
+          chatActions.push(action);
+          map.set('chat_conversation', chatActions);
+        }
+      }
+
+      // 去重
+      for (const [agentId, actions] of map.entries()) {
+        const uniq = new Map<string, SkillActionOptionV2>();
+        for (const action of actions) {
+          uniq.set(action.actionId, action);
+        }
+        map.set(agentId, Array.from(uniq.values()));
+      }
+    } catch (error) {
+      this.logger.warn(`Failed to build dynamic skill actions: ${error instanceof Error ? error.message : String(error)}`);
+    }
+
+    return map;
+  }
+
   /**
    * 获取单个 Agent 的详细信息
    */
-  private async getAgentInfo(agentId: SupportedAgentId): Promise<AgentInfoDto> {
+  private async getAgentInfo(
+    agentId: SupportedAgentId,
+    skillActions?: SkillActionOptionV2[],
+  ): Promise<AgentInfoDto> {
     const metadata = AGENT_METADATA[agentId];
 
     // chat_conversation 是特殊的流式对话 agent，可能没有定义文件
@@ -146,6 +193,7 @@ export class AgentListService {
         memory: {
           strategy: 'conversation',
         },
+        skillActions,
       };
     }
 
@@ -217,6 +265,7 @@ export class AgentListService {
         outputSchema: bundle.outputSchema as Record<string, unknown> | undefined,
         usage: metadata?.usage,
         endpoint: metadata?.endpoint,
+        skillActions,
       };
     } catch (error) {
       // 如果加载失败，返回 unavailable 状态
@@ -233,8 +282,8 @@ export class AgentListService {
           name: op.name,
           description: op.description,
         })),
+        skillActions,
       };
     }
   }
 }
-

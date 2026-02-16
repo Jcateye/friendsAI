@@ -13,6 +13,13 @@ import { FeishuMessageDelivery } from './feishu-message-delivery.entity';
 import { AgentDefinitionVersion } from './agent-definition-version.entity';
 import { AgentDefinitionReleaseRule } from './agent-definition-release-rule.entity';
 import { AgentDefinitionPublishLog } from './agent-definition-publish-log.entity';
+import { SkillDefinition } from './skill-definition.entity';
+import { SkillVersion } from './skill-version.entity';
+import { SkillReleaseRule } from './skill-release-rule.entity';
+import { SkillBinding } from './skill-binding.entity';
+import { SkillRuntimeMount } from './skill-runtime-mount.entity';
+import { SkillInvocationLog } from './skill-invocation-log.entity';
+import { SkillPublishLog } from './skill-publish-log.entity';
 
 /**
  * V3 实体模块
@@ -37,6 +44,13 @@ import { AgentDefinitionPublishLog } from './agent-definition-publish-log.entity
         AgentDefinitionVersion,
         AgentDefinitionReleaseRule,
         AgentDefinitionPublishLog,
+        SkillDefinition,
+        SkillVersion,
+        SkillReleaseRule,
+        SkillBinding,
+        SkillRuntimeMount,
+        SkillInvocationLog,
+        SkillPublishLog,
       ],
       'v3',
     ),

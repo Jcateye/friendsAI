@@ -25,6 +25,8 @@ export interface AgentComposerContext {
   attachments?: AgentComposerAttachment[];
   feishuEnabled?: boolean;
   inputMode?: 'text' | 'voice';
+  skillActionId?: string;
+  rawInputs?: Record<string, unknown>;
   [key: string]: unknown;
 }
 

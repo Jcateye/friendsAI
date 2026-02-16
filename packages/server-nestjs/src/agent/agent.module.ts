@@ -42,12 +42,14 @@ import { AgentRuntimeExecutor } from './runtime/agent-runtime-executor.service';
 // Agent List Service
 import { AgentListService } from './agent-list.service';
 import { AgentDefinitionReleaseRule, AgentDefinitionVersion } from '../v3-entities';
+import { SkillsModule } from '../skills/skills.module';
 
 @Module({
   imports: [
     AiModule,
     ConversationsModule,
     ActionTrackingModule,
+    SkillsModule,
     TypeOrmModule.forFeature([
       User,
       Contact,

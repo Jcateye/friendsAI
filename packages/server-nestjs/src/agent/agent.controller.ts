@@ -1,4 +1,4 @@
-import { Body, Controller, Get, HttpCode, HttpException, HttpStatus, Post, Query, Req, Res } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, HttpException, HttpStatus, Optional, Post, Query, Req, Res } from '@nestjs/common';
 import { ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
 import type { Request, Response } from 'express';
 import { AgentOrchestrator } from './agent.orchestrator';
@@ -20,6 +20,7 @@ import { AgentListResponseDto } from './dto/agent-list.dto';
 import { AgentRuntimeError } from './errors/agent-runtime.error';
 import { AgentRunMetricsService } from '../action-tracking/agent-run-metrics.service';
 import { generateUlid } from '../utils/ulid';
+import { SkillsService } from '../skills/skills.service';
 
 @ApiTags('Agent')
 @Controller('agent')
@@ -30,6 +31,8 @@ export class AgentController {
   private readonly maxContextStringLength = 500;
   private readonly maxComposerTools = 12;
   private readonly maxComposerAttachments = 10;
+  private readonly skillParserEnabled = process.env.SKILL_INPUT_PARSER_ENABLED === 'true';
+  private readonly skillParserExecuteMode = process.env.SKILL_PARSER_EXECUTE_MODE ?? 'log-only';
 
   constructor(
     private readonly agentOrchestrator: AgentOrchestrator,
@@ -37,6 +40,8 @@ export class AgentController {
     private readonly agentRuntimeExecutor: AgentRuntimeExecutor,
     private readonly agentListService: AgentListService,
     private readonly agentRunMetricsService: AgentRunMetricsService,
+    @Optional()
+    private readonly skillsService?: SkillsService,
   ) {}
 
   @Post('chat')
@@ -113,6 +118,54 @@ export class AgentController {
         context: sanitizedContext,
         userId: resolvedUserId,
       };
+
+      if (this.skillParserEnabled && this.skillsService && resolvedUserId) {
+        const parserText =
+          typeof body.prompt === 'string' && body.prompt.trim().length > 0
+            ? body.prompt
+            : this.extractLatestUserText(body.messages);
+
+        const parsedIntent = await this.skillsService.parseInvocationFromChat({
+          tenantId: resolvedUserId,
+          conversationId: body.conversationId,
+          sessionId: body.sessionId,
+          text: parserText,
+          composer:
+            preparedRequest.context?.composer && this.isRecord(preparedRequest.context.composer)
+              ? (preparedRequest.context.composer as Record<string, unknown>)
+              : undefined,
+          agentScope: body.sessionId ?? body.conversationId ?? resolvedUserId,
+        });
+
+        if (parsedIntent) {
+          preparedRequest.context = {
+            ...(preparedRequest.context ?? {}),
+            skillInvocation: parsedIntent,
+          };
+
+          if (
+            this.skillParserExecuteMode === 'enforce' &&
+            parsedIntent.matched &&
+            parsedIntent.execution
+          ) {
+            const handled = await this.executeSkillIntentDirectly({
+              res,
+              format,
+              runRequest: body,
+              userId: resolvedUserId,
+              parsedIntent,
+            });
+
+            if (handled) {
+              runCompleted = true;
+              streamStatus = 'succeeded';
+              runId = handled.runId;
+              streamErrorCode = null;
+              return;
+            }
+          }
+        }
+      }
 
       for await (const event of this.agentOrchestrator.streamChat(preparedRequest, {
         signal: abortController.signal,
@@ -325,13 +378,159 @@ export class AgentController {
     description: '成功返回 Agent 列表',
     type: AgentListResponseDto,
   })
-  async getAgentList(): Promise<AgentListResponseDto> {
-    return this.agentListService.getAgentList();
+  async getAgentList(@Req() req: Request): Promise<AgentListResponseDto> {
+    const resolvedUserId = (req.user as { id?: string } | undefined)?.id;
+    return this.agentListService.getAgentList(resolvedUserId);
   }
 
   private writeEvent(res: Response, event: AgentStreamEvent | AgentSseEvent): void {
     res.write(`event: ${event.event}\n`);
     res.write(`data: ${JSON.stringify(event)}\n\n`);
+  }
+
+  private extractLatestUserText(messages?: AgentChatRequest['messages']): string | undefined {
+    if (!Array.isArray(messages)) {
+      return undefined;
+    }
+    for (let index = messages.length - 1; index >= 0; index -= 1) {
+      const message = messages[index];
+      if (message?.role !== 'user') {
+        continue;
+      }
+      if (typeof message.content === 'string' && message.content.trim().length > 0) {
+        return message.content;
+      }
+      if (Array.isArray(message.content)) {
+        const text = message.content
+          .map((part) => {
+            if (typeof part === 'string') {
+              return part;
+            }
+            if (part && typeof part === 'object' && 'text' in part && typeof (part as any).text === 'string') {
+              return String((part as any).text);
+            }
+            return '';
+          })
+          .join(' ')
+          .trim();
+        if (text.length > 0) {
+          return text;
+        }
+      }
+    }
+    return undefined;
+  }
+
+  private async executeSkillIntentDirectly(input: {
+    res: Response;
+    format: 'sse' | 'vercel-ai';
+    runRequest: AgentChatRequest;
+    userId: string;
+    parsedIntent: {
+      skillKey?: string;
+      operation?: string;
+      execution?: {
+        agentId: string;
+        operation?: string | null;
+        input: Record<string, unknown>;
+      };
+    };
+  }): Promise<{ runId: string } | null> {
+    if (!input.parsedIntent.execution) {
+      return null;
+    }
+
+    const execution = input.parsedIntent.execution;
+    const executionInput: Record<string, unknown> = {
+      ...(execution.input ?? {}),
+    };
+
+    if (!('conversationId' in executionInput) && input.runRequest.conversationId) {
+      executionInput.conversationId = input.runRequest.conversationId;
+    }
+    if (!('sessionId' in executionInput) && input.runRequest.sessionId) {
+      executionInput.sessionId = input.runRequest.sessionId;
+    }
+    if (!('userId' in executionInput) && input.userId) {
+      executionInput.userId = input.userId;
+    }
+
+    const result = await this.agentRuntimeExecutor.execute(
+      execution.agentId as AgentRunRequest['agentId'],
+      execution.operation ?? null,
+      executionInput,
+      {
+        useCache: true,
+        userId: input.userId,
+        conversationId: input.runRequest.conversationId,
+        sessionId: input.runRequest.sessionId,
+      },
+    );
+
+    const summaryText = this.buildSkillExecutionSummary(
+      input.parsedIntent.skillKey ?? execution.agentId,
+      input.parsedIntent.operation ?? execution.operation ?? 'default',
+      result.data,
+      result.cached,
+    );
+
+    if (input.format === 'vercel-ai') {
+      input.res.write(`0:${JSON.stringify(summaryText)}\n`);
+      input.res.write(`d:${JSON.stringify({ finishReason: 'stop' })}\n`);
+      return { runId: result.runId };
+    }
+
+    const now = new Date();
+    const messageEvent = {
+      event: 'agent.message' as const,
+      data: {
+        id: generateUlid(),
+        role: 'assistant' as const,
+        content: summaryText,
+        createdAt: now.toISOString(),
+        createdAtMs: now.getTime(),
+        metadata: {
+          skillInvocation: {
+            skillKey: input.parsedIntent.skillKey ?? null,
+            operation: input.parsedIntent.operation ?? null,
+            runId: result.runId,
+            cached: result.cached,
+          },
+        },
+      },
+    };
+
+    this.writeEvent(input.res, {
+      event: 'agent.start',
+      data: {
+        runId: result.runId,
+        createdAt: now.toISOString(),
+        input: summaryText,
+      },
+    });
+    this.writeEvent(input.res, messageEvent);
+    this.writeEvent(input.res, {
+      event: 'agent.end',
+      data: {
+        runId: result.runId,
+        status: 'succeeded',
+        finishedAt: new Date().toISOString(),
+        output: summaryText,
+      },
+    });
+
+    return { runId: result.runId };
+  }
+
+  private buildSkillExecutionSummary(
+    skillKey: string,
+    operation: string,
+    data: Record<string, unknown>,
+    cached: boolean,
+  ): string {
+    const payload = JSON.stringify(data, null, 2);
+    const trimmed = payload.length > 1200 ? `${payload.slice(0, 1197)}...` : payload;
+    return `已执行技能 ${skillKey}:${operation}${cached ? '（缓存命中）' : ''}\n\n${trimmed}`;
   }
 
   private sanitizeChatContext(context: AgentChatRequest['context']): AgentChatContext | undefined {
@@ -402,6 +601,20 @@ export class AgentController {
 
     if (value.inputMode === 'text' || value.inputMode === 'voice') {
       sanitized.inputMode = value.inputMode;
+    }
+
+    if (typeof value.skillActionId === 'string') {
+      const skillActionId = value.skillActionId.trim().slice(0, 160);
+      if (skillActionId.length > 0) {
+        sanitized.skillActionId = skillActionId;
+      }
+    }
+
+    if (value.rawInputs !== undefined) {
+      const rawInputs = this.sanitizeGenericContextValue(value.rawInputs, 0);
+      if (this.isRecord(rawInputs)) {
+        sanitized.rawInputs = rawInputs as Record<string, unknown>;
+      }
     }
 
     if (Object.keys(sanitized).length === 0) {

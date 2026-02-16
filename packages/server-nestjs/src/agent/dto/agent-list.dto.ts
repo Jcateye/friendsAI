@@ -47,6 +47,33 @@ export class AgentOperationDto {
   outputSchema?: Record<string, unknown>;
 }
 
+export class AgentSkillActionDto {
+  @ApiProperty({ description: '动作 ID，前端可直接回传到 composer.skillActionId' })
+  actionId: string;
+
+  @ApiProperty({ description: '技能 key' })
+  skillKey: string;
+
+  @ApiProperty({ description: '操作名' })
+  operation: string;
+
+  @ApiProperty({ description: '展示名称' })
+  name: string;
+
+  @ApiProperty({ description: '动作描述' })
+  description?: string;
+
+  @ApiProperty({ description: '执行映射配置', type: Object })
+  run?: {
+    agentId: string;
+    operation?: string | null;
+    inputTemplate?: Record<string, unknown>;
+  };
+
+  @ApiProperty({ description: '风险等级' })
+  riskLevel?: 'low' | 'medium' | 'high';
+}
+
 /**
  * Agent 名片信息
  */
@@ -92,6 +119,9 @@ export class AgentInfoDto {
 
   @ApiProperty({ description: 'API 端点' })
   endpoint?: string;
+
+  @ApiProperty({ description: '可触发的 skills actions', type: [AgentSkillActionDto] })
+  skillActions?: AgentSkillActionDto[];
 }
 
 /**
@@ -104,4 +134,3 @@ export class AgentListResponseDto {
   @ApiProperty({ description: '总数' })
   total: number;
 }
-

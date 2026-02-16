@@ -37,6 +37,7 @@ import { ActionTrackingModule } from './action-tracking/action-tracking.module';
 import { ActionDigestModule } from './action-digest/action-digest.module';
 import { RelationshipsModule } from './relationships/relationships.module';
 import { AgentDefinitionCenterModule } from './agent-definition-center/agent-definition-center.module';
+import { SkillsModule } from './skills/skills.module';
 import { FeishuApiModule } from './feishu/api/feishu-api.module';
 import { FeishuWebhookModule } from './feishu/webhook/feishu-webhook.module';
 import { FeishuConfigModule } from './feishu/config/feishu-config.module';
@@ -164,6 +165,7 @@ import { HttpLoggingInterceptor } from './common/interceptors/http-logging.inter
     ActionDigestModule,
     RelationshipsModule,
     AgentDefinitionCenterModule,
+    SkillsModule,
     FeishuApiModule,
     FeishuWebhookModule,
     FeishuConfigModule,
