@@ -34,6 +34,9 @@ import { ToolsModule } from './tools/tools.module';
 import { ToolConfirmationsModule } from './tool-confirmations/tool-confirmations.module';
 import { ConversationArchivesModule } from './conversation-archives/conversation-archives.module';
 import { ActionTrackingModule } from './action-tracking/action-tracking.module';
+import { ActionDigestModule } from './action-digest/action-digest.module';
+import { RelationshipsModule } from './relationships/relationships.module';
+import { AgentDefinitionCenterModule } from './agent-definition-center/agent-definition-center.module';
 import { FeishuApiModule } from './feishu/api/feishu-api.module';
 import { FeishuWebhookModule } from './feishu/webhook/feishu-webhook.module';
 import { FeishuConfigModule } from './feishu/config/feishu-config.module';
@@ -158,6 +161,9 @@ import { HttpLoggingInterceptor } from './common/interceptors/http-logging.inter
     ToolConfirmationsModule,
     ConversationArchivesModule,
     ActionTrackingModule,
+    ActionDigestModule,
+    RelationshipsModule,
+    AgentDefinitionCenterModule,
     FeishuApiModule,
     FeishuWebhookModule,
     FeishuConfigModule,
