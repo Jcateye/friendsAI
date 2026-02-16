@@ -65,7 +65,17 @@ describe('Chat SSE Flow (e2e)', () => {
   });
 
   afterAll(async () => {
-    await app.close();
+    if (!app) {
+      return;
+    }
+    try {
+      await app.close();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (!message.includes('Nest could not find DataSource element')) {
+        throw error;
+      }
+    }
   });
 
   describe('POST /v1/agent/chat - SSE streaming', () => {
@@ -180,6 +190,25 @@ describe('Chat SSE Flow (e2e)', () => {
           expect.objectContaining({ role: 'user', content: 'Test' }),
         ]),
       );
+    });
+
+    it('should support vercel-ai stream protocol format', async () => {
+      const mockStreamGenerator = async function* () {
+        yield { choices: [{ delta: { content: 'Hello' }, finish_reason: null }] };
+        yield { choices: [{ delta: {}, finish_reason: 'stop' }] };
+      };
+
+      aiServiceMock.streamChat.mockReturnValue(mockStreamGenerator());
+
+      const response = await request(app.getHttpServer())
+        .post('/v1/agent/chat?format=vercel-ai')
+        .set(authHeader)
+        .send({ prompt: 'Say hello' })
+        .expect(200);
+
+      expect(response.headers['x-vercel-ai-data-stream']).toBe('v1');
+      expect(response.text).toContain('0:"Hello"');
+      expect(response.text).toContain('d:{"finishReason":"stop"}');
     });
 
     it('should handle streaming errors gracefully', async () => {

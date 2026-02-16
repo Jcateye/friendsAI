@@ -5,6 +5,8 @@ import { ActionTrackingService } from './action-tracking.service';
 import { WeeklyReportService } from './weekly-report.service';
 import { ActionOutcomeLog } from '../v3-entities/action-outcome-log.entity';
 import { WeeklyReportCache } from '../v3-entities/weekly-report-cache.entity';
+import { AgentRunMetric } from '../v3-entities/agent-run-metric.entity';
+import { AgentRunMetricsService } from './agent-run-metrics.service';
 
 /**
  * Action Tracking Module
@@ -19,12 +21,13 @@ import { WeeklyReportCache } from '../v3-entities/weekly-report-cache.entity';
       [
         ActionOutcomeLog,
         WeeklyReportCache,
+        AgentRunMetric,
       ],
       'v3', // 使用 V3 数据源
     ),
   ],
   controllers: [ActionTrackingController],
-  providers: [ActionTrackingService, WeeklyReportService],
-  exports: [ActionTrackingService],
+  providers: [ActionTrackingService, WeeklyReportService, AgentRunMetricsService],
+  exports: [ActionTrackingService, AgentRunMetricsService],
 })
 export class ActionTrackingModule {}

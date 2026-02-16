@@ -19,6 +19,8 @@ import { ActionTrackingService } from './action-tracking.service';
 import { WeeklyReportService } from './weekly-report.service';
 import type { AgentEventType } from './action-tracking.types';
 import type { WeeklyMetrics } from './action-tracking.types';
+import type { AgentMetricsSummary } from './action-tracking.types';
+import { AgentRunMetricsService } from './agent-run-metrics.service';
 
 /**
  * 追踪事件响应 DTO
@@ -32,6 +34,7 @@ interface TrackEventResponseDto {
  * 每周指标响应 DTO
  */
 interface WeeklyMetricsResponseDto extends WeeklyMetrics {}
+interface AgentMetricsResponseDto extends AgentMetricsSummary {}
 
 /**
  * 记录事件请求 DTO
@@ -48,6 +51,7 @@ export class ActionTrackingController {
   constructor(
     private readonly actionTrackingService: ActionTrackingService,
     private readonly weeklyReportService: WeeklyReportService,
+    private readonly agentRunMetricsService: AgentRunMetricsService,
   ) {}
 
   @Post('actions/track')
@@ -161,6 +165,36 @@ export class ActionTrackingController {
     }
 
     return this.weeklyReportService.getMetrics(userId, days);
+  }
+
+  @Get('metrics/agents')
+  @ApiOperation({
+    summary: '查询 Agent 运行指标',
+    description:
+      '返回 run 级观测指标，包括成功率、缓存命中率、输出校验失败率、平均耗时和总运行数。',
+  })
+  @ApiQuery({
+    name: 'days',
+    required: false,
+    type: Number,
+    description: '统计天数，默认 7 天',
+    example: 7,
+  })
+  @ApiResponse({
+    status: 200,
+    description: '成功返回 Agent 指标',
+    type: Object,
+  })
+  async getAgentMetrics(
+    @Request() req: any,
+    @Query('days') days: number = 7,
+  ): Promise<AgentMetricsResponseDto> {
+    const userId = req.user?.id || req.headers['x-user-id'];
+    if (!userId) {
+      throw new Error('User ID not found in request');
+    }
+
+    return this.agentRunMetricsService.getMetrics(userId, days);
   }
 
   @Get('metrics/events')

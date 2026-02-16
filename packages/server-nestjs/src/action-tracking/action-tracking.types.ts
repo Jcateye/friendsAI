@@ -153,3 +153,21 @@ export interface EventStatistics {
   /** 总事件数 */
   total: number;
 }
+
+export interface AgentMetricsByAgentItem {
+  agentId: string;
+  totalRuns: number;
+  successRate: number;
+  cacheHitRate: number;
+  validationFailRate: number;
+  avgDurationMs: number;
+}
+
+export interface AgentMetricsSummary {
+  totalRuns: number;
+  successRate: number;
+  cacheHitRate: number;
+  validationFailRate: number;
+  avgDurationMs: number;
+  byAgent: AgentMetricsByAgentItem[];
+}

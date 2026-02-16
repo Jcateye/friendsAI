@@ -1,24 +1,14 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ActionPanelController } from './action-panel.controller';
-import { ActionPanelService } from './action-panel.service';
 import { NetworkActionService } from '../../agent/capabilities/network_action/network-action.service';
 
 describe('ActionPanelController', () => {
   let controller: ActionPanelController;
-  let actionPanelService: {
-    getFollowUps: jest.Mock;
-    getRecommendedContacts: jest.Mock;
-  };
   let networkActionService: {
     run: jest.Mock;
   };
 
   beforeEach(async () => {
-    actionPanelService = {
-      getFollowUps: jest.fn(),
-      getRecommendedContacts: jest.fn(),
-    };
-
     networkActionService = {
       run: jest.fn(),
     };
@@ -26,7 +16,6 @@ describe('ActionPanelController', () => {
     const module: TestingModule = await Test.createTestingModule({
       controllers: [ActionPanelController],
       providers: [
-        { provide: ActionPanelService, useValue: actionPanelService },
         { provide: NetworkActionService, useValue: networkActionService },
       ],
     }).compile();
@@ -61,19 +50,12 @@ describe('ActionPanelController', () => {
     expect(result).toHaveProperty('recommendedContacts');
   });
 
-  it('should fallback to legacy service when NetworkActionService fails', async () => {
+  it('should throw when NetworkActionService fails', async () => {
     networkActionService.run.mockRejectedValue(new Error('Agent runtime failed'));
-    actionPanelService.getFollowUps.mockResolvedValue([{ id: 'todo-1' }]);
-    actionPanelService.getRecommendedContacts.mockResolvedValue([{ id: 'contact-1' }]);
 
-    const result = await controller.getDashboard({ user: { id: 'user-1' } });
-
-    expect(actionPanelService.getFollowUps).toHaveBeenCalledWith('user-1');
-    expect(actionPanelService.getRecommendedContacts).toHaveBeenCalledWith('user-1');
-    expect(result).toEqual({
-      followUps: [{ id: 'todo-1' }],
-      recommendedContacts: [{ id: 'contact-1' }],
-    });
+    await expect(controller.getDashboard({ user: { id: 'user-1' } })).rejects.toThrow(
+      'Agent runtime failed',
+    );
   });
 
   it('should throw NotFoundException when user id is missing', async () => {

@@ -1,6 +1,5 @@
-import { Controller, Get, Request, UseGuards, NotFoundException } from '@nestjs/common';
+import { Controller, Get, Request, NotFoundException } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
-import { ActionPanelService } from './action-panel.service';
 import { NetworkActionService } from '../../agent/capabilities/network_action/network-action.service';
 // import { AuthGuard } from '../../auth/auth.guard'; // 假设认证守卫存在
 
@@ -9,7 +8,6 @@ import { NetworkActionService } from '../../agent/capabilities/network_action/ne
 @Controller('action-panel')
 export class ActionPanelController {
   constructor(
-    private readonly actionPanelService: ActionPanelService,
     private readonly networkActionService: NetworkActionService,
   ) {}
 
@@ -18,7 +16,7 @@ export class ActionPanelController {
     summary: '获取当前用户的行动面板（Dashboard）',
     description:
       '聚合当前用户需要跟进的人、推荐联系人的列表等高优先级行动信息。' +
-      '默认通过新的 NetworkActionService 获取结果，如果失败则自动回退到旧版 ActionPanelService。',
+      '通过 NetworkActionService（Agent Runtime）返回聚合结果。',
   })
   @ApiResponse({
     status: 200,
@@ -35,26 +33,14 @@ export class ActionPanelController {
       throw new NotFoundException('User not found');
     }
 
-    try {
-      // 桥接到 NetworkActionService（它内部使用 AgentRuntimeExecutor）
-      const result = await this.networkActionService.run({
-        userId,
-        forceRefresh: false,
-      });
+    // 桥接到 NetworkActionService（它内部使用 AgentRuntimeExecutor）
+    const result = await this.networkActionService.run({
+      userId,
+      forceRefresh: false,
+    });
 
-      // 转换为旧格式
-      return this.mapToDashboardResponse(result);
-    } catch (error) {
-      // 如果新runtime失败，回退到旧实现
-      console.warn('NetworkActionService failed, falling back to legacy service:', error);
-      const followUps = await this.actionPanelService.getFollowUps(userId);
-      const recommendedContacts = await this.actionPanelService.getRecommendedContacts(userId);
-
-      return {
-        followUps,
-        recommendedContacts,
-      };
-    }
+    // 转换为旧格式
+    return this.mapToDashboardResponse(result);
   }
 
   /**

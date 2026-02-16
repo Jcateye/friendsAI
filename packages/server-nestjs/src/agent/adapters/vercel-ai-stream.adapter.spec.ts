@@ -257,8 +257,31 @@ describe('VercelAiStreamAdapter', () => {
     });
   });
 
-});
+  describe('context.patch', () => {
+    it('应该将 conversationId 补丁转换为 2: 自定义事件', () => {
+      const event: AgentStreamEvent = {
+        event: 'context.patch',
+        data: {
+          layer: 'session',
+          patch: {
+            conversationId: 'conv-123',
+          },
+        },
+      };
 
+      const result = adapter.transform(event);
+      expect(result).toContain('2:');
+      if (result) {
+        const parsed = JSON.parse(result.substring(2).trim());
+        expect(parsed[0]).toMatchObject({
+          type: 'conversation.created',
+          conversationId: 'conv-123',
+        });
+      }
+    });
+  });
+
+});
 
 
 

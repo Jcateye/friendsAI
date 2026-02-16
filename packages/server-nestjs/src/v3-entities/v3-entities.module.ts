@@ -5,6 +5,7 @@ import { RelationshipDebtItem } from './relationship-debt-item.entity';
 import { ActionOutcomeLog } from './action-outcome-log.entity';
 import { WeeklyReportCache } from './weekly-report-cache.entity';
 import { FeishuToken } from './feishu-token.entity';
+import { AgentRunMetric } from './agent-run-metric.entity';
 
 /**
  * V3 实体模块
@@ -21,6 +22,7 @@ import { FeishuToken } from './feishu-token.entity';
         ActionOutcomeLog,
         WeeklyReportCache,
         FeishuToken,
+        AgentRunMetric,
       ],
       'v3',
     ),
