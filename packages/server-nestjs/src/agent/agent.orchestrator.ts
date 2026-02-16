@@ -1,5 +1,4 @@
 import { Injectable, Logger } from '@nestjs/common';
-import type OpenAI from 'openai';
 import { AiService } from '../ai/ai.service';
 import { ToolExecutionStrategy } from '../ai/tools/tool-execution.strategy';
 import { ToolRegistry } from '../ai/tool-registry';
@@ -9,6 +8,7 @@ import { ContextBuilder } from './context-builder';
 import { MessagesService } from '../conversations/messages.service';
 import { ConversationsService } from '../conversations/conversations.service';
 import { generateUlid } from '../utils/ulid';
+import type { LlmMessage, LlmToolCall, LlmToolDefinition } from '../ai/providers/llm-types';
 import type {
   AgentError,
   AgentMessage,
@@ -130,7 +130,7 @@ export class AgentOrchestrator {
       iterationCount++;
 
       // 获取可用工具列表
-      const tools = this.getToolsForOpenAI(request);
+      const tools = this.getToolsForLlm(request);
 
       // 调用 AI 服务
       const stream = await this.aiService.streamChat(messages, {
@@ -143,7 +143,7 @@ export class AgentOrchestrator {
 
       let assistantMessage = '';
       const assistantMessageId = generateUlid();
-      let toolCalls: OpenAI.Chat.Completions.ChatCompletionMessageFunctionToolCall[] = [];
+      let toolCalls: LlmToolCall[] = [];
       let finishReason: string | undefined;
 
       // 流式处理 AI 响应
@@ -183,8 +183,9 @@ export class AgentOrchestrator {
                     arguments: toolCall.function.arguments ?? '',
                   },
                 };
-              } else if (toolCall.function.arguments) {
-                toolCalls[index].function.arguments += toolCall.function.arguments;
+              } else if (toolCall.function.arguments && toolCalls[index]?.function) {
+                const existingArgs = toolCalls[index].function?.arguments ?? '';
+                toolCalls[index].function!.arguments = existingArgs + toolCall.function.arguments;
               }
             }
           }
@@ -342,10 +343,10 @@ export class AgentOrchestrator {
   }
 
   private async *executeToolCalls(
-    toolCalls: OpenAI.Chat.Completions.ChatCompletionMessageFunctionToolCall[],
+    toolCalls: LlmToolCall[],
     request: AgentChatRequest,
-    messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[],
-    conversationId?: string
+    messages: LlmMessage[],
+    conversationId?: string,
   ): AsyncGenerator<AgentStreamEvent> {
     for (const toolCall of toolCalls) {
       if (toolCall.type && toolCall.type !== 'function') {
@@ -435,7 +436,7 @@ export class AgentOrchestrator {
           role: 'tool',
           tool_call_id: callId,
           content: toolResultContent,
-        } as OpenAI.Chat.Completions.ChatCompletionToolMessageParam);
+        });
 
       } catch (error) {
         this.logger.error(`Tool execution failed: ${toolName}`, error);
@@ -459,12 +460,12 @@ export class AgentOrchestrator {
           role: 'tool',
           tool_call_id: callId,
           content: `Error: ${errorMessage}`,
-        } as OpenAI.Chat.Completions.ChatCompletionToolMessageParam);
+        });
       }
     }
   }
 
-  private getToolsForOpenAI(request: AgentChatRequest): OpenAI.Chat.Completions.ChatCompletionTool[] {
+  private getToolsForLlm(request: AgentChatRequest): LlmToolDefinition[] {
     const registeredTools = this.toolRegistry.list();
     const requestedTools = this.getRequestedToolNames(request);
 
@@ -476,13 +477,10 @@ export class AgentOrchestrator {
       effectiveTools = filtered.length > 0 ? filtered : registeredTools;
     }
 
-    return effectiveTools.map(tool => ({
-      type: 'function' as const,
-      function: {
-        name: tool.name,
-        description: tool.description,
-        parameters: tool.parameters,
-      },
+    return effectiveTools.map((tool) => ({
+      name: tool.name,
+      description: tool.description,
+      parameters: tool.parameters,
     }));
   }
 
@@ -509,7 +507,7 @@ export class AgentOrchestrator {
     confirmationId: string,
     approved: boolean,
     originalRequest: AgentChatRequest,
-    currentMessages: OpenAI.Chat.Completions.ChatCompletionMessageParam[]
+    currentMessages: LlmMessage[],
   ): AsyncGenerator<AgentStreamEvent> {
     // 解析确认结果
     const executionResult = await this.toolExecutionStrategy.resolveConfirmation(
@@ -547,13 +545,13 @@ export class AgentOrchestrator {
       ? JSON.stringify(executionResult.result)
       : `Error: ${executionResult.error}`;
 
-    const updatedMessages = [
+    const updatedMessages: LlmMessage[] = [
       ...currentMessages,
       {
         role: 'tool',
-        tool_call_id: executionResult.callId,
+        tool_call_id: executionResult.callId ?? generateUlid(),
         content: toolResultContent,
-      } as OpenAI.Chat.Completions.ChatCompletionToolMessageParam,
+      },
     ];
 
     // 继续流式对话

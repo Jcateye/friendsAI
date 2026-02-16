@@ -1,32 +1,43 @@
 import { Injectable, InternalServerErrorException, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import OpenAI from 'openai';
 import fs from 'fs';
 import path from 'path';
 import dotenv from 'dotenv';
+import type {
+  LlmMessage,
+  LlmStreamChatOptions,
+  LlmStreamChunk,
+} from './providers/llm-types';
+import type { LlmProvider } from './providers/llm-provider.interface';
+import { OpenAiCompatibleProvider } from './providers/openai-compatible.provider';
 
 @Injectable()
 export class AiService {
   private readonly logger = new Logger(AiService.name);
-  private openai: OpenAI;
-  private model: string;
-  private embeddingModel: string;
+  private readonly provider: LlmProvider;
+  private readonly model: string;
+  private readonly embeddingModel: string;
 
   constructor(private configService: ConfigService) {
-    const { apiKey, baseUrl, model, embeddingModel } = this.resolveOpenAiConfig();
+    const { provider, apiKey, baseUrl, model, embeddingModel } = this.resolveLlmConfig();
     if (!apiKey) {
-      throw new InternalServerErrorException('OPENAI_API_KEY is not configured.');
+      throw new InternalServerErrorException('LLM_API_KEY is not configured.');
     }
-    this.openai = new OpenAI({
+    this.provider = this.createProvider(provider, {
       apiKey,
-      ...(baseUrl ? { baseURL: baseUrl } : {}),
+      baseUrl,
+      model,
+      embeddingModel,
     });
     this.model = model;
     this.embeddingModel = embeddingModel;
-    this.logger.log(`AI Service initialized: model=${model}, embedding=${embeddingModel}, baseUrl=${baseUrl || 'https://api.openai.com/v1 (default)'}`);
+    this.logger.log(
+      `AI Service initialized: provider=${this.provider.name}, model=${model}, embedding=${embeddingModel}, baseUrl=${baseUrl || 'https://api.openai.com/v1 (default)'}`,
+    );
   }
 
-  private resolveOpenAiConfig(): {
+  private resolveLlmConfig(): {
+    provider: string;
     apiKey: string | undefined;
     baseUrl: string | undefined;
     model: string;
@@ -36,27 +47,60 @@ export class AiService {
     const useEnvFile = nodeEnv !== 'production';
     const fileConfig = useEnvFile ? this.loadLocalEnv(nodeEnv ?? 'dev') : {};
 
+    const provider =
+      fileConfig.LLM_PROVIDER ??
+      this.configService.get<string>('LLM_PROVIDER') ??
+      process.env.LLM_PROVIDER ??
+      'openai-compatible';
     const apiKey =
+      fileConfig.LLM_API_KEY ??
+      this.configService.get<string>('LLM_API_KEY') ??
+      process.env.LLM_API_KEY ??
       fileConfig.OPENAI_API_KEY ??
       this.configService.get<string>('OPENAI_API_KEY') ??
       process.env.OPENAI_API_KEY;
     const baseUrl =
+      fileConfig.LLM_BASE_URL ??
+      this.configService.get<string>('LLM_BASE_URL') ??
+      process.env.LLM_BASE_URL ??
       fileConfig.OPENAI_BASE_URL ??
       this.configService.get<string>('OPENAI_BASE_URL') ??
       process.env.OPENAI_BASE_URL ??
       undefined;
     const model =
+      fileConfig.LLM_MODEL ??
+      this.configService.get<string>('LLM_MODEL') ??
+      process.env.LLM_MODEL ??
       fileConfig.OPENAI_MODEL ??
       this.configService.get<string>('OPENAI_MODEL') ??
       process.env.OPENAI_MODEL ??
       'gpt-4.1-mini';
     const embeddingModel =
+      fileConfig.LLM_EMBEDDING_MODEL ??
+      this.configService.get<string>('LLM_EMBEDDING_MODEL') ??
+      process.env.LLM_EMBEDDING_MODEL ??
       fileConfig.OPENAI_EMBEDDING_MODEL ??
       this.configService.get<string>('OPENAI_EMBEDDING_MODEL') ??
       process.env.OPENAI_EMBEDDING_MODEL ??
       'text-embedding-ada-002';
 
-    return { apiKey, baseUrl, model, embeddingModel };
+    return { provider, apiKey, baseUrl, model, embeddingModel };
+  }
+
+  private createProvider(
+    providerName: string,
+    config: {
+      apiKey: string;
+      baseUrl?: string;
+      model: string;
+      embeddingModel: string;
+    },
+  ): LlmProvider {
+    if (providerName === 'openai-compatible') {
+      return new OpenAiCompatibleProvider(config);
+    }
+
+    throw new InternalServerErrorException(`Unsupported LLM provider: ${providerName}`);
   }
 
   private loadLocalEnv(nodeEnv: string): Record<string, string> {
@@ -94,11 +138,7 @@ export class AiService {
 
   async generateEmbedding(text: string): Promise<number[]> {
     try {
-      const response = await this.openai.embeddings.create({
-        model: this.embeddingModel,
-        input: text,
-      });
-      return response.data[0].embedding;
+      return await this.provider.generateEmbedding(text);
     } catch (error) {
       console.error('Error generating embedding:', error);
       throw new InternalServerErrorException('Failed to generate embedding.');
@@ -107,23 +147,23 @@ export class AiService {
 
   async callAgent(prompt: string, context?: any): Promise<string> {
     try {
-      const messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
+      const messages: LlmMessage[] = [
         { role: 'system', content: 'You are a helpful assistant.' },
         { role: 'user', content: prompt },
       ];
 
       if (context) {
-        messages.splice(1, 0, { role: 'system', content: `Context: ${JSON.stringify(context)}` });
+        messages.splice(1, 0, {
+          role: 'system',
+          content: `Context: ${JSON.stringify(context)}`,
+        });
       }
 
-      const response = await this.openai.chat.completions.create({
+      return await this.provider.generateText(messages, {
         model: this.model,
-        messages: messages,
         temperature: 0.7,
-        max_tokens: 500,
+        maxTokens: 500,
       });
-
-      return response.choices[0].message?.content || '';
     } catch (error) {
       console.error('Error calling AI agent:', error);
       throw new InternalServerErrorException('Failed to call AI agent.');
@@ -131,28 +171,11 @@ export class AiService {
   }
 
   async streamChat(
-    messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[],
-    options?: {
-      model?: string;
-      temperature?: number;
-      maxTokens?: number;
-      signal?: AbortSignal;
-      tools?: OpenAI.Chat.Completions.ChatCompletionTool[];
-    }
-  ): Promise<AsyncIterable<OpenAI.Chat.Completions.ChatCompletionChunk>> {
+    messages: LlmMessage[],
+    options?: LlmStreamChatOptions,
+  ): Promise<AsyncIterable<LlmStreamChunk>> {
     try {
-      return await this.openai.chat.completions.create(
-        {
-          model: options?.model ?? this.model,
-          messages,
-          temperature: options?.temperature ?? 0.7,
-          max_tokens: options?.maxTokens ?? 4096,
-          stream: true,
-          tools: options?.tools,
-          tool_choice: options?.tools && options.tools.length > 0 ? 'auto' : undefined,
-        },
-        options?.signal ? { signal: options.signal } : undefined,
-      );
+      return await this.provider.streamChat(messages, options);
     } catch (error) {
       console.error('Error streaming AI agent:', error);
       throw new InternalServerErrorException('Failed to stream AI agent.');

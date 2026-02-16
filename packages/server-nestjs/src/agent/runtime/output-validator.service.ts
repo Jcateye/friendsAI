@@ -1,4 +1,5 @@
 import { Injectable, Logger, BadRequestException } from '@nestjs/common';
+import Ajv, { type AnySchema, type ErrorObject, type ValidateFunction } from 'ajv';
 import { z } from 'zod';
 import type { AgentDefinitionBundle } from '../contracts/agent-definition.types';
 import type { ValidationResult } from '../contracts/runtime.types';
@@ -14,6 +15,12 @@ import {
 @Injectable()
 export class OutputValidator {
   private readonly logger = new Logger(OutputValidator.name);
+  private readonly ajv = new Ajv({
+    allErrors: true,
+    strict: false,
+    allowUnionTypes: true,
+  });
+  private readonly compiledSchemaCache = new Map<string, ValidateFunction>();
 
   /**
    * 验证输出数据
@@ -52,23 +59,28 @@ export class OutputValidator {
       }
     }
 
-    // 如果 outputSchema 是 JSON Schema 对象，需要转换为 ZodSchema
-    // 注意：这是一个简化实现，实际应该使用更完善的 JSON Schema 到 Zod 转换库
     if (typeof bundle.outputSchema === 'object' && bundle.outputSchema !== null) {
       try {
-        const zodSchema = this.convertJsonSchemaToZod(bundle.outputSchema as Record<string, unknown>);
-        zodSchema.parse(output);
-        return { valid: true };
-      } catch (error) {
-        if (error instanceof z.ZodError) {
-          this.logger.warn(
-            `Output validation failed for agent ${bundle.definition.id}: ${error.message}`,
-          );
-          return {
-            valid: false,
-            errors: error,
-          };
+        const validator = this.getOrCompileJsonSchemaValidator(
+          bundle.definition.id,
+          bundle.definition.version,
+          bundle.outputSchema as Record<string, unknown>,
+        );
+        const valid = validator(output);
+        if (valid) {
+          return { valid: true };
         }
+
+        const errors = validator.errors ?? [];
+        this.logger.warn(
+          `Output validation failed for agent ${bundle.definition.id}: ${JSON.stringify(errors)}`,
+        );
+
+        return {
+          valid: false,
+          errors,
+        };
+      } catch (error) {
         throw new AgentDefinitionError(
           AgentDefinitionErrorCode.OUTPUT_VALIDATION_FAILED,
           `Unexpected error during validation: ${error instanceof Error ? error.message : String(error)}`,
@@ -80,79 +92,9 @@ export class OutputValidator {
 
     // 如果 outputSchema 既不是 ZodSchema 也不是有效的 JSON Schema 对象，记录警告并跳过验证
     this.logger.warn(
-      `Invalid outputSchema type for agent ${bundle.definition.id}, skipping validation`
+      `Invalid outputSchema type for agent ${bundle.definition.id}, skipping validation`,
     );
     return { valid: true };
-  }
-
-  /**
-   * 将 JSON Schema 转换为 Zod Schema
-   * 这是一个简化实现，支持基本的 JSON Schema 类型
-   */
-  private convertJsonSchemaToZod(jsonSchema: unknown): z.ZodSchema {
-    if (typeof jsonSchema !== 'object' || jsonSchema === null) {
-      throw new Error('Invalid JSON schema: must be an object');
-    }
-
-    const schema = jsonSchema as Record<string, unknown>;
-
-    // 处理 type 字段
-    const type = schema.type;
-    if (type === 'string') {
-      let zodSchema: z.ZodString = z.string();
-      if (schema.minLength !== undefined) {
-        zodSchema = zodSchema.min(schema.minLength as number);
-      }
-      if (schema.maxLength !== undefined) {
-        zodSchema = zodSchema.max(schema.maxLength as number);
-      }
-      return zodSchema;
-    }
-
-    if (type === 'number' || type === 'integer') {
-      let zodSchema: z.ZodNumber = z.number();
-      if (schema.minimum !== undefined) {
-        zodSchema = zodSchema.min(schema.minimum as number);
-      }
-      if (schema.maximum !== undefined) {
-        zodSchema = zodSchema.max(schema.maximum as number);
-      }
-      return zodSchema;
-    }
-
-    if (type === 'boolean') {
-      return z.boolean();
-    }
-
-    if (type === 'array') {
-      const items = schema.items;
-      if (items) {
-        const itemSchema = this.convertJsonSchemaToZod(items);
-        return z.array(itemSchema);
-      }
-      return z.array(z.unknown());
-    }
-
-    if (type === 'object') {
-      const properties = schema.properties as Record<string, unknown> | undefined;
-      const required = schema.required as string[] | undefined;
-
-      if (!properties) {
-        return z.record(z.unknown());
-      }
-
-      const shape: Record<string, z.ZodTypeAny> = {};
-      for (const [key, value] of Object.entries(properties)) {
-        const isRequired = required?.includes(key) ?? true;
-        const fieldSchema = this.convertJsonSchemaToZod(value);
-        shape[key] = isRequired ? fieldSchema : fieldSchema.optional();
-      }
-
-      return z.object(shape);
-    }
-
-    // 默认返回 unknown
-    return z.unknown();
   }
 
   /**
@@ -164,16 +106,47 @@ export class OutputValidator {
   validateOrThrow(bundle: AgentDefinitionBundle, output: unknown): void {
     const result = this.validate(bundle, output);
     if (!result.valid) {
-      const errorMessage = result.errors instanceof z.ZodError
-        ? result.errors.errors.map(e => `${e.path.join('.')}: ${e.message}`).join('; ')
-        : 'Output validation failed';
+      const details = this.formatValidationDetails(result.errors);
       throw new BadRequestException({
         code: 'output_validation_failed',
-        message: errorMessage,
+        message: details.join('; ') || 'Output validation failed',
         details: result.errors,
       });
     }
   }
+
+  private getOrCompileJsonSchemaValidator(
+    agentId: string,
+    version: string,
+    schema: Record<string, unknown>,
+  ): ValidateFunction {
+    const schemaKey = `${agentId}@${version}:${JSON.stringify(schema)}`;
+    const cached = this.compiledSchemaCache.get(schemaKey);
+    if (cached) {
+      return cached;
+    }
+
+    const validator = this.ajv.compile(schema as AnySchema);
+    this.compiledSchemaCache.set(schemaKey, validator);
+    return validator;
+  }
+
+  private formatValidationDetails(errors: unknown): string[] {
+    if (!errors) {
+      return [];
+    }
+
+    if (errors instanceof z.ZodError) {
+      return errors.errors.map((err) => `${err.path.join('.')}: ${err.message}`);
+    }
+
+    if (Array.isArray(errors)) {
+      return (errors as ErrorObject[]).map((err) => {
+        const path = err.instancePath?.replace(/^\//, '').replace(/\//g, '.') || '(root)';
+        return `${path}: ${err.message ?? 'invalid'}`;
+      });
+    }
+
+    return ['Output validation failed'];
+  }
 }
-
-

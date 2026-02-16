@@ -201,7 +201,7 @@ describe('AgentOrchestrator', () => {
 
       expect(aiService.streamChat).toHaveBeenCalled();
       const chatOptions = aiService.streamChat.mock.calls[0][1];
-      const toolNames = (chatOptions.tools ?? []).map((tool) => tool.function.name);
+      const toolNames = (chatOptions.tools ?? []).map((tool) => tool.name);
       expect(toolNames).toEqual(['selected_tool']);
     });
 
@@ -259,7 +259,7 @@ describe('AgentOrchestrator', () => {
       }
 
       const chatOptions = aiService.streamChat.mock.calls[0][1];
-      const toolNames = (chatOptions.tools ?? []).map((tool) => tool.function.name).sort();
+      const toolNames = (chatOptions.tools ?? []).map((tool) => tool.name).sort();
       expect(toolNames).toEqual(['tool_a', 'tool_b']);
     });
 

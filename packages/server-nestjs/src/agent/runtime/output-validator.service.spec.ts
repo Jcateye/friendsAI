@@ -115,6 +115,46 @@ describe('OutputValidator', () => {
       expect(result.valid).toBe(true);
     });
 
+    it('should enforce enum/minItems/maxItems by JSON schema rules', () => {
+      const bundle: AgentDefinitionBundle = {
+        definition: {
+          id: 'json-schema-agent',
+          version: '1.0.0',
+          prompt: {
+            systemTemplate: 'system.mustache',
+            userTemplate: 'user.mustache',
+          },
+          validation: {
+            outputSchema: 'output.schema.json',
+          },
+        },
+        systemTemplate: '',
+        userTemplate: '',
+        outputSchema: {
+          type: 'object',
+          properties: {
+            level: { type: 'string', enum: ['high', 'medium', 'low'] },
+            tags: {
+              type: 'array',
+              items: { type: 'string' },
+              minItems: 2,
+              maxItems: 3,
+            },
+          },
+          required: ['level', 'tags'],
+        },
+      };
+
+      const invalid = {
+        level: 'urgent',
+        tags: ['one'],
+      };
+
+      const result = service.validate(bundle, invalid);
+      expect(result.valid).toBe(false);
+      expect(Array.isArray(result.errors)).toBe(true);
+    });
+
     it('should accept concise Chinese titles/actions for contact_insight output', async () => {
       const registry = new AgentDefinitionRegistry();
       const bundle = await registry.loadDefinition('contact_insight');

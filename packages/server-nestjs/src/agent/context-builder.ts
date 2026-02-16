@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
-import type OpenAI from 'openai';
 import { AgentChatRequest } from './agent.types';
+import type { LlmMessage, LlmToolCall } from '../ai/providers/llm-types';
 
 export interface ContextBuilderOptions {
   systemPrompt?: string;
@@ -19,8 +19,8 @@ export class ContextBuilder {
   buildMessages(
     request: AgentChatRequest,
     options?: ContextBuilderOptions
-  ): OpenAI.Chat.Completions.ChatCompletionMessageParam[] {
-    const messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [];
+  ): LlmMessage[] {
+    const messages: LlmMessage[] = [];
     const systemPrompt = options?.systemPrompt ?? this.defaultSystemPrompt;
 
     // 1. 添加系统提示
@@ -63,18 +63,19 @@ export class ContextBuilder {
    * 添加工具调用结果到消息历史
    */
   appendToolResult(
-    messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[],
+    messages: LlmMessage[],
     toolCallId: string,
     toolName: string,
     result: unknown
-  ): OpenAI.Chat.Completions.ChatCompletionMessageParam[] {
+  ): LlmMessage[] {
     return [
       ...messages,
       {
         role: 'tool',
         tool_call_id: toolCallId,
         content: JSON.stringify(result),
-      } as OpenAI.Chat.Completions.ChatCompletionToolMessageParam,
+        name: toolName,
+      },
     ];
   }
 
@@ -82,15 +83,15 @@ export class ContextBuilder {
    * 添加助手的工具调用消息
    */
   appendAssistantToolCall(
-    messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[],
-    toolCalls: OpenAI.Chat.Completions.ChatCompletionMessageToolCall[]
-  ): OpenAI.Chat.Completions.ChatCompletionMessageParam[] {
+    messages: LlmMessage[],
+    toolCalls: LlmToolCall[],
+  ): LlmMessage[] {
     return [
       ...messages,
       {
         role: 'assistant',
         tool_calls: toolCalls,
-      } as OpenAI.Chat.Completions.ChatCompletionAssistantMessageParam,
+      },
     ];
   }
 
@@ -111,9 +112,9 @@ export class ContextBuilder {
    * 清理过长的消息历史，保留最近的消息
    */
   trimHistory(
-    messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[],
+    messages: LlmMessage[],
     maxLength: number = this.defaultMaxHistoryLength
-  ): OpenAI.Chat.Completions.ChatCompletionMessageParam[] {
+  ): LlmMessage[] {
     if (messages.length <= maxLength) {
       return messages;
     }

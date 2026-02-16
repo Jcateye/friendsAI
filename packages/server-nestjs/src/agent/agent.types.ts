@@ -1,4 +1,4 @@
-import type OpenAI from 'openai';
+import type { LlmMessage } from '../ai/providers/llm-types';
 import type {
   AgentContextPatch,
   AgentError,
@@ -11,7 +11,7 @@ import type {
 } from './client-types';
 import type { AgentId } from './contracts/agent-definition.types';
 
-export type AgentChatMessage = OpenAI.Chat.Completions.ChatCompletionMessageParam;
+export type AgentChatMessage = LlmMessage;
 
 export interface AgentComposerAttachment {
   name: string;

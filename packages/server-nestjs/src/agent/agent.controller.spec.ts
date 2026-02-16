@@ -1,13 +1,14 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { NotFoundException } from '@nestjs/common';
+import { HttpException } from '@nestjs/common';
 import { AgentController } from './agent.controller';
 import { AgentRuntimeExecutor } from './runtime/agent-runtime-executor.service';
 import { AgentOrchestrator } from './agent.orchestrator';
 import { AgentMessageStore } from './agent-message.store';
 import { AgentListService } from './agent-list.service';
+import { AgentRunMetricsService } from '../action-tracking/agent-run-metrics.service';
 import type { AgentChatRequest, AgentRunRequest, AgentRunResponse } from './agent.types';
 import type { Request, Response } from 'express';
-import { AgentDefinitionError, AgentDefinitionErrorCode } from './contracts/agent-definition-registry.interface';
+import { AgentRuntimeError } from './errors/agent-runtime.error';
 
 describe('AgentController - POST /v1/agent/run', () => {
   let controller: AgentController;
@@ -15,6 +16,7 @@ describe('AgentController - POST /v1/agent/run', () => {
   let mockAgentOrchestrator: jest.Mocked<AgentOrchestrator>;
   let mockMessageStore: jest.Mocked<AgentMessageStore>;
   let mockAgentListService: jest.Mocked<AgentListService>;
+  let mockAgentRunMetricsService: jest.Mocked<AgentRunMetricsService>;
 
   beforeEach(async () => {
     mockRuntimeExecutor = {
@@ -37,6 +39,11 @@ describe('AgentController - POST /v1/agent/run', () => {
       }),
     } as unknown as jest.Mocked<AgentListService>;
 
+    mockAgentRunMetricsService = {
+      recordRun: jest.fn().mockResolvedValue(undefined),
+      getMetrics: jest.fn(),
+    } as unknown as jest.Mocked<AgentRunMetricsService>;
+
     const module: TestingModule = await Test.createTestingModule({
       controllers: [AgentController],
       providers: [
@@ -44,6 +51,7 @@ describe('AgentController - POST /v1/agent/run', () => {
         { provide: AgentOrchestrator, useValue: mockAgentOrchestrator },
         { provide: AgentMessageStore, useValue: mockMessageStore },
         { provide: AgentListService, useValue: mockAgentListService },
+        { provide: AgentRunMetricsService, useValue: mockAgentRunMetricsService },
       ],
     }).compile();
 
@@ -142,33 +150,59 @@ describe('AgentController - POST /v1/agent/run', () => {
     });
 
     it('应该处理不存在的 Agent ID', async () => {
-      const notFoundError = new NotFoundException({
-        code: 'agent_not_found',
-        message: 'Agent definition not found: unknown_agent',
-      });
+      const notFoundError = new AgentRuntimeError(
+        {
+          code: 'agent_not_found',
+          message: 'Agent definition not found: unknown_agent',
+          statusCode: 404,
+          retryable: false,
+        },
+      );
 
       mockRuntimeExecutor.execute.mockRejectedValue(notFoundError);
 
-      await expect(
-        controller.run({} as Request, {
-          agentId: 'unknown_agent' as any,
-          input: {},
-        })
-      ).rejects.toThrow(NotFoundException);
+      await expect(controller.run({} as Request, {
+        agentId: 'unknown_agent' as any,
+        input: {},
+      })).rejects.toThrow(HttpException);
+
+      await controller.run({} as Request, {
+        agentId: 'unknown_agent' as any,
+        input: {},
+      }).catch((error) => {
+        expect(error).toBeInstanceOf(HttpException);
+        expect(error.getStatus()).toBe(404);
+        expect(error.getResponse()).toMatchObject({
+          code: 'agent_not_found',
+          message: 'Agent definition not found: unknown_agent',
+        });
+      });
     });
 
     it('应该处理验证失败的情况', async () => {
-      const validationError = new AgentDefinitionError(
-        AgentDefinitionErrorCode.OUTPUT_VALIDATION_FAILED,
-        'Output does not match schema',
-        'title_summary'
+      const validationError = new AgentRuntimeError(
+        {
+          code: 'output_validation_failed',
+          message: 'Output does not match schema',
+          statusCode: 400,
+          retryable: false,
+        },
       );
 
       mockRuntimeExecutor.execute.mockRejectedValue(validationError);
 
-      await expect(
-        controller.run({} as Request, validTitleSummaryRequest)
-      ).rejects.toThrow(NotFoundException);
+      await expect(controller.run({} as Request, validTitleSummaryRequest)).rejects.toThrow(
+        HttpException,
+      );
+
+      await controller.run({} as Request, validTitleSummaryRequest).catch((error) => {
+        expect(error).toBeInstanceOf(HttpException);
+        expect(error.getStatus()).toBe(400);
+        expect(error.getResponse()).toMatchObject({
+          code: 'output_validation_failed',
+          message: 'Output does not match schema',
+        });
+      });
     });
 
     it('应该处理缺少必需参数的情况', async () => {
@@ -181,12 +215,24 @@ describe('AgentController - POST /v1/agent/run', () => {
       };
 
       mockRuntimeExecutor.execute.mockImplementation(() => {
-        throw new Error('messages is required');
+        throw new AgentRuntimeError({
+          code: 'invalid_agent_input',
+          message: 'messages is required',
+          statusCode: 400,
+          retryable: false,
+        });
       });
 
-      await expect(
-        controller.run({} as Request, invalidRequest)
-      ).rejects.toThrow(NotFoundException);
+      await expect(controller.run({} as Request, invalidRequest)).rejects.toThrow(HttpException);
+
+      await controller.run({} as Request, invalidRequest).catch((error) => {
+        expect(error).toBeInstanceOf(HttpException);
+        expect(error.getStatus()).toBe(400);
+        expect(error.getResponse()).toMatchObject({
+          code: 'invalid_agent_input',
+          message: 'messages is required',
+        });
+      });
     });
 
     it('应该支持强制刷新缓存', async () => {

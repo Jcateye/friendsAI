@@ -31,7 +31,7 @@ export interface ValidationResult {
   /** 是否验证通过 */
   valid: boolean;
   /** 验证错误（如果验证失败） */
-  errors?: z.ZodError;
+  errors?: z.ZodError | unknown;
 }
 
 /**
@@ -75,4 +75,3 @@ export interface AgentRunRequest {
   /** 其他配置 */
   [key: string]: unknown;
 }
-

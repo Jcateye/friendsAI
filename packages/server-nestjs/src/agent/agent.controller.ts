@@ -1,4 +1,4 @@
-import { Body, Controller, Get, HttpCode, Post, Query, Req, Res, NotFoundException } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, HttpException, HttpStatus, Post, Query, Req, Res } from '@nestjs/common';
 import { ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
 import type { Request, Response } from 'express';
 import { AgentOrchestrator } from './agent.orchestrator';
@@ -17,6 +17,9 @@ import { VercelAiStreamAdapter } from './adapters/vercel-ai-stream.adapter';
 import { AgentRuntimeExecutor } from './runtime/agent-runtime-executor.service';
 import { AgentListService } from './agent-list.service';
 import { AgentListResponseDto } from './dto/agent-list.dto';
+import { AgentRuntimeError } from './errors/agent-runtime.error';
+import { AgentRunMetricsService } from '../action-tracking/agent-run-metrics.service';
+import { generateUlid } from '../utils/ulid';
 
 @ApiTags('Agent')
 @Controller('agent')
@@ -33,6 +36,7 @@ export class AgentController {
     private readonly messageStore: AgentMessageStore,
     private readonly agentRuntimeExecutor: AgentRuntimeExecutor,
     private readonly agentListService: AgentListService,
+    private readonly agentRunMetricsService: AgentRunMetricsService,
   ) {}
 
   @Post('chat')
@@ -56,6 +60,8 @@ export class AgentController {
     @Body() body: AgentChatRequest,
     @Query('format') format: 'sse' | 'vercel-ai' = 'sse',
   ): Promise<void> {
+    const streamStartedAt = Date.now();
+    const resolvedUserId = (req.user as { id?: string } | undefined)?.id ?? body.userId;
     const hasMessages = Array.isArray(body?.messages) && body.messages.length > 0;
     const hasPrompt = typeof body?.prompt === 'string' && body.prompt.trim().length > 0;
 
@@ -88,6 +94,8 @@ export class AgentController {
 
     let runCompleted = false;
     let runId: string | undefined;
+    let streamStatus: 'succeeded' | 'failed' | 'cancelled' = 'failed';
+    let streamErrorCode: string | null = null;
     const pingInterval = setInterval(() => {
       if (res.writableEnded) {
         return;
@@ -103,7 +111,7 @@ export class AgentController {
       const preparedRequest: AgentChatRequest = {
         ...body,
         context: sanitizedContext,
-        userId: (req.user as { id?: string } | undefined)?.id ?? body.userId,
+        userId: resolvedUserId,
       };
 
       for await (const event of this.agentOrchestrator.streamChat(preparedRequest, {
@@ -117,6 +125,8 @@ export class AgentController {
         }
         if (event.event === 'agent.end') {
           runCompleted = true;
+          streamStatus = event.data.status === 'cancelled' ? 'cancelled' : event.data.status === 'succeeded' ? 'succeeded' : 'failed';
+          streamErrorCode = event.data.error?.code ?? null;
         }
         
         // 根据 format 选择写入方式
@@ -130,6 +140,8 @@ export class AgentController {
         }
       }
     } catch (error) {
+      streamStatus = 'failed';
+      streamErrorCode = 'stream_error';
       if (!res.writableEnded) {
         const message = error instanceof Error ? error.message : 'Unknown error';
         const errorPayload: AgentError = {
@@ -152,9 +164,24 @@ export class AgentController {
               message: 'Stream terminated early.',
             },
           };
+          streamStatus = 'failed';
+          streamErrorCode = 'stream_error';
           this.writeEvent(res, { event: 'agent.end', data: endPayload });
         }
         res.end();
+      }
+      if (runId) {
+        void this.agentRunMetricsService.recordRun({
+          runId,
+          userId: resolvedUserId ?? null,
+          agentId: 'chat_conversation',
+          operation: null,
+          endpoint: 'chat',
+          status: streamStatus,
+          cached: false,
+          durationMs: Date.now() - streamStartedAt,
+          errorCode: streamStatus === 'succeeded' ? null : (streamErrorCode ?? 'stream_error'),
+        });
       }
     }
   }
@@ -173,14 +200,27 @@ export class AgentController {
     description: '执行成功，返回本次运行的结果、runId、是否命中缓存等信息',
   })
   @ApiResponse({
+    status: 400,
+    description: '输入不合法或输出校验失败',
+  })
+  @ApiResponse({
     status: 404,
-    description: 'Agent 不存在或执行失败（agent_execution_failed）',
+    description: 'Agent 不存在',
+  })
+  @ApiResponse({
+    status: 502,
+    description: 'LLM Provider 调用失败',
+  })
+  @ApiResponse({
+    status: 500,
+    description: '服务内部错误',
   })
   @HttpCode(200)
   async run(
     @Req() req: Request,
     @Body() body: AgentRunRequest,
   ): Promise<AgentRunResponse> {
+    const startedAt = Date.now();
     const userId = (req.user as { id?: string } | undefined)?.id ?? body.userId;
 
     try {
@@ -201,6 +241,16 @@ export class AgentController {
       );
 
       const now = new Date();
+      void this.agentRunMetricsService.recordRun({
+        runId: result.runId,
+        userId: userId ?? null,
+        agentId: body.agentId,
+        operation: body.operation ?? null,
+        endpoint: 'run',
+        status: 'succeeded',
+        cached: result.cached,
+        durationMs: Date.now() - startedAt,
+      });
       return {
         runId: result.runId,
         agentId: body.agentId,
@@ -212,14 +262,19 @@ export class AgentController {
         data: result.data,
       };
     } catch (error) {
-      if (error instanceof NotFoundException) {
-        throw error;
-      }
-      // 其他错误转换为标准格式
-      throw new NotFoundException({
-        code: 'agent_execution_failed',
-        message: error instanceof Error ? error.message : 'Unknown error',
+      const mapped = this.mapRunError(error);
+      void this.agentRunMetricsService.recordRun({
+        runId: generateUlid(),
+        userId: userId ?? null,
+        agentId: body.agentId,
+        operation: body.operation ?? null,
+        endpoint: 'run',
+        status: 'failed',
+        cached: false,
+        durationMs: Date.now() - startedAt,
+        errorCode: mapped.body.code,
       });
+      throw new HttpException(mapped.body, mapped.statusCode);
     }
   }
 
@@ -423,5 +478,98 @@ export class AgentController {
 
   private isRecord(value: unknown): value is Record<string, unknown> {
     return value !== null && typeof value === 'object' && !Array.isArray(value);
+  }
+
+  private mapRunError(error: unknown): {
+    statusCode: number;
+    body: {
+      code: string;
+      message: string;
+      details?: unknown;
+      retryable?: boolean;
+    };
+  } {
+    if (error instanceof AgentRuntimeError) {
+      return {
+        statusCode: error.statusCode,
+        body: {
+          code: error.code,
+          message: error.message,
+          details: error.details,
+          retryable: error.retryable,
+        },
+      };
+    }
+
+    if (error instanceof HttpException) {
+      const statusCode = error.getStatus();
+      const response = error.getResponse();
+      if (typeof response === 'object' && response !== null) {
+        const payload = response as Record<string, unknown>;
+        return {
+          statusCode,
+          body: {
+            code: typeof payload.code === 'string' ? payload.code : 'agent_execution_failed',
+            message: typeof payload.message === 'string' ? payload.message : error.message,
+            details: payload.details,
+            retryable: typeof payload.retryable === 'boolean' ? payload.retryable : undefined,
+          },
+        };
+      }
+
+      return {
+        statusCode,
+        body: {
+          code: 'agent_execution_failed',
+          message: typeof response === 'string' ? response : error.message,
+        },
+      };
+    }
+
+    if (error instanceof Error) {
+      if (error.message.startsWith('snapshot_deserialize_failed')) {
+        return {
+          statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
+          body: {
+            code: 'snapshot_deserialize_failed',
+            message: error.message,
+          },
+        };
+      }
+      if (error.message.startsWith('snapshot_hash_build_failed')) {
+        return {
+          statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
+          body: {
+            code: 'snapshot_hash_build_failed',
+            message: error.message,
+          },
+        };
+      }
+      if (error.message.startsWith('snapshot_expiry_invalid')) {
+        return {
+          statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
+          body: {
+            code: 'snapshot_expiry_invalid',
+            message: error.message,
+          },
+        };
+      }
+
+      return {
+        statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
+        body: {
+          code: 'agent_execution_failed',
+          message: error.message,
+        },
+      };
+    }
+
+    return {
+      statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
+      body: {
+        code: 'agent_execution_failed',
+        message: 'Unknown error',
+      },
+    };
   }
 }

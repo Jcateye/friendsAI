@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { readFileSync, existsSync } from 'fs';
+import { readFileSync, existsSync, statSync, readdirSync } from 'fs';
 import { join, resolve } from 'path';
 import { z } from 'zod';
 import type {
@@ -20,8 +20,9 @@ import {
 @Injectable()
 export class AgentDefinitionRegistry implements IAgentDefinitionRegistry {
   private readonly logger = new Logger(AgentDefinitionRegistry.name);
-  private readonly cache = new Map<AgentId, AgentDefinitionBundle>();
+  private readonly cache = new Map<AgentId, { bundle: AgentDefinitionBundle; mtimeMs: number }>();
   private readonly definitionsRoot: string;
+  private readonly cacheMode: 'watch' | 'memory';
 
   constructor() {
     // 计算定义根目录：src/agent/definitions
@@ -29,7 +30,15 @@ export class AgentDefinitionRegistry implements IAgentDefinitionRegistry {
     const currentDir = __dirname;
     const agentDir = resolve(currentDir, '..');
     this.definitionsRoot = resolve(agentDir, 'definitions');
+    const configuredMode = (process.env.AGENT_DEFINITION_CACHE_MODE ?? '').trim().toLowerCase();
+    if (configuredMode === 'watch' || configuredMode === 'memory') {
+      this.cacheMode = configuredMode;
+    } else {
+      const nodeEnv = (process.env.NODE_ENV ?? 'development').toLowerCase();
+      this.cacheMode = nodeEnv === 'production' ? 'memory' : 'watch';
+    }
     this.logger.debug(`Agent definitions root: ${this.definitionsRoot}`);
+    this.logger.debug(`Agent definition cache mode: ${this.cacheMode}`);
   }
 
   /**
@@ -43,14 +52,18 @@ export class AgentDefinitionRegistry implements IAgentDefinitionRegistry {
    * 加载 Agent 定义 Bundle
    */
   async loadDefinition(agentId: AgentId): Promise<AgentDefinitionBundle> {
+    const definitionPath = this.getDefinitionPath(agentId);
+    const currentMtimeMs = this.getDirectoryMtimeMs(definitionPath);
+
     // 检查缓存
     const cached = this.cache.get(agentId);
     if (cached) {
-      this.logger.debug(`Using cached definition for agent: ${agentId}`);
-      return cached;
+      if (this.cacheMode === 'memory' || cached.mtimeMs === currentMtimeMs) {
+        this.logger.debug(`Using cached definition for agent: ${agentId}`);
+        return cached.bundle;
+      }
+      this.logger.debug(`Definition changed on disk, reloading: ${agentId}`);
     }
-
-    const definitionPath = this.getDefinitionPath(agentId);
 
     // 1. 加载 agent.json
     const agentJsonPath = join(definitionPath, 'agent.json');
@@ -183,10 +196,40 @@ export class AgentDefinitionRegistry implements IAgentDefinitionRegistry {
     };
 
     // 缓存 bundle
-    this.cache.set(agentId, bundle);
+    this.cache.set(agentId, { bundle, mtimeMs: currentMtimeMs });
     this.logger.debug(`Loaded and cached definition for agent: ${agentId}`);
 
     return bundle;
+  }
+
+  private getDirectoryMtimeMs(definitionPath: string): number {
+    if (!existsSync(definitionPath)) {
+      return 0;
+    }
+
+    let maxMtime = 0;
+    const stack: string[] = [definitionPath];
+
+    while (stack.length > 0) {
+      const currentPath = stack.pop();
+      if (!currentPath || !existsSync(currentPath)) {
+        continue;
+      }
+
+      const stat = statSync(currentPath);
+      maxMtime = Math.max(maxMtime, stat.mtimeMs);
+
+      if (!stat.isDirectory()) {
+        continue;
+      }
+
+      const children = readdirSync(currentPath);
+      for (const child of children) {
+        stack.push(join(currentPath, child));
+      }
+    }
+
+    return maxMtime;
   }
 
   /**

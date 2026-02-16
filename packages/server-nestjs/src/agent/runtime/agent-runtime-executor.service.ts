@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException, Inject, forwardRef, Logger } from '@nestjs/common';
+import { Injectable, Inject, forwardRef, Logger } from '@nestjs/common';
 import { AgentDefinitionRegistry } from './agent-definition-registry.service';
 import { PromptTemplateRenderer } from './prompt-template-renderer.service';
 import { OutputValidator } from './output-validator.service';
@@ -14,6 +14,7 @@ import { ArchiveBriefService } from '../capabilities/archive_brief/archive-brief
 import { ActionTrackingService } from '../../action-tracking/action-tracking.service';
 import type { ContactInsightOutput } from '../capabilities/contact_insight/contact-insight.types';
 import type { NetworkActionOutput } from '../capabilities/network_action/network-action.types';
+import { AgentRuntimeError } from '../errors/agent-runtime.error';
 
 /**
  * Agent 运行结果
@@ -104,13 +105,12 @@ export class AgentRuntimeExecutor {
     try {
       bundle = await this.registry.loadDefinition(agentId);
     } catch (error) {
-      if (error instanceof NotFoundException) {
-        throw new NotFoundException({
-          code: 'agent_not_found',
-          message: `Agent definition not found: ${agentId}`,
-        });
-      }
-      throw error;
+      throw new AgentRuntimeError({
+        code: 'agent_not_found',
+        message: `Agent definition not found: ${agentId}`,
+        statusCode: 404,
+        details: error,
+      });
     }
 
     // 2. 构建运行时上下文
@@ -198,9 +198,12 @@ export class AgentRuntimeExecutor {
       }
       aiResponse = fullResponse;
     } catch (error) {
-      throw new BadRequestException({
-        code: 'ai_service_error',
+      throw new AgentRuntimeError({
+        code: 'ai_provider_error',
         message: `AI service error: ${error instanceof Error ? error.message : String(error)}`,
+        statusCode: 502,
+        details: error,
+        retryable: true,
       });
     }
 
@@ -243,9 +246,10 @@ export class AgentRuntimeExecutor {
     // 8. 验证输出
     const validationResult = await this.outputValidator.validate(bundle, parsedOutput);
     if (!validationResult.valid) {
-      throw new BadRequestException({
+      throw new AgentRuntimeError({
         code: 'output_validation_failed',
         message: 'Agent output validation failed',
+        statusCode: 400,
         details: validationResult.errors,
       });
     }
@@ -310,14 +314,26 @@ export class AgentRuntimeExecutor {
     const runId = generateUlid();
 
     if (!this.titleSummaryService) {
-      throw new NotFoundException('TitleSummaryService not available');
+      throw new AgentRuntimeError({
+        code: 'service_unavailable',
+        message: 'TitleSummaryService not available',
+        statusCode: 500,
+      });
     }
 
     if (!input.userId && !options?.userId) {
-      throw new BadRequestException('userId is required');
+      throw new AgentRuntimeError({
+        code: 'invalid_input',
+        message: 'userId is required',
+        statusCode: 400,
+      });
     }
     if (!input.conversationId && !options?.conversationId) {
-      throw new BadRequestException('conversationId is required');
+      throw new AgentRuntimeError({
+        code: 'invalid_input',
+        message: 'conversationId is required',
+        statusCode: 400,
+      });
     }
 
     const userId = (input.userId || options?.userId) as string;
@@ -393,14 +409,26 @@ export class AgentRuntimeExecutor {
     const runId = generateUlid();
 
     if (!this.contactInsightService) {
-      throw new NotFoundException('ContactInsightService not available');
+      throw new AgentRuntimeError({
+        code: 'service_unavailable',
+        message: 'ContactInsightService not available',
+        statusCode: 500,
+      });
     }
 
     if (!input.userId && !options?.userId) {
-      throw new BadRequestException('userId is required');
+      throw new AgentRuntimeError({
+        code: 'invalid_input',
+        message: 'userId is required',
+        statusCode: 400,
+      });
     }
     if (!input.contactId) {
-      throw new BadRequestException('contactId is required');
+      throw new AgentRuntimeError({
+        code: 'invalid_input',
+        message: 'contactId is required',
+        statusCode: 400,
+      });
     }
 
     const userId = (input.userId || options?.userId) as string;
@@ -554,18 +582,30 @@ export class AgentRuntimeExecutor {
     const runId = generateUlid();
 
     if (!this.archiveBriefService) {
-      throw new NotFoundException('ArchiveBriefService not available');
+      throw new AgentRuntimeError({
+        code: 'service_unavailable',
+        message: 'ArchiveBriefService not available',
+        statusCode: 500,
+      });
     }
 
     if (!input.userId && !options?.userId) {
-      throw new BadRequestException('userId is required');
+      throw new AgentRuntimeError({
+        code: 'invalid_input',
+        message: 'userId is required',
+        statusCode: 400,
+      });
     }
 
     const userId = (input.userId || options?.userId) as string;
 
     if (operation === 'archive_extract') {
       if (!input.conversationId) {
-        throw new BadRequestException('conversationId is required for archive_extract');
+        throw new AgentRuntimeError({
+          code: 'invalid_input',
+          message: 'conversationId is required for archive_extract',
+          statusCode: 400,
+        });
       }
 
       const conversationId = input.conversationId as string;
@@ -611,7 +651,11 @@ export class AgentRuntimeExecutor {
       };
     } else if (operation === 'brief_generate') {
       if (!input.contactId) {
-        throw new BadRequestException('contactId is required for brief_generate');
+        throw new AgentRuntimeError({
+          code: 'invalid_input',
+          message: 'contactId is required for brief_generate',
+          statusCode: 400,
+        });
       }
 
       const contactId = input.contactId as string;
@@ -658,7 +702,11 @@ export class AgentRuntimeExecutor {
         data: result as unknown as Record<string, unknown>,
       };
     } else {
-      throw new BadRequestException(`Invalid operation for archive_brief: ${operation}`);
+      throw new AgentRuntimeError({
+        code: 'agent_operation_invalid',
+        message: `Invalid operation for archive_brief: ${operation}`,
+        statusCode: 400,
+      });
     }
   }
 
