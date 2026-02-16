@@ -6,6 +6,13 @@ import { ActionOutcomeLog } from './action-outcome-log.entity';
 import { WeeklyReportCache } from './weekly-report-cache.entity';
 import { FeishuToken } from './feishu-token.entity';
 import { AgentRunMetric } from './agent-run-metric.entity';
+import { DailyActionDigest } from './daily-action-digest.entity';
+import { DailyActionDigestItem } from './daily-action-digest-item.entity';
+import { FeishuMessageTemplate } from './feishu-message-template.entity';
+import { FeishuMessageDelivery } from './feishu-message-delivery.entity';
+import { AgentDefinitionVersion } from './agent-definition-version.entity';
+import { AgentDefinitionReleaseRule } from './agent-definition-release-rule.entity';
+import { AgentDefinitionPublishLog } from './agent-definition-publish-log.entity';
 
 /**
  * V3 实体模块
@@ -23,6 +30,13 @@ import { AgentRunMetric } from './agent-run-metric.entity';
         WeeklyReportCache,
         FeishuToken,
         AgentRunMetric,
+        DailyActionDigest,
+        DailyActionDigestItem,
+        FeishuMessageTemplate,
+        FeishuMessageDelivery,
+        AgentDefinitionVersion,
+        AgentDefinitionReleaseRule,
+        AgentDefinitionPublishLog,
       ],
       'v3',
     ),
