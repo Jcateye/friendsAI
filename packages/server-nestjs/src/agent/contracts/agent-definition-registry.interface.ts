@@ -11,7 +11,12 @@ export interface IAgentDefinitionRegistry {
    * @returns Agent 定义 Bundle
    * @throws {AgentDefinitionError} 当定义不存在、模板缺失或 schema 无效时
    */
-  loadDefinition(agentId: AgentId): Promise<AgentDefinitionBundle>;
+  loadDefinition(
+    agentId: AgentId,
+    options?: {
+      userId?: string;
+    },
+  ): Promise<AgentDefinitionBundle>;
 
   /**
    * 获取 Agent 定义路径
@@ -49,7 +54,6 @@ export enum AgentDefinitionErrorCode {
   /** 输出验证失败 */
   OUTPUT_VALIDATION_FAILED = 'output_validation_failed',
 }
-
 
 
 

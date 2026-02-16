@@ -41,6 +41,7 @@ import { NetworkActionService } from './capabilities/network_action/network-acti
 import { AgentRuntimeExecutor } from './runtime/agent-runtime-executor.service';
 // Agent List Service
 import { AgentListService } from './agent-list.service';
+import { AgentDefinitionReleaseRule, AgentDefinitionVersion } from '../v3-entities';
 
 @Module({
   imports: [
@@ -57,6 +58,10 @@ import { AgentListService } from './agent-list.service';
       ContactFact,
       ContactTodo,
     ]),
+    TypeOrmModule.forFeature([
+      AgentDefinitionVersion,
+      AgentDefinitionReleaseRule,
+    ], 'v3'),
   ],
   controllers: [AgentController],
   providers: [

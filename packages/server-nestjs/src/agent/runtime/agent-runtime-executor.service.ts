@@ -103,7 +103,7 @@ export class AgentRuntimeExecutor {
     // 1. 加载 Agent 定义
     let bundle;
     try {
-      bundle = await this.registry.loadDefinition(agentId);
+      bundle = await this.registry.loadDefinition(agentId, { userId: options?.userId });
     } catch (error) {
       throw new AgentRuntimeError({
         code: 'agent_not_found',

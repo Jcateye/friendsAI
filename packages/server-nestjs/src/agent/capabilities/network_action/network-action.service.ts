@@ -42,7 +42,7 @@ export class NetworkActionService {
       const sourceHash = this.contextBuilder.computeSourceHash(context, input.userId);
 
       // 2. 加载 Agent 定义以获取 version
-      const bundle = await this.definitionRegistry.loadDefinition(this.AGENT_ID);
+      const bundle = await this.definitionRegistry.loadDefinition(this.AGENT_ID, { userId: input.userId });
       const promptVersion = bundle.definition.version || '1.0.0';
 
       // 3. 检查缓存（除非 forceRefresh）

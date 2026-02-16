@@ -1,7 +1,9 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import { readFileSync, existsSync, statSync, readdirSync } from 'fs';
 import { join, resolve } from 'path';
 import { z } from 'zod';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
 import type {
   AgentDefinition,
   AgentDefinitionBundle,
@@ -12,6 +14,8 @@ import {
   AgentDefinitionErrorCode,
   IAgentDefinitionRegistry,
 } from '../contracts/agent-definition-registry.interface';
+import { AgentDefinitionReleaseRule, AgentDefinitionVersion } from '../../v3-entities';
+import { createHash } from 'crypto';
 
 /**
  * Agent 定义注册表实现
@@ -23,8 +27,16 @@ export class AgentDefinitionRegistry implements IAgentDefinitionRegistry {
   private readonly cache = new Map<AgentId, { bundle: AgentDefinitionBundle; mtimeMs: number }>();
   private readonly definitionsRoot: string;
   private readonly cacheMode: 'watch' | 'memory';
+  private readonly versionCenterEnabled: boolean;
 
-  constructor() {
+  constructor(
+    @Optional()
+    @InjectRepository(AgentDefinitionVersion, 'v3')
+    private readonly versionRepo?: Repository<AgentDefinitionVersion>,
+    @Optional()
+    @InjectRepository(AgentDefinitionReleaseRule, 'v3')
+    private readonly releaseRuleRepo?: Repository<AgentDefinitionReleaseRule>,
+  ) {
     // 计算定义根目录：src/agent/definitions
     // 从当前文件位置向上找到 src/agent，然后进入 definitions
     const currentDir = __dirname;
@@ -39,6 +51,8 @@ export class AgentDefinitionRegistry implements IAgentDefinitionRegistry {
     }
     this.logger.debug(`Agent definitions root: ${this.definitionsRoot}`);
     this.logger.debug(`Agent definition cache mode: ${this.cacheMode}`);
+    this.versionCenterEnabled = process.env.AGENT_DEFINITION_CENTER_ENABLED === 'true';
+    this.logger.debug(`Agent definition center enabled: ${this.versionCenterEnabled}`);
   }
 
   /**
@@ -51,7 +65,19 @@ export class AgentDefinitionRegistry implements IAgentDefinitionRegistry {
   /**
    * 加载 Agent 定义 Bundle
    */
-  async loadDefinition(agentId: AgentId): Promise<AgentDefinitionBundle> {
+  async loadDefinition(
+    agentId: AgentId,
+    options?: {
+      userId?: string;
+    },
+  ): Promise<AgentDefinitionBundle> {
+    if (this.versionCenterEnabled) {
+      const fromCenter = await this.tryLoadDefinitionFromVersionCenter(agentId, options?.userId);
+      if (fromCenter) {
+        return fromCenter;
+      }
+    }
+
     const definitionPath = this.getDefinitionPath(agentId);
     const currentMtimeMs = this.getDirectoryMtimeMs(definitionPath);
 
@@ -200,6 +226,103 @@ export class AgentDefinitionRegistry implements IAgentDefinitionRegistry {
     this.logger.debug(`Loaded and cached definition for agent: ${agentId}`);
 
     return bundle;
+  }
+
+  private async tryLoadDefinitionFromVersionCenter(
+    agentId: AgentId,
+    userId?: string,
+  ): Promise<AgentDefinitionBundle | null> {
+    if (!this.versionRepo || !this.releaseRuleRepo) {
+      return null;
+    }
+
+    const activeVersion = await this.versionRepo.findOne({
+      where: {
+        agentId,
+        status: 'active',
+      },
+      order: {
+        updatedAt: 'DESC',
+      },
+    });
+
+    if (!activeVersion) {
+      return null;
+    }
+
+    const activeRule = await this.releaseRuleRepo.findOne({
+      where: {
+        agentId,
+        version: activeVersion.version,
+        isActive: true,
+      },
+    });
+
+    if (activeRule && userId) {
+      const bucket = this.stableBucket(agentId, userId);
+      if (bucket >= activeRule.rolloutPercent) {
+        return null;
+      }
+    }
+
+    const templateBundle = activeVersion.templateBundle ?? {};
+    const systemTemplate =
+      typeof templateBundle.systemTemplate === 'string' ? templateBundle.systemTemplate : '';
+    const userTemplate = typeof templateBundle.userTemplate === 'string' ? templateBundle.userTemplate : '';
+
+    if (!systemTemplate || !userTemplate) {
+      this.logger.warn(`Active definition version missing templates for ${agentId}@${activeVersion.version}`);
+      return null;
+    }
+
+    const defaults =
+      templateBundle.defaults && typeof templateBundle.defaults === 'object'
+        ? (templateBundle.defaults as Record<string, unknown>)
+        : undefined;
+
+    const inputSchema =
+      templateBundle.inputSchema && typeof templateBundle.inputSchema === 'object'
+        ? (templateBundle.inputSchema as Record<string, unknown>)
+        : undefined;
+
+    const outputSchema =
+      activeVersion.schema && typeof activeVersion.schema === 'object'
+        ? (activeVersion.schema as Record<string, unknown>)
+        : undefined;
+
+    const definition: AgentDefinition = {
+      id: agentId,
+      version: activeVersion.version,
+      prompt: {
+        systemTemplate: '__inline__',
+        userTemplate: '__inline__',
+      },
+      validation: {
+        outputSchemaFile: '__inline__',
+      },
+      cache:
+        templateBundle.cache && typeof templateBundle.cache === 'object'
+          ? (templateBundle.cache as Record<string, unknown>)
+          : undefined,
+    };
+
+    this.logger.debug(
+      `Loaded definition from version center for ${agentId}@${activeVersion.version} (rule=${activeRule?.rolloutPercent ?? 100}%)`,
+    );
+
+    return {
+      definition,
+      systemTemplate,
+      userTemplate,
+      defaults,
+      inputSchema,
+      outputSchema,
+    };
+  }
+
+  private stableBucket(agentId: string, userId: string): number {
+    const hash = createHash('sha256').update(`${agentId}:${userId}`).digest('hex');
+    return parseInt(hash.slice(0, 8), 16) % 100;
   }
 
   private getDirectoryMtimeMs(definitionPath: string): number {
