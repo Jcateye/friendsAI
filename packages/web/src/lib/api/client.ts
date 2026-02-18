@@ -13,6 +13,7 @@ import type {
   UpdateContactRequest,
   ContactListResponse,
   ContactContext,
+  CreateContactFactRequest,
   // Conversation
   Conversation,
   CreateConversationRequest,
@@ -300,6 +301,23 @@ export const api = {
     async getContext(id: string): Promise<ContactContext> {
       const response = await fetchWithAuth(`${API_BASE}/contacts/${id}/context`);
       return handleResponse<ContactContext>(response);
+    },
+
+    /**
+     * 给联系人添加信息点（fact）
+     */
+    async addFact(contactId: string, request: CreateContactFactRequest): Promise<{
+      id: string;
+      content: string;
+      metadata?: Record<string, any> | null;
+      sourceConversationId?: string | null;
+      contactId: string;
+    }> {
+      const response = await fetchWithAuth(`${API_BASE}/contacts/${contactId}/facts`, {
+        method: 'POST',
+        body: JSON.stringify(request),
+      });
+      return handleResponse(response);
     },
   },
 

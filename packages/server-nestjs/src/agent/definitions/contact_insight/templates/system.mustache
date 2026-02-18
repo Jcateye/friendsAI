@@ -52,8 +52,22 @@ You MUST respond with a valid JSON object:
   "citations": [
     {
       "source": "string",
-      "type": "string",
+      "type": "conversation|event|fact|todo",
       "reference": "string"
+    }
+  ],
+  "confidence": 0.0-1.0,
+  "sourceRefs": [
+    {
+      "type": "conversation|event|fact|todo",
+      "reference": "string"
+    }
+  ],
+  "evidenceChains": [
+    {
+      "summary": "string",
+      "sourceType": "conversation|event|fact|todo",
+      "sourceRef": "string"
     }
   ],
   "priorityScore": 0-100,
@@ -79,6 +93,9 @@ You MUST respond with a valid JSON object:
 - **Suggested Actions**: Provide concrete, prioritized actions with clear reasoning
 - **Opening Lines**: Generate natural, contextually relevant conversation starters
 - **Citations**: Reference specific data points (conversations, events, facts, todos) that support your insights
+- **Confidence**: Provide an overall confidence score in [0, 1]
+- **SourceRefs**: Provide normalized source references aligned with citations
+- **EvidenceChains**: Provide summarized evidence chains (no full raw text)
 
 ## Quality Standards
 

@@ -105,7 +105,7 @@ export class ToolConfirmationsController {
     return this.toolConfirmationsService.findOne(id);
   }
 
-  @Post(':id([0-9a-fA-F-]+)/confirm')
+  @Post(':id/confirm')
   @ApiOperation({
     summary: '确认某个工具操作',
     description: '用户在前端确认之后调用此接口，后端会据此继续执行工具操作。',
@@ -121,7 +121,7 @@ export class ToolConfirmationsController {
     return this.toolConfirmationsService.confirm(id, body.payload, userId);
   }
 
-  @Post(':id([0-9a-fA-F-]+)/reject')
+  @Post(':id/reject')
   @ApiOperation({
     summary: '拒绝某个工具操作',
     description: '用户在前端拒绝之后调用此接口，可携带拒绝原因，后端会记录并终止该工具操作。',

@@ -79,6 +79,26 @@ export class ContactsController {
     );
   }
 
+  @Post(':id/facts')
+  @ApiOperation({ summary: 'Add a fact for contact' })
+  @ApiParam({ name: 'id', description: 'Contact ID', type: String })
+  @ApiResponse({ status: 201, description: 'Contact fact created successfully' })
+  addFact(
+    @Request() req: any,
+    @Param('id') id: string,
+    @Body() body: { content: string; metadata?: Record<string, any>; sourceConversationId?: string },
+  ) {
+    return this.contactsService.addFact(
+      id,
+      {
+        content: body.content,
+        metadata: body.metadata,
+        sourceConversationId: body.sourceConversationId,
+      },
+      req.user?.id,
+    );
+  }
+
   @Delete(':id')
   @ApiOperation({ summary: 'Delete a contact by ID' })
   @ApiParam({ name: 'id', description: 'Contact ID', type: String })

@@ -191,7 +191,15 @@ export interface CreateEventRequest {
   title: string;
   description?: string;
   contactId: string;
+  eventDate?: string;
+  sourceConversationId?: string;
   details?: Record<string, any>;
+}
+
+export interface CreateContactFactRequest {
+  content: string;
+  metadata?: Record<string, any>;
+  sourceConversationId?: string;
 }
 
 // ==================== Briefing ====================

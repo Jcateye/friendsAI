@@ -24,6 +24,7 @@ export interface RecordAgentRunMetricInput {
 export class AgentRunMetricsService {
   private readonly logger = new Logger(AgentRunMetricsService.name);
   private readonly enabled = process.env.AGENT_METRICS_ENABLED !== 'false';
+  private schemaAvailable = true;
 
   constructor(
     @InjectRepository(AgentRunMetric, 'v3')
@@ -31,7 +32,7 @@ export class AgentRunMetricsService {
   ) {}
 
   async recordRun(input: RecordAgentRunMetricInput): Promise<void> {
-    if (!this.enabled) {
+    if (!this.enabled || !this.schemaAvailable) {
       return;
     }
 
@@ -49,8 +50,16 @@ export class AgentRunMetricsService {
       });
       await this.metricRepo.save(entity);
     } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (message.includes('relation "agent_run_metrics" does not exist')) {
+        this.schemaAvailable = false;
+        this.logger.warn(
+          'agent_run_metrics table is missing in DATABASE_URL_V3; metric writes are disabled until schema is migrated.',
+        );
+        return;
+      }
       this.logger.warn(
-        `Failed to record agent metric: ${error instanceof Error ? error.message : String(error)}`,
+        `Failed to record agent metric: ${message}`,
       );
     }
   }

@@ -8,6 +8,7 @@ import { Contact, ContactFact, ContactTodo, ContactBrief, Event, Conversation, C
 describe('ContactsService', () => {
   let service: ContactsService;
   let contactRepository: jest.Mocked<Repository<Contact>>;
+  let factRepository: jest.Mocked<Repository<ContactFact>>;
 
   // Mock test data
   const mockUserId = 'test-user-id';
@@ -78,7 +79,7 @@ describe('ContactsService', () => {
 
   beforeEach(async () => {
     // Create mock repository
-    const mockRepositoryFactory = {
+    const mockContactRepositoryFactory = {
       provide: getRepositoryToken(Contact),
       useFactory: () => ({
         create: jest.fn(),
@@ -92,12 +93,21 @@ describe('ContactsService', () => {
       }),
     };
 
+    const mockFactRepositoryFactory = {
+      provide: getRepositoryToken(ContactFact),
+      useFactory: () => ({
+        create: jest.fn(),
+        save: jest.fn(),
+      }),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
-      providers: [ContactsService, mockRepositoryFactory],
+      providers: [ContactsService, mockContactRepositoryFactory, mockFactRepositoryFactory],
     }).compile();
 
     service = module.get<ContactsService>(ContactsService);
     contactRepository = module.get(getRepositoryToken(Contact));
+    factRepository = module.get(getRepositoryToken(ContactFact));
   });
 
   afterEach(() => {
@@ -148,7 +158,7 @@ describe('ContactsService', () => {
       const createDto = { email: 'test@example.com' };
 
       await expect(service.create(createDto, mockUserId)).rejects.toThrow(
-        new BadRequestException('displayName is required'),
+        new BadRequestException('name is required'),
       );
 
       expect(contactRepository.create).not.toHaveBeenCalled();
@@ -169,6 +179,24 @@ describe('ContactsService', () => {
       expect(contactRepository.create).toHaveBeenCalledWith(
         expect.objectContaining({
           profile: { wechat: 'test_wx', linkedin: 'test-linkedin' },
+        }),
+      );
+    });
+
+    it('should sanitize duplicated and meaningless tags on create', async () => {
+      const createDto = {
+        name: '标签测试',
+        tags: ['客户', '已更新', '客户', '  ', '伙伴'],
+      };
+
+      contactRepository.create.mockReturnValue(mockContact);
+      contactRepository.save.mockResolvedValue(mockContact);
+
+      await service.create(createDto, mockUserId);
+
+      expect(contactRepository.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          tags: ['客户', '伙伴'],
         }),
       );
     });
@@ -255,6 +283,18 @@ describe('ContactsService', () => {
       expect(result).toEqual(mockContactWithRelations);
     });
 
+    it('should sanitize internal marker tags when returning contact', async () => {
+      const contactWithDirtyTags = {
+        ...mockContact,
+        tags: ['客户', '已更新', '客户', '合作伙伴'],
+      };
+      contactRepository.findOne.mockResolvedValue(contactWithDirtyTags);
+
+      const result = await service.findOne(mockContactId, mockUserId);
+
+      expect(result.tags).toEqual(['客户', '合作伙伴']);
+    });
+
     it('should return a contact without userId filter', async () => {
       contactRepository.findOne.mockResolvedValue(mockContact);
 
@@ -335,6 +375,81 @@ describe('ContactsService', () => {
       ).rejects.toThrow(new NotFoundException('Contact not found'));
 
       expect(contactRepository.save).not.toHaveBeenCalled();
+    });
+
+    it('should sanitize tags on update and remove internal marker', async () => {
+      const updateDto = {
+        tags: ['已更新', 'VIP', 'VIP', '  ', '合作伙伴'],
+      };
+
+      const updatedContact = { ...mockContact, tags: ['VIP', '合作伙伴'] };
+      contactRepository.findOne.mockResolvedValue(mockContact);
+      contactRepository.save.mockResolvedValue(updatedContact);
+
+      const result = await service.update(mockContactId, updateDto, mockUserId);
+
+      expect(contactRepository.save).toHaveBeenCalledWith(
+        expect.objectContaining({
+          tags: ['VIP', '合作伙伴'],
+        }),
+      );
+      expect(result.tags).toEqual(['VIP', '合作伙伴']);
+    });
+  });
+
+  describe('addFact', () => {
+    it('should add fact successfully', async () => {
+      const payload = {
+        content: '用户收到黄玲发送的200元红包',
+        metadata: { category: '商务' },
+        sourceConversationId: 'conv-1',
+      };
+      const createdFact = {
+        id: 'fact-new',
+        contactId: mockContactId,
+        content: payload.content,
+        metadata: payload.metadata,
+        sourceConversationId: payload.sourceConversationId,
+        createdAt: new Date('2026-01-01'),
+        contact: null,
+      };
+
+      contactRepository.findOne.mockResolvedValue(mockContact);
+      factRepository.create.mockReturnValue(createdFact as ContactFact);
+      factRepository.save.mockResolvedValue(createdFact as ContactFact);
+
+      const result = await service.addFact(mockContactId, payload, mockUserId);
+
+      expect(contactRepository.findOne).toHaveBeenCalledWith({
+        where: { id: mockContactId, userId: mockUserId },
+      });
+      expect(factRepository.create).toHaveBeenCalledWith({
+        content: payload.content,
+        metadata: payload.metadata,
+        sourceConversationId: payload.sourceConversationId,
+        contactId: mockContactId,
+      });
+      expect(result).toEqual(createdFact);
+    });
+
+    it('should throw NotFoundException when contact does not exist', async () => {
+      contactRepository.findOne.mockResolvedValue(null);
+
+      await expect(
+        service.addFact(mockContactId, { content: '测试事实' }, mockUserId),
+      ).rejects.toThrow(new NotFoundException('Contact not found'));
+
+      expect(factRepository.create).not.toHaveBeenCalled();
+    });
+
+    it('should throw BadRequestException when content is empty', async () => {
+      contactRepository.findOne.mockResolvedValue(mockContact);
+
+      await expect(
+        service.addFact(mockContactId, { content: '   ' }, mockUserId),
+      ).rejects.toThrow(new BadRequestException('content is required'));
+
+      expect(factRepository.create).not.toHaveBeenCalled();
     });
   });
 

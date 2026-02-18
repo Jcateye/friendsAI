@@ -16,7 +16,17 @@ export class EventsController {
     status: 201,
     description: '事件创建成功',
   })
-  create(@Body() body: { title: string; description?: string; contactId: string; details?: Record<string, any> }) {
+  create(
+    @Body()
+    body: {
+      title: string;
+      description?: string;
+      contactId: string;
+      eventDate?: string;
+      sourceConversationId?: string;
+      details?: Record<string, any>;
+    },
+  ) {
     return this.eventsService.create(body);
   }
 
