@@ -1,7 +1,6 @@
 import { Body, Controller, Get, HttpCode, HttpException, HttpStatus, Optional, Post, Query, Req, Res } from '@nestjs/common';
 import { ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
 import type { Request, Response } from 'express';
-import { AgentOrchestrator } from './agent.orchestrator';
 import { AgentMessageStore } from './agent-message.store';
 import type {
   AgentChatContext,
@@ -14,13 +13,13 @@ import type {
 } from './agent.types';
 import type { AgentError, AgentRunEnd, AgentSseEvent } from './client-types';
 import { VercelAiStreamAdapter } from './adapters/vercel-ai-stream.adapter';
-import { AgentRuntimeExecutor } from './runtime/agent-runtime-executor.service';
 import { AgentListService } from './agent-list.service';
 import { AgentListResponseDto } from './dto/agent-list.dto';
 import { AgentRuntimeError } from './errors/agent-runtime.error';
 import { AgentRunMetricsService } from '../action-tracking/agent-run-metrics.service';
 import { generateUlid } from '../utils/ulid';
 import { SkillsService } from '../skills/skills.service';
+import { EngineRouter } from './engines/engine.router';
 
 @ApiTags('Agent')
 @Controller('agent')
@@ -35,9 +34,8 @@ export class AgentController {
   private readonly skillParserExecuteMode = process.env.SKILL_PARSER_EXECUTE_MODE ?? 'log-only';
 
   constructor(
-    private readonly agentOrchestrator: AgentOrchestrator,
+    private readonly engineRouter: EngineRouter,
     private readonly messageStore: AgentMessageStore,
-    private readonly agentRuntimeExecutor: AgentRuntimeExecutor,
     private readonly agentListService: AgentListService,
     private readonly agentRunMetricsService: AgentRunMetricsService,
     @Optional()
@@ -167,7 +165,7 @@ export class AgentController {
         }
       }
 
-      for await (const event of this.agentOrchestrator.streamChat(preparedRequest, {
+      for await (const event of this.engineRouter.streamChat(preparedRequest, {
         signal: abortController.signal,
       })) {
         if (res.writableEnded) {
@@ -277,7 +275,7 @@ export class AgentController {
     const userId = (req.user as { id?: string } | undefined)?.id ?? body.userId;
 
     try {
-      const result = await this.agentRuntimeExecutor.execute(
+      const result = await this.engineRouter.run(
         body.agentId,
         body.operation,
         body.input,
@@ -455,7 +453,7 @@ export class AgentController {
       executionInput.userId = input.userId;
     }
 
-    const result = await this.agentRuntimeExecutor.execute(
+    const result = await this.engineRouter.run(
       execution.agentId as AgentRunRequest['agentId'],
       execution.operation ?? null,
       executionInput,
