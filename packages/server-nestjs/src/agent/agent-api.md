@@ -114,9 +114,9 @@ data: {"event":"agent.delta","data":{"id":"msg_1","delta":"你好","role":"assis
 ```
 
 - 当 `format=vercel-ai` 时：
-  - `Content-Type: text/plain; charset=utf-8`
-  - Header：`X-Vercel-AI-Data-Stream: v1`
-  - Body 是 Vercel AI 风格的增量文本片段，适配前端的 Vercel AI SDK。
+  - `Content-Type: text/event-stream; charset=utf-8`
+  - Header：`x-vercel-ai-ui-message-stream: v1`
+  - Body 使用 AI SDK v6 UI Message Stream 协议（`data: {...}` + `data: [DONE]`）。
 
 ### 4. 可运行示例
 
@@ -154,6 +154,36 @@ for await (const chunk of res.body as any) {
   // 按行拆分，解析 event/data
   console.log(text);
 }
+```
+
+**cURL（vercel-ai / UI Message Stream）**
+
+```bash
+curl -N \
+  -H "Content-Type: application/json" \
+  -H "Accept: text/event-stream" \
+  -X POST "http://localhost:3000/v1/agent/chat?format=vercel-ai" \
+  -d '{
+    "messages": [
+      { "role": "user", "content": "给我一个简短开场白" }
+    ],
+    "llm": {
+      "provider": "openai",
+      "model": "gpt-4.1-mini"
+    }
+  }'
+```
+
+**vercel-ai 响应片段示意（v6 UI Message Stream）**
+
+```text
+data: {"type":"start","messageId":"..."}
+data: {"type":"text-start","id":"..."}
+data: {"type":"text-delta","id":"...","delta":"你好，"}
+data: {"type":"text-delta","id":"...","delta":"很高兴认识你。"}
+data: {"type":"text-end","id":"..."}
+data: {"type":"finish","finishReason":"stop"}
+data: [DONE]
 ```
 
 ---

@@ -25,7 +25,7 @@ export default defineConfig({
             output: {
                 manualChunks: {
                     react: ['react', 'react-dom', 'react-router-dom'],
-                    ai: ['ai', '@assistant-ui/react'],
+                    ai: ['ai', '@ai-sdk/react', '@assistant-ui/react'],
                     icons: ['lucide-react'],
                 },
             },

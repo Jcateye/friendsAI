@@ -42,7 +42,7 @@ export class AgentController {
     private readonly agentRunMetricsService: AgentRunMetricsService,
     @Optional()
     private readonly skillsService?: SkillsService,
-  ) {}
+  ) { }
 
   @Post('chat')
   @ApiOperation({
@@ -50,12 +50,12 @@ export class AgentController {
     description:
       '发起与多 Agent 协调的流式对话，请求体支持 messages（多轮聊天记录）或 prompt（单轮提示），二者至少提供其一；' +
       '通过 format 查询参数选择输出流格式：sse 时返回 text/event-stream 的 Agent 事件（agent.start / agent.delta / agent.message 等），' +
-      'vercel-ai 时返回兼容 Vercel AI SDK 的纯文本增量流。常用于前端聊天框、打字机效果，以及需要实时看到工具调用进度的场景。',
+      'vercel-ai 时返回兼容 AI SDK v6 的 UI Message Stream（`data: {...}` + `data: [DONE]`）。常用于前端聊天框、打字机效果，以及需要实时看到工具调用进度的场景。',
   })
   @ApiQuery({
     name: 'format',
     required: false,
-    description: '响应格式：sse（默认，EventSource）或 vercel-ai（适配 Vercel AI SDK）',
+    description: '响应格式：sse（默认，EventSource）或 vercel-ai（AI SDK v6 UI Message Stream，header: x-vercel-ai-ui-message-stream: v1）',
     example: 'sse',
   })
   @HttpCode(200)
@@ -88,15 +88,15 @@ export class AgentController {
     }
 
     res.status(200);
-    
+
     // 根据 format 设置响应头
     if (format === 'vercel-ai') {
-      res.setHeader('Content-Type', 'text/plain; charset=utf-8');
-      res.setHeader('X-Vercel-AI-Data-Stream', 'v1');
+      res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
+      res.setHeader('x-vercel-ai-ui-message-stream', 'v1');
     } else {
       res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
     }
-    
+
     res.setHeader('Cache-Control', 'no-cache, no-transform');
     res.setHeader('Connection', 'keep-alive');
     res.setHeader('X-Accel-Buffering', 'no');
@@ -194,7 +194,7 @@ export class AgentController {
           streamStatus = event.data.status === 'cancelled' ? 'cancelled' : event.data.status === 'succeeded' ? 'succeeded' : 'failed';
           streamErrorCode = event.data.error?.code ?? null;
         }
-        
+
         // 根据 format 选择写入方式
         if (adapter) {
           const transformed = adapter.transform(event);
@@ -214,7 +214,15 @@ export class AgentController {
           code: 'stream_error',
           message,
         };
-        this.writeEvent(res, { event: 'error', data: errorPayload });
+        const errorEvent: AgentStreamEvent = { event: 'error', data: errorPayload };
+        if (adapter) {
+          const transformed = adapter.transform(errorEvent);
+          if (transformed) {
+            res.write(transformed);
+          }
+        } else {
+          this.writeEvent(res, errorEvent);
+        }
       }
     } finally {
       req.off('close', handleClose);
@@ -232,7 +240,19 @@ export class AgentController {
           };
           streamStatus = 'failed';
           streamErrorCode = 'stream_error';
-          this.writeEvent(res, { event: 'agent.end', data: endPayload });
+          const endEvent: AgentStreamEvent = { event: 'agent.end', data: endPayload };
+          if (adapter) {
+            const transformed = adapter.transform(endEvent);
+            if (transformed) {
+              res.write(transformed);
+            }
+          } else {
+            this.writeEvent(res, endEvent);
+          }
+        }
+        // Send [DONE] marker for v6 UI Message Stream Protocol
+        if (adapter) {
+          res.write(adapter.done());
         }
         res.end();
       }
@@ -491,8 +511,14 @@ export class AgentController {
     );
 
     if (input.format === 'vercel-ai') {
-      input.res.write(`0:${JSON.stringify(summaryText)}\n`);
-      input.res.write(`d:${JSON.stringify({ finishReason: 'stop' })}\n`);
+      const skillAdapter = new VercelAiStreamAdapter();
+      const startChunk = skillAdapter.transform({ event: 'agent.start', data: { runId: result.runId, createdAt: new Date().toISOString(), input: summaryText } });
+      if (startChunk) input.res.write(startChunk);
+      const deltaChunk = skillAdapter.transform({ event: 'agent.delta', data: { id: generateUlid(), delta: summaryText } });
+      if (deltaChunk) input.res.write(deltaChunk);
+      const msgChunk = skillAdapter.transform({ event: 'agent.message', data: { id: generateUlid(), role: 'assistant', content: summaryText, createdAt: new Date().toISOString(), createdAtMs: Date.now() } });
+      if (msgChunk) input.res.write(msgChunk);
+      input.res.write(skillAdapter.done());
       return { runId: result.runId };
     }
 
