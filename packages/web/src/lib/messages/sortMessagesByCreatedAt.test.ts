@@ -1,10 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import type { Message as AISDKMessage } from 'ai';
-import { sortMessagesByCreatedAt } from './sortMessagesByCreatedAt';
+import { sortMessagesByCreatedAt, type ChatMessageLike } from './sortMessagesByCreatedAt';
 
-type MessageWithMs = AISDKMessage & { createdAtMs?: number };
+type MessageWithMs = ChatMessageLike & { createdAtMs?: number };
 
-function buildMessage(input: Partial<MessageWithMs> & Pick<AISDKMessage, 'id' | 'role' | 'content'>): MessageWithMs {
+function buildMessage(input: Partial<MessageWithMs> & Pick<ChatMessageLike, 'id' | 'role' | 'content'>): MessageWithMs {
   return {
     id: input.id,
     role: input.role,

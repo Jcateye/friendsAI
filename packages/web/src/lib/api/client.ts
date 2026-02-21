@@ -43,6 +43,7 @@ import type {
   SendFeishuTemplateMessageResponse,
   SkillCatalogResponse,
   SkillInvocationIntentResponse,
+  AgentLlmRequest,
 } from './types';
 import type {
   AgentRunResponse,
@@ -552,6 +553,7 @@ export const api = {
       conversationId: string;
       messages: Array<{ role: string; content: string }>;
       language?: string;
+      llm?: AgentLlmRequest;
     }): Promise<{
       runId: string;
       agentId: string;
@@ -577,6 +579,7 @@ export const api = {
             useCache: true,
           },
           conversationId: request.conversationId,
+          ...(request.llm !== undefined && { llm: request.llm }),
         }),
       });
 
@@ -593,6 +596,7 @@ export const api = {
       intent?: 'maintain' | 'grow' | 'repair';
       relationshipMix?: 'business' | 'friend' | 'mixed';
       timeBudgetMinutes?: number;
+      llm?: AgentLlmRequest;
     }): Promise<AgentRunResponse<ContactInsightData>> {
       const response = await fetchWithAuth(`${API_BASE}/agent/run`, {
         method: 'POST',
@@ -610,6 +614,7 @@ export const api = {
           },
           // 用联系人 ID 作为会话作用域，便于快照缓存
           conversationId: `insight_${request.contactId}`,
+          ...(request.llm !== undefined && { llm: request.llm }),
         }),
       });
 
@@ -622,6 +627,7 @@ export const api = {
      */
     async runArchiveExtract(request: {
       conversationId: string;
+      llm?: AgentLlmRequest;
     }): Promise<AgentRunResponse<ArchiveBriefData>> {
       const response = await fetchWithAuth(`${API_BASE}/agent/run`, {
         method: 'POST',
@@ -635,6 +641,7 @@ export const api = {
             useCache: true,
           },
           conversationId: request.conversationId,
+          ...(request.llm !== undefined && { llm: request.llm }),
         }),
       });
 
@@ -647,6 +654,7 @@ export const api = {
      */
     async runBriefGenerate(request: {
       contactId: string;
+      llm?: AgentLlmRequest;
     }): Promise<AgentRunResponse<ArchiveBriefData>> {
       const response = await fetchWithAuth(`${API_BASE}/agent/run`, {
         method: 'POST',
@@ -660,6 +668,7 @@ export const api = {
             useCache: true,
           },
           conversationId: `brief_${request.contactId}`,
+          ...(request.llm !== undefined && { llm: request.llm }),
         }),
       });
 
@@ -675,6 +684,7 @@ export const api = {
       intent?: 'maintain' | 'grow' | 'repair';
       relationshipMix?: 'business' | 'friend' | 'mixed';
       timeBudgetMinutes?: number;
+      llm?: AgentLlmRequest;
     }): Promise<AgentRunResponse<NetworkActionData>> {
       const response = await fetchWithAuth(`${API_BASE}/agent/run`, {
         method: 'POST',
@@ -689,6 +699,7 @@ export const api = {
           options: {
             useCache: true,
           },
+          ...(request.llm !== undefined && { llm: request.llm }),
         }),
       });
 
@@ -708,6 +719,7 @@ export const api = {
         useCache?: boolean;
         forceRefresh?: boolean;
       };
+      llm?: AgentLlmRequest;
     }): Promise<AgentRunResponse<Record<string, unknown>>> {
       const response = await fetchWithAuth(`${API_BASE}/agent/run`, {
         method: 'POST',
@@ -718,6 +730,7 @@ export const api = {
           conversationId: request.conversationId,
           sessionId: request.sessionId,
           options: request.options ?? { useCache: true },
+          ...(request.llm !== undefined && { llm: request.llm }),
         }),
       });
 

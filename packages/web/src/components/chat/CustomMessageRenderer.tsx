@@ -1,7 +1,6 @@
 import { useMessage } from '@assistant-ui/react';
 import { A2UIRenderer, ToolTraceCard } from '../a2ui';
 import type { A2UIDocument, A2UIAction } from '../a2ui/types';
-import type { Message as AISDKMessage } from 'ai';
 
 interface ToolInvocation {
   toolCallId?: string;
@@ -244,7 +243,7 @@ function InlineMessageRenderer({ message }: { message: MessageLike }) {
   );
 }
 
-export function CustomMessageRenderer({ message: messageProp }: { message?: AISDKMessage } = {}) {
+export function CustomMessageRenderer({ message: messageProp }: { message?: MessageLike } = {}) {
   if (messageProp) {
     return <InlineMessageRenderer message={messageProp as MessageLike} />;
   }

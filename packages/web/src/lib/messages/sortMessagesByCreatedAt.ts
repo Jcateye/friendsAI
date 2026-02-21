@@ -1,10 +1,15 @@
-import type { Message as AISDKMessage } from 'ai';
 import { resolveEpochMs } from '../time/timestamp';
 
-function resolveMessageTimestamp(message: AISDKMessage): number | null {
-  const messageWithMs = message as AISDKMessage & {
-    createdAtMs?: number | string | Date | null;
-  };
+export interface ChatMessageLike {
+  id: string;
+  role: string;
+  content: unknown;
+  createdAt?: Date | string;
+  createdAtMs?: number | string | Date | null;
+}
+
+function resolveMessageTimestamp(message: ChatMessageLike): number | null {
+  const messageWithMs = message as ChatMessageLike;
 
   return resolveEpochMs(messageWithMs.createdAtMs, message.createdAt);
 }
@@ -14,7 +19,7 @@ function resolveMessageTimestamp(message: AISDKMessage): number | null {
  *
  * 当时间戳相同（或缺失）时，保持原始顺序，避免因随机 ID 导致重排。
  */
-export function sortMessagesByCreatedAt(messages: AISDKMessage[]): AISDKMessage[] {
+export function sortMessagesByCreatedAt<TMessage extends ChatMessageLike>(messages: TMessage[]): TMessage[] {
   return messages
     .map((message, index) => ({
       message,
