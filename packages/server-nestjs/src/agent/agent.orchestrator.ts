@@ -134,9 +134,7 @@ export class AgentOrchestrator {
 
       // 调用 AI 服务
       const stream = await this.aiService.streamChat(messages, {
-        model: request.model,
-        temperature: request.temperature,
-        maxTokens: request.maxTokens ?? request.max_tokens,
+        llm: request.llm,
         signal: options?.signal,
         tools: tools.length > 0 ? tools : undefined,
       });

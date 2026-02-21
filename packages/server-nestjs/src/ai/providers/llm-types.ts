@@ -1,5 +1,39 @@
 export type LlmRole = 'system' | 'user' | 'assistant' | 'tool';
 
+export type LlmProviderName = 'openai' | 'claude' | 'gemini' | 'openai-compatible';
+export type LlmProviderAlias = 'anthropic' | 'google';
+export type LlmProviderInputName = LlmProviderName | LlmProviderAlias;
+
+export type LlmProviderOptions = Record<string, Record<string, unknown>>;
+
+export interface LlmRequestConfig {
+  provider: LlmProviderName;
+  model: string;
+  temperature?: number;
+  maxOutputTokens?: number;
+  topP?: number;
+  topK?: number;
+  stopSequences?: string[];
+  seed?: number;
+  presencePenalty?: number;
+  frequencyPenalty?: number;
+  providerOptions?: LlmProviderOptions;
+}
+
+export interface LlmCallSettings {
+  provider?: LlmProviderName;
+  model?: string;
+  temperature?: number;
+  maxOutputTokens?: number;
+  topP?: number;
+  topK?: number;
+  stopSequences?: string[];
+  seed?: number;
+  presencePenalty?: number;
+  frequencyPenalty?: number;
+  providerOptions?: LlmProviderOptions;
+}
+
 export interface LlmToolFunctionCall {
   name?: string;
   arguments?: string;
@@ -17,6 +51,7 @@ export interface LlmMessage {
   content?: string | null;
   tool_call_id?: string;
   tool_calls?: LlmToolCall[];
+  name?: string;
   [key: string]: unknown;
 }
 
@@ -41,10 +76,11 @@ export interface LlmStreamChunk {
   [key: string]: unknown;
 }
 
-export interface LlmStreamChatOptions {
-  model?: string;
-  temperature?: number;
-  maxTokens?: number;
+export interface LlmTextOptions {
+  llm?: LlmCallSettings;
   signal?: AbortSignal;
+}
+
+export interface LlmStreamChatOptions extends LlmTextOptions {
   tools?: LlmToolDefinition[];
 }

@@ -8,7 +8,6 @@ import { AgentChatRequest } from './agent.types';
 import { AgentMessageStore } from './agent-message.store';
 import { MessagesService } from '../conversations/messages.service';
 import { ConversationsService } from '../conversations/conversations.service';
-import type OpenAI from 'openai';
 
 describe('AgentOrchestrator', () => {
   let orchestrator: AgentOrchestrator;
@@ -111,7 +110,7 @@ describe('AgentOrchestrator', () => {
               finish_reason: null,
             },
           ],
-        } as OpenAI.Chat.Completions.ChatCompletionChunk;
+        } as any;
         yield {
           choices: [
             {
@@ -119,7 +118,7 @@ describe('AgentOrchestrator', () => {
               finish_reason: null,
             },
           ],
-        } as OpenAI.Chat.Completions.ChatCompletionChunk;
+        } as any;
         yield {
           choices: [
             {
@@ -127,7 +126,7 @@ describe('AgentOrchestrator', () => {
               finish_reason: 'stop',
             },
           ],
-        } as OpenAI.Chat.Completions.ChatCompletionChunk;
+        } as any;
       })();
 
       aiService.streamChat.mockResolvedValue(mockStream);
@@ -146,6 +145,50 @@ describe('AgentOrchestrator', () => {
       expect(events[events.length - 1].event).toBe('agent.end');
     });
 
+    it('should pass llm config through to AiService.streamChat', async () => {
+      const request: AgentChatRequest = {
+        prompt: 'Hello',
+        llm: {
+          provider: 'claude',
+          model: 'claude-3-7-sonnet',
+          providerOptions: {
+            anthropic: {
+              thinking: { type: 'enabled', budgetTokens: 256 },
+            },
+          },
+        },
+      };
+
+      contextBuilder.buildMessages.mockReturnValue([
+        { role: 'system', content: 'You are helpful' },
+        { role: 'user', content: 'Hello' },
+      ]);
+      toolRegistry.list.mockReturnValue([]);
+
+      const mockStream = (async function* () {
+        yield {
+          choices: [
+            {
+              delta: { content: 'ok' },
+              finish_reason: 'stop',
+            },
+          ],
+        } as any;
+      })();
+      aiService.streamChat.mockResolvedValue(mockStream);
+
+      for await (const _event of orchestrator.streamChat(request)) {
+        // drain
+      }
+
+      expect(aiService.streamChat).toHaveBeenCalledWith(
+        expect.any(Array),
+        expect.objectContaining({
+          llm: request.llm,
+        }),
+      );
+    });
+
     it('should filter tools based on context.composer.enabledTools', async () => {
       const request: AgentChatRequest = {
         prompt: 'Use selected tool only',
@@ -159,7 +202,7 @@ describe('AgentOrchestrator', () => {
       contextBuilder.buildMessages.mockReturnValue([
         { role: 'system', content: 'You are helpful' },
         { role: 'user', content: 'Use selected tool only' },
-      ] as OpenAI.Chat.Completions.ChatCompletionMessageParam[]);
+      ] as any);
 
       toolRegistry.list.mockReturnValue([
         {
@@ -182,7 +225,7 @@ describe('AgentOrchestrator', () => {
               finish_reason: null,
             },
           ],
-        } as OpenAI.Chat.Completions.ChatCompletionChunk;
+        } as any;
         yield {
           choices: [
             {
@@ -190,7 +233,7 @@ describe('AgentOrchestrator', () => {
               finish_reason: 'stop',
             },
           ],
-        } as OpenAI.Chat.Completions.ChatCompletionChunk;
+        } as any;
       })();
 
       aiService.streamChat.mockResolvedValue(mockStream);
@@ -218,7 +261,7 @@ describe('AgentOrchestrator', () => {
       contextBuilder.buildMessages.mockReturnValue([
         { role: 'system', content: 'You are helpful' },
         { role: 'user', content: 'Fallback tools' },
-      ] as OpenAI.Chat.Completions.ChatCompletionMessageParam[]);
+      ] as any);
 
       toolRegistry.list.mockReturnValue([
         {
@@ -241,7 +284,7 @@ describe('AgentOrchestrator', () => {
               finish_reason: null,
             },
           ],
-        } as OpenAI.Chat.Completions.ChatCompletionChunk;
+        } as any;
         yield {
           choices: [
             {
@@ -249,7 +292,7 @@ describe('AgentOrchestrator', () => {
               finish_reason: 'stop',
             },
           ],
-        } as OpenAI.Chat.Completions.ChatCompletionChunk;
+        } as any;
       })();
 
       aiService.streamChat.mockResolvedValue(mockStream);
@@ -345,7 +388,7 @@ describe('AgentOrchestrator', () => {
               finish_reason: null,
             },
           ],
-        } as OpenAI.Chat.Completions.ChatCompletionChunk;
+        } as any;
         yield {
           choices: [
             {
@@ -353,7 +396,7 @@ describe('AgentOrchestrator', () => {
               finish_reason: 'stop',
             },
           ],
-        } as OpenAI.Chat.Completions.ChatCompletionChunk;
+        } as any;
       })();
 
       aiService.streamChat
@@ -521,7 +564,7 @@ describe('AgentOrchestrator', () => {
               finish_reason: null,
             },
           ],
-        } as OpenAI.Chat.Completions.ChatCompletionChunk;
+        } as any;
         yield {
           choices: [
             {
@@ -529,7 +572,7 @@ describe('AgentOrchestrator', () => {
               finish_reason: 'stop',
             },
           ],
-        } as OpenAI.Chat.Completions.ChatCompletionChunk;
+        } as any;
       })();
 
       aiService.streamChat
@@ -663,7 +706,7 @@ describe('AgentOrchestrator', () => {
               finish_reason: null,
             },
           ],
-        } as OpenAI.Chat.Completions.ChatCompletionChunk;
+        } as any;
         yield {
           choices: [
             {
@@ -671,7 +714,7 @@ describe('AgentOrchestrator', () => {
               finish_reason: 'stop',
             },
           ],
-        } as OpenAI.Chat.Completions.ChatCompletionChunk;
+        } as any;
       })();
 
       aiService.streamChat.mockResolvedValue(mockStream);

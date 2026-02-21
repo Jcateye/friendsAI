@@ -1,4 +1,5 @@
 import type { AgentChatRequest, AgentRunRequest } from '../agent.types';
+import type { LlmRequestConfig } from '../../ai/providers/llm-types';
 
 export type AgentEngineName = 'local' | 'openclaw';
 
@@ -18,6 +19,7 @@ export interface AgentEngineRunOptions {
   intent?: AgentRunRequest['intent'];
   relationshipMix?: AgentRunRequest['relationshipMix'];
   timeBudgetMinutes?: number;
+  llm?: LlmRequestConfig;
 }
 
 export interface AgentEngineRunResult {

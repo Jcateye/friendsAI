@@ -2,6 +2,7 @@ import type {
   LlmMessage,
   LlmStreamChatOptions,
   LlmStreamChunk,
+  LlmTextOptions,
 } from './llm-types';
 
 export interface LlmProvider {
@@ -9,7 +10,7 @@ export interface LlmProvider {
   generateEmbedding(text: string): Promise<number[]>;
   generateText(
     messages: LlmMessage[],
-    options?: Pick<LlmStreamChatOptions, 'model' | 'temperature' | 'maxTokens' | 'signal'>,
+    options?: LlmTextOptions,
   ): Promise<string>;
   streamChat(
     messages: LlmMessage[],

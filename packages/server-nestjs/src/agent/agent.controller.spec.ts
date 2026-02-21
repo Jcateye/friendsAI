@@ -406,6 +406,72 @@ describe('AgentController - POST /v1/agent/run', () => {
         expect.any(Object)
       );
     });
+
+    it('should reject legacy llm fields in /agent/run', async () => {
+      const requestWithLegacyField = {
+        agentId: 'title_summary',
+        input: {
+          conversationId: 'conv-123',
+          messages: [{ role: 'user', content: 'hello' }],
+        },
+        model: 'gpt-4.1-mini',
+      } as unknown as AgentRunRequest;
+
+      await expect(controller.run({} as Request, requestWithLegacyField)).rejects.toThrow(HttpException);
+
+      await controller.run({} as Request, requestWithLegacyField).catch((error) => {
+        expect(error).toBeInstanceOf(HttpException);
+        expect(error.getStatus()).toBe(400);
+        expect(error.getResponse()).toMatchObject({
+          code: 'invalid_llm_request',
+        });
+      });
+      expect(mockEngineRouter.run).not.toHaveBeenCalled();
+    });
+
+    it('should pass normalized llm config to engine router in /agent/run', async () => {
+      const requestWithLlm: AgentRunRequest = {
+        agentId: 'title_summary',
+        input: {
+          conversationId: 'conv-123',
+          messages: [{ role: 'user', content: 'hello' }],
+        },
+        llm: {
+          provider: 'claude',
+          model: 'claude-3-7-sonnet',
+          providerOptions: {
+            claude: {
+              thinking: { type: 'enabled', budgetTokens: 256 },
+            } as any,
+          },
+        },
+      };
+
+      mockEngineRouter.run.mockResolvedValue({
+        runId: 'run-llm',
+        cached: false,
+        data: { title: 'ok', summary: 'ok' },
+      });
+
+      await controller.run({} as Request, requestWithLlm);
+
+      expect(mockEngineRouter.run).toHaveBeenCalledWith(
+        'title_summary',
+        undefined,
+        expect.any(Object),
+        expect.objectContaining({
+          llm: expect.objectContaining({
+            provider: 'claude',
+            model: 'claude-3-7-sonnet',
+            providerOptions: {
+              anthropic: {
+                thinking: { type: 'enabled', budgetTokens: 256 },
+              },
+            },
+          }),
+        }),
+      );
+    });
   });
 
   describe('chat context sanitization', () => {

@@ -49,10 +49,17 @@
   "context": {
     "any": "自定义上下文"
   },
-  "model": "可选模型名",
-  "temperature": 0.7,
-  "maxTokens": 1024,
-  "max_tokens": 1024,
+  "llm": {
+    "provider": "openai-compatible",
+    "model": "gpt-4.1-mini",
+    "temperature": 0.7,
+    "maxOutputTokens": 1024,
+    "providerOptions": {
+      "openaiCompatible": {
+        "reasoningEffort": "medium"
+      }
+    }
+  },
   "userId": "user_123",
   "conversationId": "conv_123",
   "sessionId": "session_123"
@@ -66,14 +73,13 @@
 | `messages` | body | `AgentChatMessage[]` | 与 `prompt` 二选一 | 聊天历史，使用 OpenAI Chat Completion message 格式（`role`, `content`, 也支持 `tool` 等） |
 | `prompt` | body | string | 与 `messages` 二选一 | 单条提示文本；如果只传 `prompt`，会由服务端封装为一条 user 消息 |
 | `context` | body | object | 否 | 自定义上下文（业务侧状态、变量等），会进入 Agent 上下文层 |
-| `model` | body | string | 否 | 指定模型名（如果不填使用后端默认） |
-| `temperature` | body | number | 否 | 采样温度，越大越随机 |
-| `maxTokens` / `max_tokens` | body | number | 否 | 最大生成 token 数，两者任选一个 |
+| `llm` | body | object | 否 | LLM 请求配置（`provider/model/temperature/maxOutputTokens/topP/topK/stopSequences/seed/providerOptions`） |
 | `userId` | body | string | 否 | 用户 ID；如果有鉴权中间件，会优先用 `req.user.id` 覆盖 |
 | `conversationId` | body | string | 否 | 对话 ID，用于消息分组和缓存 |
 | `sessionId` | body | string | 否 | 会话 ID，用于多轮会话管理 |
 
 > **重要约束**：`messages` 和 `prompt` 必须至少提供一个，否则接口返回 `400`。
+> **兼容说明**：顶层旧字段 `model/temperature/maxTokens/max_tokens` 已废弃，传入会返回 `400 invalid_llm_request`。
 
 ### 3. 响应（SSE / Vercel AI 流）
 

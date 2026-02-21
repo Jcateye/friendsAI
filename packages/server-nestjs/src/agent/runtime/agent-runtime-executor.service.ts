@@ -15,6 +15,8 @@ import { ActionTrackingService } from '../../action-tracking/action-tracking.ser
 import type { ContactInsightOutput } from '../capabilities/contact_insight/contact-insight.types';
 import type { NetworkActionOutput } from '../capabilities/network_action/network-action.types';
 import { AgentRuntimeError } from '../errors/agent-runtime.error';
+import type { LlmRequestConfig } from '../../ai/providers/llm-types';
+import { LlmCallError, LlmConfigurationError } from '../../ai/providers/llm-config.types';
 
 /**
  * Agent 运行结果
@@ -75,9 +77,7 @@ export class AgentRuntimeExecutor {
       userId?: string;
       conversationId?: string;
       sessionId?: string;
-      model?: string;
-      temperature?: number;
-      maxTokens?: number;
+      llm?: LlmRequestConfig;
       skipServiceRouting?: boolean; // 跳过服务路由，直接使用通用流程（用于避免循环依赖）
       intent?: 'maintain' | 'grow' | 'repair';
       relationshipMix?: 'business' | 'friend' | 'mixed';
@@ -183,9 +183,7 @@ export class AgentRuntimeExecutor {
     let aiResponse: string;
     try {
       const stream = await this.aiService.streamChat(messages, {
-        model: options?.model,
-        temperature: options?.temperature,
-        maxTokens: options?.maxTokens,
+        llm: options?.llm,
       });
 
       // 收集流式响应
@@ -198,8 +196,28 @@ export class AgentRuntimeExecutor {
       }
       aiResponse = fullResponse;
     } catch (error) {
+      if (error instanceof LlmConfigurationError) {
+        throw new AgentRuntimeError({
+          code: error.code,
+          message: error.message,
+          statusCode: error.code === 'unsupported_llm_provider' ? 400 : 500,
+          details: error,
+          retryable: false,
+        });
+      }
+
+      if (error instanceof LlmCallError) {
+        throw new AgentRuntimeError({
+          code: 'llm_call_failed',
+          message: error.message,
+          statusCode: 502,
+          details: error,
+          retryable: true,
+        });
+      }
+
       throw new AgentRuntimeError({
-        code: 'ai_provider_error',
+        code: 'llm_call_failed',
         message: `AI service error: ${error instanceof Error ? error.message : String(error)}`,
         statusCode: 502,
         details: error,
@@ -272,7 +290,7 @@ export class AgentRuntimeExecutor {
           userId: options?.userId ?? null,
           sourceHash,
           promptVersion,
-          model: options?.model ?? null,
+          model: options?.llm?.model ?? null,
           input: context as Record<string, unknown>,
           output: parsedOutput as Record<string, unknown>,
           ttlSeconds,
@@ -312,6 +330,7 @@ export class AgentRuntimeExecutor {
       forceRefresh?: boolean;
       userId?: string;
       conversationId?: string;
+      llm?: LlmRequestConfig;
     }
   ): Promise<AgentExecutionResult> {
     const runId = generateUlid();
@@ -385,7 +404,10 @@ export class AgentRuntimeExecutor {
         userId,
         conversationId,
       },
-      { forceRefresh: options?.forceRefresh }
+      {
+        forceRefresh: options?.forceRefresh,
+        llm: options?.llm,
+      }
     );
 
     return {
@@ -404,6 +426,7 @@ export class AgentRuntimeExecutor {
       useCache?: boolean;
       forceRefresh?: boolean;
       userId?: string;
+      llm?: LlmRequestConfig;
       intent?: 'maintain' | 'grow' | 'repair';
       relationshipMix?: 'business' | 'friend' | 'mixed';
       timeBudgetMinutes?: number;
@@ -445,7 +468,10 @@ export class AgentRuntimeExecutor {
         relationshipMix: options?.relationshipMix,
         timeBudgetMinutes: options?.timeBudgetMinutes,
       },
-      { forceRefresh: options?.forceRefresh }
+      {
+        forceRefresh: options?.forceRefresh,
+        llm: options?.llm,
+      }
     );
 
     // 追踪建议展示事件（如果启用）
@@ -580,6 +606,7 @@ export class AgentRuntimeExecutor {
       useCache?: boolean;
       forceRefresh?: boolean;
       userId?: string;
+      llm?: LlmRequestConfig;
     }
   ): Promise<AgentExecutionResult> {
     const runId = generateUlid();
@@ -617,7 +644,10 @@ export class AgentRuntimeExecutor {
           userId,
           conversationId,
         },
-        { forceRefresh: options?.forceRefresh }
+        {
+          forceRefresh: options?.forceRefresh,
+          llm: options?.llm,
+        }
       );
 
       // 检查是否来自缓存
@@ -667,7 +697,10 @@ export class AgentRuntimeExecutor {
           userId,
           contactId,
         },
-        { forceRefresh: options?.forceRefresh }
+        {
+          forceRefresh: options?.forceRefresh,
+          llm: options?.llm,
+        }
       );
 
       // 检查是否来自缓存

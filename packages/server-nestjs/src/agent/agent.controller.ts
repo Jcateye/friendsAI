@@ -20,6 +20,8 @@ import { AgentRunMetricsService } from '../action-tracking/agent-run-metrics.ser
 import { generateUlid } from '../utils/ulid';
 import { SkillsService } from '../skills/skills.service';
 import { EngineRouter } from './engines/engine.router';
+import { AgentLlmValidationError, findLegacyLlmFields, parseAgentLlmOrThrow } from './dto/agent-llm.schema';
+import type { LlmRequestConfig } from '../ai/providers/llm-types';
 
 @ApiTags('Agent')
 @Controller('agent')
@@ -63,6 +65,18 @@ export class AgentController {
     @Body() body: AgentChatRequest,
     @Query('format') format: 'sse' | 'vercel-ai' = 'sse',
   ): Promise<void> {
+    let normalizedLlm: LlmRequestConfig | undefined;
+    try {
+      normalizedLlm = this.validateAndNormalizeLlm(body);
+    } catch (error) {
+      const llmError = this.toLlmValidationError(error);
+      if (llmError) {
+        res.status(400).json(llmError);
+        return;
+      }
+      throw error;
+    }
+
     const streamStartedAt = Date.now();
     const resolvedUserId = (req.user as { id?: string } | undefined)?.id ?? body.userId;
     const hasMessages = Array.isArray(body?.messages) && body.messages.length > 0;
@@ -115,6 +129,7 @@ export class AgentController {
         ...body,
         context: sanitizedContext,
         userId: resolvedUserId,
+        llm: normalizedLlm,
       };
 
       if (this.skillParserEnabled && this.skillsService && resolvedUserId) {
@@ -149,7 +164,7 @@ export class AgentController {
             const handled = await this.executeSkillIntentDirectly({
               res,
               format,
-              runRequest: body,
+              runRequest: preparedRequest,
               userId: resolvedUserId,
               parsedIntent,
             });
@@ -275,6 +290,7 @@ export class AgentController {
     const userId = (req.user as { id?: string } | undefined)?.id ?? body.userId;
 
     try {
+      const normalizedLlm = this.validateAndNormalizeLlm(body);
       const result = await this.engineRouter.run(
         body.agentId,
         body.operation,
@@ -288,6 +304,7 @@ export class AgentController {
           intent: body.intent,
           relationshipMix: body.relationshipMix,
           timeBudgetMinutes: body.timeBudgetMinutes,
+          llm: normalizedLlm,
         }
       );
 
@@ -462,6 +479,7 @@ export class AgentController {
         userId: input.userId,
         conversationId: input.runRequest.conversationId,
         sessionId: input.runRequest.sessionId,
+        llm: input.runRequest.llm,
       },
     );
 
@@ -691,6 +709,41 @@ export class AgentController {
     return value !== null && typeof value === 'object' && !Array.isArray(value);
   }
 
+  private validateAndNormalizeLlm(body: unknown): LlmRequestConfig | undefined {
+    const legacyFields = findLegacyLlmFields(body);
+    if (legacyFields.length > 0) {
+      throw new AgentLlmValidationError(
+        'invalid_llm_request',
+        `Legacy LLM fields are no longer supported: ${legacyFields.join(', ')}. Use llm.* fields instead.`,
+        { legacyFields },
+      );
+    }
+
+    if (!this.isRecord(body) || body.llm === undefined) {
+      return undefined;
+    }
+
+    return parseAgentLlmOrThrow(body);
+  }
+
+  private toLlmValidationError(error: unknown):
+    | {
+      code: 'invalid_llm_request' | 'unsupported_llm_provider';
+      message: string;
+      details?: unknown;
+    }
+    | null {
+    if (!(error instanceof AgentLlmValidationError)) {
+      return null;
+    }
+
+    return {
+      code: error.code,
+      message: error.message,
+      details: error.details,
+    };
+  }
+
   private mapRunError(error: unknown): {
     statusCode: number;
     body: {
@@ -700,6 +753,18 @@ export class AgentController {
       retryable?: boolean;
     };
   } {
+    if (error instanceof AgentLlmValidationError) {
+      return {
+        statusCode: HttpStatus.BAD_REQUEST,
+        body: {
+          code: error.code,
+          message: error.message,
+          details: error.details,
+          retryable: false,
+        },
+      };
+    }
+
     if (error instanceof AgentRuntimeError) {
       return {
         statusCode: error.statusCode,

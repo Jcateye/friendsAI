@@ -95,11 +95,11 @@ describe('WeeklyReportService', () => {
       providers: [
         WeeklyReportService,
         {
-          provide: getRepositoryToken(ActionOutcomeLog),
+          provide: getRepositoryToken(ActionOutcomeLog, 'v3'),
           useValue: logRepo,
         },
         {
-          provide: getRepositoryToken(WeeklyReportCache),
+          provide: getRepositoryToken(WeeklyReportCache, 'v3'),
           useValue: cacheRepo,
         },
       ],

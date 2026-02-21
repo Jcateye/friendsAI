@@ -33,9 +33,19 @@
     // 允许业务透传其它上下文字段
     [key: string]: unknown;
   };
-  model?: string;
-  temperature?: number;
-  maxTokens?: number;
+  llm?: {
+    provider: 'openai' | 'claude' | 'gemini' | 'openai-compatible';
+    model: string;
+    temperature?: number;
+    maxOutputTokens?: number;
+    topP?: number;
+    topK?: number;
+    stopSequences?: string[];
+    seed?: number;
+    presencePenalty?: number;
+    frequencyPenalty?: number;
+    providerOptions?: Record<string, Record<string, unknown>>;
+  };
   userId?: string;
   conversationId?: string;
   sessionId?: string;
@@ -43,6 +53,10 @@
 ```
 
 **响应**: SSE 流式事件（agent.start, agent.delta, agent.message, tool.state, agent.end）
+
+**兼容约束**:
+- 顶层旧字段 `model`、`temperature`、`maxTokens`、`max_tokens` 已下线。
+- 这些字段若出现在 `/v1/agent/chat` 或 `/v1/agent/run` 请求体中，会返回 `400 invalid_llm_request`。
 
 **`context.composer` 约定**:
 - 用于承载前端聊天输入区（工具、多媒体、模式）元信息，仅透传元数据，不上传二进制内容。
@@ -89,6 +103,19 @@
     useCache?: boolean;
     forceRefresh?: boolean;
   };
+  llm?: {
+    provider: 'openai' | 'claude' | 'gemini' | 'openai-compatible';
+    model: string;
+    temperature?: number;
+    maxOutputTokens?: number;
+    topP?: number;
+    topK?: number;
+    stopSequences?: string[];
+    seed?: number;
+    presencePenalty?: number;
+    frequencyPenalty?: number;
+    providerOptions?: Record<string, Record<string, unknown>>;
+  };
   userId?: string;
   conversationId?: string;
   sessionId?: string;
@@ -132,6 +159,4 @@
 - `GET /action-panel/dashboard` → `agentId: 'network_action'`
 
 所有 legacy 端点保持响应格式不变，确保向后兼容。
-
-
 

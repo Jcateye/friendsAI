@@ -117,6 +117,8 @@ describe('SnapshotService', () => {
     });
 
     it('should bypass cache when forceRefresh is true', async () => {
+      const findBySourceHashSpy = jest.spyOn(repository, 'findBySourceHash').mockResolvedValue(null);
+
       const params = {
         agentId: 'test-agent',
         operation: 'test-operation',
@@ -131,7 +133,7 @@ describe('SnapshotService', () => {
 
       expect(result.snapshot).toBeNull();
       expect(result.cached).toBe(false);
-      expect(repository.findBySourceHash).not.toHaveBeenCalled();
+      expect(findBySourceHashSpy).not.toHaveBeenCalled();
     });
 
     it('should handle snapshot without expiresAt', async () => {
@@ -335,5 +337,4 @@ describe('SnapshotService', () => {
     });
   });
 });
-
 
