@@ -1,5 +1,5 @@
 {
-  "version": "2.7",
+  "version": "2.8",
   "children": [
     {
       "type": "frame",
@@ -201,6 +201,115 @@
                       "padding": 12,
                       "children": [
                         {
+                          "type": "frame",
+                          "id": "th1nkExp",
+                          "name": "thinkingProcessExpanded",
+                          "width": "fill_container",
+                          "fill": "#F0EFEC",
+                          "cornerRadius": 10,
+                          "layout": "vertical",
+                          "gap": 8,
+                          "padding": 12,
+                          "children": [
+                            {
+                              "type": "frame",
+                              "id": "th1nkHdrExp",
+                              "name": "thinkingHeader",
+                              "width": "fill_container",
+                              "justifyContent": "space_between",
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "frame",
+                                  "id": "th1nkLftExp",
+                                  "name": "thinkingLeft",
+                                  "gap": 8,
+                                  "alignItems": "center",
+                                  "children": [
+                                    {
+                                      "type": "icon_font",
+                                      "id": "th1nkIcoExp",
+                                      "name": "brainIcon",
+                                      "width": 14,
+                                      "height": 14,
+                                      "iconFontName": "brain",
+                                      "iconFontFamily": "lucide",
+                                      "fill": "#6B6B6B"
+                                    },
+                                    {
+                                      "type": "text",
+                                      "id": "th1nkTxtExp",
+                                      "name": "thinkingTitle",
+                                      "fill": "#6B6B6B",
+                                      "content": "思考过程",
+                                      "fontFamily": "Plus Jakarta Sans",
+                                      "fontSize": 12,
+                                      "fontWeight": "600"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "icon_font",
+                                  "id": "th1nkArrExp",
+                                  "name": "chevronUp",
+                                  "width": 14,
+                                  "height": 14,
+                                  "iconFontName": "chevron-up",
+                                  "iconFontFamily": "lucide",
+                                  "fill": "#6B6B6B"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "th1nkContentExp",
+                              "name": "thinkingExpandedContent",
+                              "opacity": 0.8,
+                              "width": "fill_container",
+                              "layout": "vertical",
+                              "gap": 6,
+                              "padding": [
+                                0,
+                                0,
+                                0,
+                                22
+                              ],
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "th1nkL1Exp",
+                                  "name": "line1",
+                                  "fill": "#6B6B6B",
+                                  "content": "识别意图：用户需要发送进度跟进消息",
+                                  "fontFamily": "Plus Jakarta Sans",
+                                  "fontSize": 12,
+                                  "fontWeight": "normal"
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "th1nkL2Exp",
+                                  "name": "line2",
+                                  "fill": "#6B6B6B",
+                                  "content": "检索模板：查找飞书城中的常用话术模板...",
+                                  "fontFamily": "Plus Jakarta Sans",
+                                  "fontSize": 12,
+                                  "fontWeight": "normal"
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "th1nkL3Exp",
+                                  "name": "line3",
+                                  "fill": "#6B6B6B",
+                                  "content": "生成引导：请求用户选择合适的模板以继续",
+                                  "fontFamily": "Plus Jakarta Sans",
+                                  "fontSize": 12,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
                           "type": "text",
                           "id": "NpSwO",
                           "name": "aiText",
@@ -310,6 +419,68 @@
                       "layout": "vertical",
                       "gap": 10,
                       "children": [
+                        {
+                          "type": "frame",
+                          "id": "th1nk",
+                          "name": "thinkingProcess",
+                          "width": "fill_container",
+                          "fill": "#F0EFEC",
+                          "cornerRadius": 10,
+                          "layout": "vertical",
+                          "gap": 8,
+                          "padding": 12,
+                          "children": [
+                            {
+                              "type": "frame",
+                              "id": "th1nkHdr",
+                              "name": "thinkingHeader",
+                              "width": "fill_container",
+                              "justifyContent": "space_between",
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "frame",
+                                  "id": "th1nkLft",
+                                  "name": "thinkingLeft",
+                                  "gap": 8,
+                                  "alignItems": "center",
+                                  "children": [
+                                    {
+                                      "type": "icon_font",
+                                      "id": "th1nkIco",
+                                      "name": "brainIcon",
+                                      "width": 14,
+                                      "height": 14,
+                                      "iconFontName": "brain",
+                                      "iconFontFamily": "lucide",
+                                      "fill": "#6B6B6B"
+                                    },
+                                    {
+                                      "type": "text",
+                                      "id": "th1nkTxt",
+                                      "name": "thinkingTitle",
+                                      "fill": "#6B6B6B",
+                                      "content": "思考过程（已折叠）",
+                                      "fontFamily": "Plus Jakarta Sans",
+                                      "fontSize": 12,
+                                      "fontWeight": "600"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "icon_font",
+                                  "id": "th1nkArr",
+                                  "name": "chevronDown",
+                                  "width": 14,
+                                  "height": 14,
+                                  "iconFontName": "chevron-down",
+                                  "iconFontFamily": "lucide",
+                                  "fill": "#6B6B6B"
+                                }
+                              ]
+                            }
+                          ]
+                        },
                         {
                           "type": "frame",
                           "id": "Ouuij",
@@ -799,6 +970,115 @@
                       "layout": "vertical",
                       "padding": 12,
                       "children": [
+                        {
+                          "type": "frame",
+                          "id": "ICF7r",
+                          "name": "thinkingProcessExpanded",
+                          "width": "fill_container",
+                          "fill": "#F0EFEC",
+                          "cornerRadius": 10,
+                          "layout": "vertical",
+                          "gap": 8,
+                          "padding": 12,
+                          "children": [
+                            {
+                              "type": "frame",
+                              "id": "jXgTr",
+                              "name": "thinkingHeader",
+                              "width": "fill_container",
+                              "justifyContent": "space_between",
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "frame",
+                                  "id": "1T3D1",
+                                  "name": "thinkingLeft",
+                                  "gap": 8,
+                                  "alignItems": "center",
+                                  "children": [
+                                    {
+                                      "type": "icon_font",
+                                      "id": "0N3j4",
+                                      "name": "brainIcon",
+                                      "width": 14,
+                                      "height": 14,
+                                      "iconFontName": "brain",
+                                      "iconFontFamily": "lucide",
+                                      "fill": "#6B6B6B"
+                                    },
+                                    {
+                                      "type": "text",
+                                      "id": "zDGOx",
+                                      "name": "thinkingTitle",
+                                      "fill": "#6B6B6B",
+                                      "content": "思考过程",
+                                      "fontFamily": "Plus Jakarta Sans",
+                                      "fontSize": 12,
+                                      "fontWeight": "600"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "icon_font",
+                                  "id": "fsCs0",
+                                  "name": "chevronUp",
+                                  "width": 14,
+                                  "height": 14,
+                                  "iconFontName": "chevron-up",
+                                  "iconFontFamily": "lucide",
+                                  "fill": "#6B6B6B"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "eBFD0",
+                              "name": "thinkingExpandedContent",
+                              "opacity": 0.8,
+                              "width": "fill_container",
+                              "layout": "vertical",
+                              "gap": 6,
+                              "padding": [
+                                0,
+                                0,
+                                0,
+                                22
+                              ],
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "RLa9p",
+                                  "name": "line1",
+                                  "fill": "#6B6B6B",
+                                  "content": "识别意图：用户需要发送进度跟进消息",
+                                  "fontFamily": "Plus Jakarta Sans",
+                                  "fontSize": 12,
+                                  "fontWeight": "normal"
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "Znqyz",
+                                  "name": "line2",
+                                  "fill": "#6B6B6B",
+                                  "content": "检索模板：查找飞书城中的常用话术模板...",
+                                  "fontFamily": "Plus Jakarta Sans",
+                                  "fontSize": 12,
+                                  "fontWeight": "normal"
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "sAjtD",
+                                  "name": "line3",
+                                  "fill": "#6B6B6B",
+                                  "content": "生成引导：请求用户选择合适的模板以继续",
+                                  "fontFamily": "Plus Jakarta Sans",
+                                  "fontSize": 12,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            }
+                          ]
+                        },
                         {
                           "type": "text",
                           "id": "ThxSj",
