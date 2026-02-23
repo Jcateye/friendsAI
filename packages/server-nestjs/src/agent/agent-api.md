@@ -6,6 +6,7 @@
   - `POST /v1/agent/chat` —— 流式聊天（SSE / Vercel AI 格式）
   - `POST /v1/agent/run` —— 统一的一次性 Agent 执行入口
   - `GET  /v1/agent/messages` —— 查询某个用户+会话的历史 Agent 消息
+  - `GET  /v1/agent/runs/:runId/timeline` —— 查询某次 run 的完整时序轨迹（思维链摘要 + 工具链）
   - `GET  /v1/agent/list` —— 查询所有可用 Agent 的“名片”列表
 
 下面我按“从大到小”的结构来写：先说明接口目的，再讲请求结构、字段含义，最后给可直接运行的调用示例。
@@ -185,6 +186,50 @@ data: {"type":"text-end","id":"..."}
 data: {"type":"finish","finishReason":"stop"}
 data: [DONE]
 ```
+
+---
+
+
+## `GET /v1/agent/runs/:runId/timeline` —— Run 时序轨迹查询
+
+### 1. 作用
+
+- **用途**：返回某个 `runId` 的完整时序事件列表，供前端构建时间轴可视化，建立用户信任与排障依据。
+- **覆盖范围**：`agent.start`、`agent.delta`、`agent.message`、`tool.state`、`context.patch`、`agent.end`。
+
+### 2. 请求
+
+- **URL**：`GET http://localhost:3000/v1/agent/runs/:runId/timeline`
+
+### 3. 成功响应
+
+```json
+{
+  "runId": "01JXYZABCDEF",
+  "agentId": "chat_conversation",
+  "status": "succeeded",
+  "startedAt": "2026-02-22T09:00:00.000Z",
+  "endedAt": "2026-02-22T09:00:03.000Z",
+  "events": [
+    {
+      "seq": 1,
+      "event": "agent.start",
+      "at": "2026-02-22T09:00:00.010Z",
+      "payload": { "runId": "01JXYZABCDEF" }
+    },
+    {
+      "seq": 2,
+      "event": "tool.state",
+      "at": "2026-02-22T09:00:00.500Z",
+      "payload": { "toolId": "tool_1", "status": "running" }
+    }
+  ]
+}
+```
+
+### 4. 错误响应
+
+- `404 run_timeline_not_found`：`runId` 不存在或超出服务端保留窗口。
 
 ---
 

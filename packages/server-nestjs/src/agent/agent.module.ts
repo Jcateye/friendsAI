@@ -16,6 +16,7 @@ import {
 import { AgentController } from './agent.controller';
 import { AgentOrchestrator } from './agent.orchestrator';
 import { AgentMessageStore } from './agent-message.store';
+import { AgentRunTraceStore } from './agent-run-trace.store';
 import { ContextBuilder } from './context-builder';
 import { ContextBuilderService } from './context-builder.service';
 import { SnapshotService } from './snapshots/snapshot.service';
@@ -72,6 +73,7 @@ import { EngineRouter } from './engines/engine.router';
   providers: [
     AgentOrchestrator,
     AgentMessageStore,
+    AgentRunTraceStore,
     ContextBuilder,
     ContextBuilderService,
     SnapshotService,
@@ -105,6 +107,7 @@ import { EngineRouter } from './engines/engine.router';
   exports: [
     AgentOrchestrator,
     AgentMessageStore,
+    AgentRunTraceStore,
     ContextBuilder,
     ContextBuilderService,
     SnapshotService,
