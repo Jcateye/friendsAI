@@ -46,6 +46,24 @@ export interface AuthResponse {
   };
 }
 
+// ==================== Agent LLM ====================
+
+export type AgentLlmProvider = 'openai' | 'claude' | 'gemini' | 'openai-compatible';
+
+export interface AgentLlmRequest {
+  provider: AgentLlmProvider | 'anthropic' | 'google';
+  model: string;
+  temperature?: number;
+  maxOutputTokens?: number;
+  topP?: number;
+  topK?: number;
+  stopSequences?: string[];
+  seed?: number;
+  presencePenalty?: number;
+  frequencyPenalty?: number;
+  providerOptions?: Record<string, Record<string, unknown>>;
+}
+
 // ==================== Contact ====================
 
 export interface Contact {
@@ -191,7 +209,15 @@ export interface CreateEventRequest {
   title: string;
   description?: string;
   contactId: string;
+  eventDate?: string;
+  sourceConversationId?: string;
   details?: Record<string, any>;
+}
+
+export interface CreateContactFactRequest {
+  content: string;
+  metadata?: Record<string, any>;
+  sourceConversationId?: string;
 }
 
 // ==================== Briefing ====================

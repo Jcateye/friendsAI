@@ -43,6 +43,9 @@ import { AgentRuntimeExecutor } from './runtime/agent-runtime-executor.service';
 import { AgentListService } from './agent-list.service';
 import { AgentDefinitionReleaseRule, AgentDefinitionVersion } from '../v3-entities';
 import { SkillsModule } from '../skills/skills.module';
+import { LocalEngine } from './engines/local.engine';
+import { EnginePolicyResolver } from './engines/engine-policy.resolver';
+import { EngineRouter } from './engines/engine.router';
 
 @Module({
   imports: [
@@ -92,6 +95,10 @@ import { SkillsModule } from '../skills/skills.module';
     NetworkActionService,
     // Runtime Executor
     AgentRuntimeExecutor,
+    // Engines
+    LocalEngine,
+    EnginePolicyResolver,
+    EngineRouter,
     // Agent List Service
     AgentListService,
   ],
@@ -118,6 +125,8 @@ import { SkillsModule } from '../skills/skills.module';
     NetworkActionService,
     // Runtime Executor exports
     AgentRuntimeExecutor,
+    // Engine routing exports
+    EngineRouter,
   ],
 })
 export class AgentModule {}

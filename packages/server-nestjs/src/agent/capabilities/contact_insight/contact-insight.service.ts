@@ -3,6 +3,7 @@ import { AgentRuntimeExecutor } from '../../runtime/agent-runtime-executor.servi
 import { SnapshotService } from '../../snapshots/snapshot.service';
 import { ContactInsightContextBuilder } from './contact-insight-context-builder.service';
 import * as crypto from 'crypto';
+import type { LlmRequestConfig } from '../../../ai/providers/llm-types';
 
 export interface ContactInsightInput {
   userId: string;
@@ -81,7 +82,7 @@ export class ContactInsightService {
    */
   async generate(
     input: ContactInsightInput,
-    options: { forceRefresh?: boolean } = {}
+    options: { forceRefresh?: boolean; llm?: LlmRequestConfig } = {}
   ): Promise<ContactInsightOutput> {
     const { userId, contactId, depth = 'standard', intent, relationshipMix, timeBudgetMinutes } = input;
 
@@ -137,7 +138,12 @@ export class ContactInsightService {
         forceRefresh: options.forceRefresh,
         userId,
         skipServiceRouting: true, // 跳过服务路由，直接使用通用流程
-        maxTokens: 4096,
+        llm: options.llm
+          ? {
+            ...options.llm,
+            maxOutputTokens: options.llm.maxOutputTokens ?? 4096,
+          }
+          : undefined,
         intent,
         relationshipMix,
         timeBudgetMinutes,

@@ -15,6 +15,8 @@ import { ActionTrackingService } from '../../action-tracking/action-tracking.ser
 import type { ContactInsightOutput } from '../capabilities/contact_insight/contact-insight.types';
 import type { NetworkActionOutput } from '../capabilities/network_action/network-action.types';
 import { AgentRuntimeError } from '../errors/agent-runtime.error';
+import type { LlmRequestConfig } from '../../ai/providers/llm-types';
+import { LlmCallError, LlmConfigurationError } from '../../ai/providers/llm-config.types';
 
 /**
  * Agent 运行结果
@@ -75,9 +77,7 @@ export class AgentRuntimeExecutor {
       userId?: string;
       conversationId?: string;
       sessionId?: string;
-      model?: string;
-      temperature?: number;
-      maxTokens?: number;
+      llm?: LlmRequestConfig;
       skipServiceRouting?: boolean; // 跳过服务路由，直接使用通用流程（用于避免循环依赖）
       intent?: 'maintain' | 'grow' | 'repair';
       relationshipMix?: 'business' | 'friend' | 'mixed';
@@ -183,9 +183,7 @@ export class AgentRuntimeExecutor {
     let aiResponse: string;
     try {
       const stream = await this.aiService.streamChat(messages, {
-        model: options?.model,
-        temperature: options?.temperature,
-        maxTokens: options?.maxTokens,
+        llm: options?.llm,
       });
 
       // 收集流式响应
@@ -198,8 +196,28 @@ export class AgentRuntimeExecutor {
       }
       aiResponse = fullResponse;
     } catch (error) {
+      if (error instanceof LlmConfigurationError) {
+        throw new AgentRuntimeError({
+          code: error.code,
+          message: error.message,
+          statusCode: error.code === 'unsupported_llm_provider' ? 400 : 500,
+          details: error,
+          retryable: false,
+        });
+      }
+
+      if (error instanceof LlmCallError) {
+        throw new AgentRuntimeError({
+          code: 'llm_call_failed',
+          message: error.message,
+          statusCode: 502,
+          details: error,
+          retryable: true,
+        });
+      }
+
       throw new AgentRuntimeError({
-        code: 'ai_provider_error',
+        code: 'llm_call_failed',
         message: `AI service error: ${error instanceof Error ? error.message : String(error)}`,
         statusCode: 502,
         details: error,
@@ -242,6 +260,9 @@ export class AgentRuntimeExecutor {
         }));
       }
     }
+    if (agentId === 'contact_insight') {
+      parsedOutput = this.normalizeContactInsightOutput(parsedOutput);
+    }
 
     // 8. 验证输出
     const validationResult = await this.outputValidator.validate(bundle, parsedOutput);
@@ -269,7 +290,7 @@ export class AgentRuntimeExecutor {
           userId: options?.userId ?? null,
           sourceHash,
           promptVersion,
-          model: options?.model ?? null,
+          model: options?.llm?.model ?? null,
           input: context as Record<string, unknown>,
           output: parsedOutput as Record<string, unknown>,
           ttlSeconds,
@@ -309,6 +330,7 @@ export class AgentRuntimeExecutor {
       forceRefresh?: boolean;
       userId?: string;
       conversationId?: string;
+      llm?: LlmRequestConfig;
     }
   ): Promise<AgentExecutionResult> {
     const runId = generateUlid();
@@ -382,7 +404,10 @@ export class AgentRuntimeExecutor {
         userId,
         conversationId,
       },
-      { forceRefresh: options?.forceRefresh }
+      {
+        forceRefresh: options?.forceRefresh,
+        llm: options?.llm,
+      }
     );
 
     return {
@@ -401,6 +426,7 @@ export class AgentRuntimeExecutor {
       useCache?: boolean;
       forceRefresh?: boolean;
       userId?: string;
+      llm?: LlmRequestConfig;
       intent?: 'maintain' | 'grow' | 'repair';
       relationshipMix?: 'business' | 'friend' | 'mixed';
       timeBudgetMinutes?: number;
@@ -442,7 +468,10 @@ export class AgentRuntimeExecutor {
         relationshipMix: options?.relationshipMix,
         timeBudgetMinutes: options?.timeBudgetMinutes,
       },
-      { forceRefresh: options?.forceRefresh }
+      {
+        forceRefresh: options?.forceRefresh,
+        llm: options?.llm,
+      }
     );
 
     // 追踪建议展示事件（如果启用）
@@ -577,6 +606,7 @@ export class AgentRuntimeExecutor {
       useCache?: boolean;
       forceRefresh?: boolean;
       userId?: string;
+      llm?: LlmRequestConfig;
     }
   ): Promise<AgentExecutionResult> {
     const runId = generateUlid();
@@ -614,7 +644,10 @@ export class AgentRuntimeExecutor {
           userId,
           conversationId,
         },
-        { forceRefresh: options?.forceRefresh }
+        {
+          forceRefresh: options?.forceRefresh,
+          llm: options?.llm,
+        }
       );
 
       // 检查是否来自缓存
@@ -664,7 +697,10 @@ export class AgentRuntimeExecutor {
           userId,
           contactId,
         },
-        { forceRefresh: options?.forceRefresh }
+        {
+          forceRefresh: options?.forceRefresh,
+          llm: options?.llm,
+        }
       );
 
       // 检查是否来自缓存
@@ -708,6 +744,237 @@ export class AgentRuntimeExecutor {
         statusCode: 400,
       });
     }
+  }
+
+  private normalizeContactInsightOutput(parsedOutput: unknown): Record<string, unknown> {
+    const output = this.asRecord(parsedOutput);
+
+    const normalizeString = (value: unknown, fallback: string, minLength = 0, maxLength = 500): string => {
+      const str = typeof value === 'string' ? value.trim() : '';
+      const candidate = str.length > 0 ? str : fallback;
+      let normalized = candidate.length > maxLength ? candidate.slice(0, maxLength) : candidate;
+      if (normalized.length < minLength) {
+        normalized = `${normalized}。${fallback}`.slice(0, maxLength);
+      }
+      return normalized;
+    };
+
+    const normalizeLevel = (
+      value: unknown,
+      allowed: readonly string[],
+      fallback: string,
+    ): string => {
+      if (typeof value === 'string') {
+        const lowered = value.trim().toLowerCase();
+        if (allowed.includes(lowered)) {
+          return lowered;
+        }
+      }
+      return fallback;
+    };
+
+    const normalizeCitationType = (value: unknown): 'conversation' | 'event' | 'fact' | 'todo' => {
+      if (typeof value !== 'string') {
+        return 'conversation';
+      }
+      const normalized = value.trim().toLowerCase();
+      if (normalized === 'conversation' || normalized === 'event' || normalized === 'fact' || normalized === 'todo') {
+        return normalized;
+      }
+      if (normalized === 'message' || normalized === 'chat') {
+        return 'conversation';
+      }
+      if (normalized === 'task' || normalized === 'action') {
+        return 'todo';
+      }
+      if (normalized === 'profile' || normalized === 'contact') {
+        return 'fact';
+      }
+      return 'conversation';
+    };
+
+    const relationshipSignals = (Array.isArray(output.relationshipSignals) ? output.relationshipSignals : [])
+      .map((item) => {
+        const signal = this.asRecord(item);
+        return {
+          type: normalizeString(signal.type, 'general_signal', 3, 80),
+          description: normalizeString(
+            signal.description,
+            '该联系人近期互动有可观察变化，建议结合上下文继续跟进。',
+            20,
+            500,
+          ),
+          strength: normalizeLevel(signal.strength, ['weak', 'moderate', 'strong'], 'moderate'),
+        };
+      });
+
+    const opportunities = (Array.isArray(output.opportunities) ? output.opportunities : [])
+      .map((item) => {
+        const opportunity = this.asRecord(item);
+        return {
+          title: normalizeString(opportunity.title, '潜在合作机会', 2, 100),
+          description: normalizeString(
+            opportunity.description,
+            '从近期上下文看存在可推进的互动机会，建议尽快设计下一步触达。',
+            20,
+            500,
+          ),
+          priority: normalizeLevel(opportunity.priority, ['low', 'medium', 'high'], 'medium'),
+        };
+      });
+
+    const risks = (Array.isArray(output.risks) ? output.risks : [])
+      .map((item) => {
+        const risk = this.asRecord(item);
+        return {
+          title: normalizeString(risk.title, '关系风险点', 2, 100),
+          description: normalizeString(
+            risk.description,
+            '存在需要关注的关系风险，若长期不处理可能影响后续协作与信任。',
+            20,
+            500,
+          ),
+          severity: normalizeLevel(risk.severity, ['low', 'medium', 'high'], 'medium'),
+        };
+      });
+
+    const suggestedActions = (Array.isArray(output.suggestedActions) ? output.suggestedActions : [])
+      .map((item) => {
+        const action = this.asRecord(item);
+        return {
+          action: normalizeString(action.action, '安排一次简短跟进沟通', 2, 200),
+          reason: normalizeString(
+            action.reason,
+            '该动作可降低关系不确定性并提高后续互动质量，建议尽快执行。',
+            20,
+            500,
+          ),
+          urgency: normalizeLevel(action.urgency ?? action.priority, ['low', 'medium', 'high'], 'medium'),
+        };
+      });
+
+    const openingLines = (Array.isArray(output.openingLines) ? output.openingLines : [])
+      .map((line) =>
+        normalizeString(
+          line,
+          '最近想到我们上次聊到的话题，想和你同步一个新的进展。',
+          10,
+          200,
+        ),
+      )
+      .filter((line) => line.length >= 10);
+    if (openingLines.length === 0) {
+      openingLines.push('最近想到我们上次聊到的话题，想和你同步一个新的进展。');
+    }
+
+    const citations = (Array.isArray(output.citations) ? output.citations : [])
+      .map((item) => {
+        const citation = this.asRecord(item);
+        const reference = normalizeString(citation.reference ?? citation.source, '上下文来源', 2, 255);
+        return {
+          source: normalizeString(citation.source ?? reference, '上下文来源', 2, 255),
+          type: normalizeCitationType(citation.type),
+          reference,
+        };
+      });
+
+    const sourceRefs = (Array.isArray(output.sourceRefs) ? output.sourceRefs : [])
+      .map((item) => {
+        const sourceRef = this.asRecord(item);
+        return {
+          type: normalizeCitationType(sourceRef.type),
+          reference: normalizeString(sourceRef.reference, '上下文来源', 2, 255),
+        };
+      });
+    if (sourceRefs.length === 0) {
+      for (const citation of citations) {
+        sourceRefs.push({
+          type: citation.type,
+          reference: citation.reference,
+        });
+      }
+    }
+
+    const evidenceChains = (Array.isArray(output.evidenceChains) ? output.evidenceChains : [])
+      .map((item) => {
+        const chain = this.asRecord(item);
+        const sourceType = normalizeCitationType(chain.sourceType ?? chain.type);
+        const sourceRef = normalizeString(chain.sourceRef ?? chain.reference, '上下文来源', 2, 255);
+        return {
+          summary: normalizeString(chain.summary, '基于已有互动记录提取的证据摘要。', 3, 200),
+          sourceType,
+          sourceRef,
+        };
+      });
+    if (evidenceChains.length === 0) {
+      for (const citation of citations.slice(0, 5)) {
+        evidenceChains.push({
+          summary: normalizeString(citation.reference, '基于已有互动记录提取的证据摘要。', 3, 200),
+          sourceType: citation.type,
+          sourceRef: citation.reference,
+        });
+      }
+    }
+
+    const confidenceRaw = typeof output.confidence === 'number' ? output.confidence : 0.5;
+    const confidence = Number(Math.max(0, Math.min(1, confidenceRaw)).toFixed(2));
+
+    const priorityScoreRaw =
+      typeof output.priorityScore === 'number'
+        ? output.priorityScore
+        : typeof output.priority_score === 'number'
+          ? output.priority_score
+          : 50;
+    const priorityScore = Number(Math.max(0, Math.min(100, priorityScoreRaw)).toFixed(1));
+
+    const reasonTags = (Array.isArray(output.reasonTags) ? output.reasonTags : Array.isArray(output.reason_tags) ? output.reason_tags : [])
+      .filter((tag): tag is string => typeof tag === 'string' && tag.trim().length > 0)
+      .map((tag) => tag.trim());
+
+    const relationshipRiskLevel = normalizeLevel(
+      output.relationshipRiskLevel ?? output.relationship_risk_level,
+      ['low', 'medium', 'high'],
+      'medium',
+    );
+
+    const profileSummary = normalizeString(
+      output.profileSummary,
+      '该联系人在近期互动中呈现稳定关系基础，存在进一步深化连接与协作的空间，建议结合具体情境推进沟通。',
+      50,
+      1000,
+    );
+
+    const normalized: Record<string, unknown> = {
+      profileSummary,
+      relationshipSignals,
+      opportunities,
+      risks,
+      suggestedActions,
+      openingLines,
+      citations,
+      confidence,
+      sourceRefs,
+      evidenceChains,
+      priorityScore,
+      reasonTags,
+      relationshipRiskLevel,
+    };
+
+    if (typeof output.sourceHash === 'string' && output.sourceHash.trim().length > 0) {
+      normalized.sourceHash = output.sourceHash.trim();
+    }
+    if (typeof output.generatedAt === 'number' && Number.isFinite(output.generatedAt)) {
+      normalized.generatedAt = output.generatedAt;
+    }
+
+    return normalized;
+  }
+
+  private asRecord(value: unknown): Record<string, unknown> {
+    if (value && typeof value === 'object' && !Array.isArray(value)) {
+      return value as Record<string, unknown>;
+    }
+    return {};
   }
 
   /**

@@ -1,6 +1,6 @@
 import { ContextBuilder } from './context-builder';
 import { AgentChatRequest } from './agent.types';
-import type OpenAI from 'openai';
+import type { LlmMessage, LlmToolCall } from '../ai/providers/llm-types';
 
 describe('ContextBuilder', () => {
   let contextBuilder: ContextBuilder;
@@ -165,7 +165,7 @@ describe('ContextBuilder', () => {
 
   describe('appendToolResult', () => {
     it('should append tool result message to messages array', () => {
-      const messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
+      const messages: LlmMessage[] = [
         { role: 'system', content: 'You are helpful' },
         { role: 'user', content: 'Send email' },
       ];
@@ -181,6 +181,7 @@ describe('ContextBuilder', () => {
       expect(result[2]).toEqual({
         role: 'tool',
         tool_call_id: 'call_123',
+        name: 'send_email',
         content: '{"success":true,"messageId":"msg_456"}',
       });
       // Original array should not be mutated
@@ -188,7 +189,7 @@ describe('ContextBuilder', () => {
     });
 
     it('should handle complex result objects', () => {
-      const messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [];
+      const messages: LlmMessage[] = [];
 
       const complexResult = {
         data: { users: [{ name: 'Alice' }, { name: 'Bob' }] },
@@ -205,6 +206,7 @@ describe('ContextBuilder', () => {
       expect(result[0]).toEqual({
         role: 'tool',
         tool_call_id: 'call_999',
+        name: 'fetch_users',
         content: JSON.stringify(complexResult),
       });
     });
@@ -212,11 +214,11 @@ describe('ContextBuilder', () => {
 
   describe('appendAssistantToolCall', () => {
     it('should append assistant tool call message', () => {
-      const messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
+      const messages: LlmMessage[] = [
         { role: 'user', content: 'Send email' },
       ];
 
-      const toolCalls: OpenAI.Chat.Completions.ChatCompletionMessageToolCall[] = [
+      const toolCalls: LlmToolCall[] = [
         {
           id: 'call_123',
           type: 'function',
@@ -239,9 +241,9 @@ describe('ContextBuilder', () => {
     });
 
     it('should handle multiple tool calls', () => {
-      const messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [];
+      const messages: LlmMessage[] = [];
 
-      const toolCalls: OpenAI.Chat.Completions.ChatCompletionMessageToolCall[] = [
+      const toolCalls: LlmToolCall[] = [
         {
           id: 'call_1',
           type: 'function',
@@ -300,7 +302,7 @@ describe('ContextBuilder', () => {
 
   describe('trimHistory', () => {
     it('should trim messages when exceeds maxLength', () => {
-      const messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
+      const messages: LlmMessage[] = [
         { role: 'system', content: 'System' },
         { role: 'user', content: 'Message 1' },
         { role: 'assistant', content: 'Response 1' },
@@ -319,7 +321,7 @@ describe('ContextBuilder', () => {
     });
 
     it('should not trim when within maxLength', () => {
-      const messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
+      const messages: LlmMessage[] = [
         { role: 'system', content: 'System' },
         { role: 'user', content: 'Message 1' },
         { role: 'assistant', content: 'Response 1' },
@@ -332,7 +334,7 @@ describe('ContextBuilder', () => {
     });
 
     it('should preserve all system messages when trimming', () => {
-      const messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
+      const messages: LlmMessage[] = [
         { role: 'system', content: 'System 1' },
         { role: 'system', content: 'System 2' },
         { role: 'user', content: 'Message 1' },
@@ -348,7 +350,7 @@ describe('ContextBuilder', () => {
     });
 
     it('should use default maxLength when not specified', () => {
-      const longMessages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = Array.from(
+      const longMessages: LlmMessage[] = Array.from(
         { length: 60 },
         (_, i) => ({
           role: i % 2 === 0 ? ('user' as const) : ('assistant' as const),

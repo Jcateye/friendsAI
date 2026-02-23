@@ -1,5 +1,4 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { NotFoundException, BadRequestException } from '@nestjs/common';
 import { AgentRuntimeExecutor } from './agent-runtime-executor.service';
 import { AgentDefinitionRegistry } from './agent-definition-registry.service';
 import { PromptTemplateRenderer } from './prompt-template-renderer.service';
@@ -166,6 +165,51 @@ describe('AgentRuntimeExecutor', () => {
       });
     });
 
+    it('should pass llm config to AiService.streamChat', async () => {
+      const agentId = 'test-agent';
+      const input = { message: 'Hello' };
+
+      registry.loadDefinition.mockResolvedValue(mockBundle);
+      templateRenderer.render.mockReturnValue({
+        system: 'You are a helpful assistant.',
+        user: 'User: Hello',
+        warnings: [],
+      });
+
+      const mockStream = (async function* () {
+        yield { choices: [{ delta: { content: '{"response":"Hello!","confidence":0.95}' } }] };
+      })();
+
+      aiService.streamChat.mockResolvedValue(mockStream as any);
+      outputValidator.validate.mockReturnValue({ valid: true });
+      snapshotService.findSnapshot.mockResolvedValue({
+        snapshot: null,
+        cached: false,
+      });
+      snapshotService.createSnapshot.mockResolvedValue({
+        id: 'snapshot-123',
+      } as any);
+
+      const llm = {
+        provider: 'gemini' as const,
+        model: 'gemini-2.0-flash',
+        providerOptions: {
+          google: {
+            safetySettings: [{ category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' }],
+          },
+        },
+      };
+
+      await service.execute(agentId, null, input, { llm });
+
+      expect(aiService.streamChat).toHaveBeenCalledWith(
+        expect.any(Array),
+        expect.objectContaining({
+          llm,
+        }),
+      );
+    });
+
     it('should return cached result when available', async () => {
       const agentId = 'test-agent';
       const input = { message: 'Hello' };
@@ -220,17 +264,17 @@ describe('AgentRuntimeExecutor', () => {
       expect(snapshotService.findSnapshot).not.toHaveBeenCalled();
     });
 
-    it('should throw NotFoundException for non-existent agent', async () => {
+    it('should return agent_not_found runtime error for non-existent agent', async () => {
       const agentId = 'non-existent';
 
-      registry.loadDefinition.mockRejectedValue(
-        new NotFoundException('Agent definition not found')
-      );
+      registry.loadDefinition.mockRejectedValue(new Error('Agent definition not found'));
 
-      await expect(service.execute(agentId, null, {})).rejects.toThrow(NotFoundException);
+      await expect(service.execute(agentId, null, {})).rejects.toMatchObject({
+        code: 'agent_not_found',
+      });
     });
 
-    it('should validate output and reject invalid results', async () => {
+    it('should return output_validation_failed runtime error for invalid output', async () => {
       const agentId = 'test-agent';
       const input = { message: 'Hello' };
 
@@ -255,7 +299,9 @@ describe('AgentRuntimeExecutor', () => {
         cached: false,
       });
 
-      await expect(service.execute(agentId, null, input)).rejects.toThrow(BadRequestException);
+      await expect(service.execute(agentId, null, input)).rejects.toMatchObject({
+        code: 'output_validation_failed',
+      });
     });
 
     it('should handle non-JSON AI responses', async () => {
@@ -431,8 +477,10 @@ describe('AgentRuntimeExecutor', () => {
       const agentId = 'contact_insight';
       const input = { contactId: 'contact-123' };
 
-      await expect(service.execute(agentId, null, input)).rejects.toThrow(BadRequestException);
-      await expect(service.execute(agentId, null, input)).rejects.toThrow('userId is required');
+      await expect(service.execute(agentId, null, input)).rejects.toMatchObject({
+        code: 'invalid_input',
+        message: 'userId is required',
+      });
     });
   });
 
@@ -492,9 +540,9 @@ describe('AgentRuntimeExecutor', () => {
       const input = { contactId: 'contact-123' };
       const userId = 'user-123';
 
-      await expect(service.execute(agentId, operation, input, { userId })).rejects.toThrow(
-        BadRequestException
-      );
+      await expect(service.execute(agentId, operation, input, { userId })).rejects.toMatchObject({
+        code: 'agent_operation_invalid',
+      });
     });
   });
 

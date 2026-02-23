@@ -2,6 +2,7 @@ import {
   BadRequestException,
   ForbiddenException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -80,9 +81,11 @@ interface ParseDebugInput {
 
 @Injectable()
 export class SkillsService {
+  private readonly logger = new Logger(SkillsService.name);
   private readonly centerEnabled = process.env.SKILL_CENTER_ENABLED !== 'false';
   private readonly parserEnabled = process.env.SKILL_INPUT_PARSER_ENABLED === 'true';
   private readonly dynamicActionsEnabled = process.env.SKILL_DYNAMIC_ACTIONS_ENABLED !== 'false';
+  private catalogSchemaAvailable = true;
 
   constructor(
     @InjectRepository(SkillDefinition, 'v3')
@@ -130,11 +133,40 @@ export class SkillsService {
       };
     }
 
-    const resolved = await this.resolver.resolveCatalog({
-      tenantId,
-      agentScope: options?.agentScope,
-      capability: options?.capability,
-    });
+    if (!this.catalogSchemaAvailable) {
+      return {
+        items: builtin,
+        warnings: ['skill_center_schema_missing'],
+      };
+    }
+
+    let resolved: { items: SkillCatalogItem[]; warnings: string[] };
+    try {
+      resolved = await this.resolver.resolveCatalog({
+        tenantId,
+        agentScope: options?.agentScope,
+        capability: options?.capability,
+      });
+    } catch (error) {
+      if (this.isMissingRelationError(error)) {
+        this.catalogSchemaAvailable = false;
+        this.logger.warn(
+          'Skills tables are missing in DATABASE_URL_V3; falling back to builtin skill catalog until migrations are applied.',
+        );
+        return {
+          items: builtin,
+          warnings: ['skill_center_schema_missing'],
+        };
+      }
+
+      this.logger.warn(
+        `Failed to resolve dynamic skills catalog, fallback to builtin: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      return {
+        items: builtin,
+        warnings: ['skill_center_resolver_error'],
+      };
+    }
 
     const merged = new Map<string, SkillCatalogItem>();
     for (const item of builtin) {
@@ -415,14 +447,26 @@ export class SkillsService {
   ): Promise<ReconcileResult> {
     void userId;
     this.ensureCenterEnabled();
-    const engine = input.engine ?? 'local';
+    const normalizedTenantId = input.tenantId?.trim() || tenantId;
+    const requestedEngine = input.engine;
+    if (requestedEngine && requestedEngine !== 'local' && requestedEngine !== 'openclaw') {
+      throw new BadRequestException('engine must be local or openclaw');
+    }
+    const engine = requestedEngine ?? 'local';
     const agentScope = input.agentScope?.trim() || tenantId;
+    if (!agentScope) {
+      throw new BadRequestException('agentScope is required');
+    }
+    if (!normalizedTenantId) {
+      throw new BadRequestException('tenantId is required');
+    }
+    const capability = input.capability?.trim() || undefined;
 
     return this.loader.reconcile({
-      tenantId: input.tenantId?.trim() || tenantId,
+      tenantId: normalizedTenantId,
       engine,
       agentScope,
-      capability: input.capability,
+      capability,
     });
   }
 
@@ -683,5 +727,24 @@ export class SkillsService {
       return;
     }
     throw new ForbiddenException('skill_parse_debug_forbidden_in_production');
+  }
+
+  private isMissingRelationError(error: unknown): boolean {
+    if (!error || typeof error !== 'object') {
+      return false;
+    }
+
+    const candidate = error as {
+      code?: string;
+      message?: string;
+      driverError?: { code?: string; message?: string };
+    };
+
+    if (candidate.code === '42P01' || candidate.driverError?.code === '42P01') {
+      return true;
+    }
+
+    const message = `${candidate.message ?? ''} ${candidate.driverError?.message ?? ''}`.toLowerCase();
+    return message.includes('relation') && message.includes('does not exist');
   }
 }

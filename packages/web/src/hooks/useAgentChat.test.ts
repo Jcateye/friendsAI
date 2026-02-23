@@ -2,10 +2,10 @@
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
-import { useChat } from 'ai/react';
+import { useChat } from '@ai-sdk/react';
 import { useAgentChat } from './useAgentChat';
 
-vi.mock('ai/react', () => ({
+vi.mock('@ai-sdk/react', () => ({
   useChat: vi.fn(),
 }));
 
@@ -22,21 +22,25 @@ describe('useAgentChat', () => {
   });
 
   it('injects composerContext into /agent/chat request body', async () => {
-    const append = vi.fn();
+    const sendMessage = vi.fn();
 
     let capturedFetch: ((input: RequestInfo | URL, init?: RequestInit) => Promise<Response>) | undefined;
 
     vi.mocked(useChat).mockImplementation((options: any) => {
-      capturedFetch = options.fetch;
+      capturedFetch = options.transport?.fetch;
       return {
         messages: [],
-        append,
+        sendMessage,
         stop: vi.fn(),
-        reload: vi.fn(),
-        input: '',
-        setInput: vi.fn(),
-        isLoading: false,
+        regenerate: vi.fn(),
+        status: 'ready',
         error: undefined,
+        setMessages: vi.fn(),
+        clearError: vi.fn(),
+        resumeStream: vi.fn(),
+        addToolResult: vi.fn(),
+        addToolOutput: vi.fn(),
+        addToolApprovalResponse: vi.fn(),
       } as any;
     });
 
@@ -53,7 +57,7 @@ describe('useAgentChat', () => {
       });
     });
 
-    expect(append).toHaveBeenCalledTimes(1);
+    expect(sendMessage).toHaveBeenCalledTimes(1);
 
     await capturedFetch?.('/v1/agent/chat?format=vercel-ai', {
       method: 'POST',
@@ -82,21 +86,25 @@ describe('useAgentChat', () => {
   });
 
   it('keeps legacy sendMessage(message) signature compatible', async () => {
-    const append = vi.fn();
+    const sendMessage = vi.fn();
 
     let capturedFetch: ((input: RequestInfo | URL, init?: RequestInit) => Promise<Response>) | undefined;
 
     vi.mocked(useChat).mockImplementation((options: any) => {
-      capturedFetch = options.fetch;
+      capturedFetch = options.transport?.fetch;
       return {
         messages: [],
-        append,
+        sendMessage,
         stop: vi.fn(),
-        reload: vi.fn(),
-        input: '',
-        setInput: vi.fn(),
-        isLoading: false,
+        regenerate: vi.fn(),
+        status: 'ready',
         error: undefined,
+        setMessages: vi.fn(),
+        clearError: vi.fn(),
+        resumeStream: vi.fn(),
+        addToolResult: vi.fn(),
+        addToolOutput: vi.fn(),
+        addToolApprovalResponse: vi.fn(),
       } as any;
     });
 
@@ -106,10 +114,9 @@ describe('useAgentChat', () => {
       result.current.sendMessage('plain message');
     });
 
-    expect(append).toHaveBeenCalledWith(
+    expect(sendMessage).toHaveBeenCalledWith(
       expect.objectContaining({
-        role: 'user',
-        content: 'plain message',
+        text: 'plain message',
       })
     );
 

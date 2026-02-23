@@ -3,10 +3,10 @@
  * 封装 Vercel AI SDK 的 useChat，添加 FriendsAI 特定功能
  */
 
-import { useState, useEffect, useCallback, useRef } from 'react';
-import { useChat } from 'ai/react';
-import type { Message as AISDKMessage } from 'ai';
-import type { ToolState } from '../lib/api/types';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useChat } from '@ai-sdk/react';
+import { DefaultChatTransport, type UIMessage } from 'ai';
+import type { AgentLlmRequest, ToolState } from '../lib/api/types';
 import { api, clearAuthToken } from '../lib/api/client';
 import { parseVercelAgentCustomDataLine } from '../lib/agent-stream/parseVercelAgentStream';
 
@@ -38,7 +38,7 @@ export interface UseAgentChatOptions {
   /**
    * 初始消息列表
    */
-  initialMessages?: AISDKMessage[];
+  initialMessages?: AgentChatMessage[];
   /**
    * 是否自动加载历史消息
    */
@@ -51,13 +51,26 @@ export interface UseAgentChatOptions {
    * 会话创建回调（当后端自动创建会话时调用）
    */
   onConversationCreated?: (conversationId: string) => void;
+  /**
+   * 可选的 LLM 配置，透传给后端 /v1/agent/chat
+   */
+  llm?: AgentLlmRequest;
+}
+
+export interface AgentChatMessage {
+  id: string;
+  role: 'system' | 'user' | 'assistant';
+  content: string;
+  createdAt?: Date;
+  createdAtMs?: number;
+  [key: string]: unknown;
 }
 
 export interface UseAgentChatReturn {
   /**
    * 消息列表（来自 useChat）
    */
-  messages: AISDKMessage[];
+  messages: AgentChatMessage[];
   /**
    * 发送消息
    */
@@ -217,34 +230,145 @@ function getAuthToken(): string | null {
 /**
  * 从消息中提取工具调用信息
  */
-function extractToolStates(messages: AISDKMessage[]): ToolState[] {
+function extractToolStates(messages: Array<UIMessage | AgentChatMessage>): ToolState[] {
   const toolStates: ToolState[] = [];
 
   for (const message of messages) {
-    if (message.toolInvocations) {
-      for (const toolInvocation of message.toolInvocations) {
-        // 从 metadata 中获取确认 ID（如果存在）
-        const confirmationId = (toolInvocation as any).confirmationId;
+    const legacyToolInvocations = isRecord(message) && Array.isArray((message as Record<string, unknown>).toolInvocations)
+      ? (message as Record<string, unknown>).toolInvocations as Array<Record<string, unknown>>
+      : [];
 
-        const state = (toolInvocation as any).state;
-        toolStates.push({
-          id: toolInvocation.toolCallId,
-          name: toolInvocation.toolName || 'Unknown Tool',
-          status: (() => {
-            if (state === 'result') return 'succeeded';
-            if (state === 'call') return 'running';
-            if (state === 'awaiting_input' || state === 'partial-call') return 'awaiting_input';
-            return 'idle';
-          })(),
-          confirmationId,
-          input: toolInvocation.args as any,
-          output: (toolInvocation as any).result as any,
-        });
+    for (const toolInvocation of legacyToolInvocations) {
+      const toolCallId = typeof toolInvocation.toolCallId === 'string' ? toolInvocation.toolCallId : '';
+      if (!toolCallId) {
+        continue;
       }
+      const state = typeof toolInvocation.state === 'string' ? toolInvocation.state : '';
+      toolStates.push({
+        id: toolCallId,
+        name: typeof toolInvocation.toolName === 'string' ? toolInvocation.toolName : 'Unknown Tool',
+        status: (() => {
+          if (state === 'result') return 'succeeded';
+          if (state === 'call') return 'running';
+          if (state === 'awaiting_input' || state === 'partial-call') return 'awaiting_input';
+          return 'idle';
+        })(),
+        confirmationId: typeof toolInvocation.confirmationId === 'string' ? toolInvocation.confirmationId : undefined,
+        input: toolInvocation.args,
+        output: toolInvocation.result,
+      });
+    }
+
+    if (!Array.isArray((message as UIMessage).parts)) {
+      continue;
+    }
+
+    for (const part of (message as UIMessage).parts) {
+      if (!isRecord(part) || typeof part.type !== 'string') {
+        continue;
+      }
+      const partRecord = part as Record<string, unknown>;
+
+      const isToolPart = part.type === 'dynamic-tool' || part.type.startsWith('tool-');
+      if (!isToolPart) {
+        continue;
+      }
+
+      const toolCallId = typeof partRecord.toolCallId === 'string' ? partRecord.toolCallId : '';
+      if (!toolCallId) {
+        continue;
+      }
+
+      const state = typeof partRecord.state === 'string' ? partRecord.state : '';
+      const approval = isRecord(partRecord.approval) ? partRecord.approval : undefined;
+      const approvalId = approval && typeof approval.id === 'string'
+        ? approval.id
+        : undefined;
+
+      const toolName = part.type === 'dynamic-tool'
+        ? (typeof partRecord.toolName === 'string' && partRecord.toolName.length > 0 ? partRecord.toolName : 'Unknown Tool')
+        : part.type.replace(/^tool-/, '');
+
+      toolStates.push({
+        id: toolCallId,
+        name: toolName || 'Unknown Tool',
+        status: (() => {
+          if (state === 'output-available') return 'succeeded';
+          if (state === 'output-error') return 'failed';
+          if (state === 'input-streaming') return 'running';
+          if (state === 'input-available' || state === 'approval-requested' || state === 'approval-responded') {
+            return 'awaiting_input';
+          }
+          return 'idle';
+        })(),
+        confirmationId: approvalId,
+        input: partRecord.input,
+        output: partRecord.output,
+        message: typeof partRecord.errorText === 'string' ? partRecord.errorText : undefined,
+      });
     }
   }
 
   return toolStates;
+}
+
+function getTextFromMessageParts(parts: unknown): string {
+  if (!Array.isArray(parts)) {
+    return '';
+  }
+
+  let content = '';
+  for (const part of parts) {
+    if (!isRecord(part)) {
+      continue;
+    }
+    if (part.type === 'text' && typeof part.text === 'string') {
+      content += part.text;
+    }
+  }
+
+  return content;
+}
+
+function toServerMessage(message: unknown): { role: string; content: string } | null {
+  if (!isRecord(message) || typeof message.role !== 'string') {
+    return null;
+  }
+
+  if (typeof message.content === 'string') {
+    return {
+      role: message.role,
+      content: message.content,
+    };
+  }
+
+  return {
+    role: message.role,
+    content: getTextFromMessageParts(message.parts),
+  };
+}
+
+function toUiMessages(messages: AgentChatMessage[]): UIMessage[] {
+  return messages
+    .filter((message): message is AgentChatMessage => isRecord(message) && typeof message.id === 'string' && typeof message.role === 'string')
+    .map((message) => ({
+      id: message.id,
+      role: message.role,
+      parts: [
+        {
+          type: 'text',
+          text: typeof message.content === 'string' ? message.content : '',
+        },
+      ],
+    }));
+}
+
+function toLegacyMessages(messages: UIMessage[]): AgentChatMessage[] {
+  return messages.map((message) => ({
+    id: message.id,
+    role: message.role,
+    content: getTextFromMessageParts(message.parts),
+  }));
 }
 
 /**
@@ -294,6 +418,7 @@ function createFetchWithConversationId(
   getConversationId?: () => string | undefined,
   onAwaitingToolConfirmation?: (tool: ToolState) => void,
   getNextComposerContext?: () => AgentComposerContext | undefined,
+  getLlmConfig?: () => AgentLlmRequest | undefined,
 ): (input: RequestInfo | URL, init?: RequestInit) => Promise<Response> {
   return async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
     // 在发送请求前，修改请求体以添加最新的 conversationId
@@ -308,7 +433,7 @@ function createFetchWithConversationId(
           : init.body instanceof Blob 
             ? await init.body.text()
             : JSON.stringify(init.body);
-        const bodyObj = JSON.parse(bodyText);
+        const bodyObj = JSON.parse(bodyText) as Record<string, unknown>;
         
         // 添加或更新 conversationId
         if (currentConversationId && currentConversationId !== 'new') {
@@ -316,6 +441,20 @@ function createFetchWithConversationId(
         } else if (currentConversationId === 'new') {
           // 如果是 'new'，不设置 conversationId，让后端创建新会话
           delete bodyObj.conversationId;
+        }
+
+        if (Array.isArray(bodyObj.messages)) {
+          bodyObj.messages = bodyObj.messages
+            .map((message: unknown) => toServerMessage(message))
+            .filter(
+              (message: { role: string; content: string } | null): message is { role: string; content: string } =>
+                message !== null,
+            );
+        }
+
+        const llmConfig = getLlmConfig?.();
+        if (llmConfig) {
+          bodyObj.llm = llmConfig;
         }
 
         const composerContext = getNextComposerContext?.();
@@ -413,27 +552,29 @@ export function useAgentChat(
     loadHistory = false,
     onToolConfirmation,
     onConversationCreated,
+    llm,
   } = options;
 
-  // 使用 ref 存储最新的 conversationId，确保 body 函数总是读取最新值
+  // 使用 ref 存储最新上下文，确保 transport 每次请求拿到最新值
   const conversationIdRef = useRef(conversationId);
   useEffect(() => {
     conversationIdRef.current = conversationId;
   }, [conversationId]);
 
+  const llmRef = useRef(llm);
+  useEffect(() => {
+    llmRef.current = llm;
+  }, [llm]);
+
   const composerContextQueueRef = useRef<AgentComposerContext[]>([]);
+  const [input, setInput] = useState('');
 
-  // 工具确认状态管理
-  const [pendingConfirmations, setPendingConfirmations] = useState<
-    ToolState[]
-  >([]);
+  const [pendingConfirmations, setPendingConfirmations] = useState<ToolState[]>([]);
 
-  // 创建一个包装的 fetch 函数来拦截流数据并解析 conversationId
-  // 同时修改请求体以添加最新的 conversationId
   const fetchWithConversationId = useCallback(
     createFetchWithConversationId(
       onConversationCreated,
-      () => conversationIdRef.current, // 提供获取最新 conversationId 的函数
+      () => conversationIdRef.current,
       (tool) => {
         setPendingConfirmations((prev) => {
           if (prev.some((item) => item.id === tool.id)) {
@@ -443,43 +584,53 @@ export function useAgentChat(
         });
       },
       () => composerContextQueueRef.current.shift(),
+      () => llmRef.current,
     ),
-    [onConversationCreated]
+    [onConversationCreated],
   );
 
-  // 使用 Vercel AI SDK 的 useChat，传入自定义 fetch 来添加认证和动态 conversationId
-  // 注意：Vercel AI SDK 的 body 参数不支持函数形式，所以我们在 fetch 中动态修改请求体
-  const chat = useChat({
-    api: '/v1/agent/chat?format=vercel-ai',
-    body: conversationId && conversationId !== 'new' ? { conversationId } : {},
-    initialMessages,
-    fetch: fetchWithConversationId as typeof globalThis.fetch,
-  });
+  const transport = useMemo(
+    () =>
+      new DefaultChatTransport({
+        api: '/v1/agent/chat?format=vercel-ai',
+        body: () => {
+          const payload: Record<string, unknown> = {};
+          const currentConversationId = conversationIdRef.current;
+          if (currentConversationId && currentConversationId !== 'new') {
+            payload.conversationId = currentConversationId;
+          }
+          if (llmRef.current) {
+            payload.llm = llmRef.current;
+          }
+          return payload;
+        },
+        fetch: fetchWithConversationId as typeof globalThis.fetch,
+      }),
+    [fetchWithConversationId],
+  );
 
-  // 从消息中提取工具状态
-  // 使用消息 ID 字符串来检测变化，避免因数组引用变化导致的无限循环
+  const chat = useChat({
+    transport,
+    messages: toUiMessages(initialMessages),
+  });
+  const messages = useMemo(() => toLegacyMessages(chat.messages), [chat.messages]);
+  const isLoading = chat.status === 'submitted' || chat.status === 'streaming';
+
   const messagesIdsStringRef = useRef('');
 
   useEffect(() => {
-    // 检查消息是否真的发生了变化（通过比较消息 ID 字符串）
-    const currentMessagesIdsString = chat.messages.map(m => m.id).join(',');
-
-    // 如果消息 ID 字符串没有变化，跳过处理
+    const currentMessagesIdsString = chat.messages.map((message) => message.id).join(',');
     if (currentMessagesIdsString === messagesIdsStringRef.current) {
       return;
     }
-
-    // 更新引用
     messagesIdsStringRef.current = currentMessagesIdsString;
 
     const toolStates = extractToolStates(chat.messages);
-    // 筛选需要确认的工具（awaiting_input 或 running 状态）
     const pending = toolStates.filter(
-      (t) => t.status === 'awaiting_input' || t.status === 'running'
+      (toolState) => toolState.status === 'awaiting_input' || toolState.status === 'running',
     );
     setPendingConfirmations(pending);
 
-    // 如果有需要确认的工具，触发回调
     if (onToolConfirmation) {
       pending.forEach((tool) => {
         if (tool.status === 'awaiting_input') {
@@ -487,23 +638,16 @@ export function useAgentChat(
         }
       });
     }
-  }, [chat.messages.length, onToolConfirmation]);
+  }, [chat.messages, onToolConfirmation]);
 
-  // 加载历史消息
-  // 注意：useChat 的 initialMessages 只在初始化时使用，不能动态更新
-  // 如果需要在运行时加载历史消息，应该在组件层面使用 useConversationHistory
-  // 然后将历史消息作为 initialMessages 传递给 useAgentChat
   useEffect(() => {
     if (loadHistory && conversationId && initialMessages.length === 0) {
       api.conversations
         .getMessages({ conversationId })
         .then(() => {
-          // 注意：useChat 的 initialMessages 只在初始化时使用
-          // 如果需要在运行时加载历史消息，应该在组件层面处理
-          // 这里只是记录日志，实际的历史消息加载应该在组件层面完成
           console.warn(
             'useAgentChat: loadHistory is deprecated. ' +
-            'Please use useConversationHistory in component level and pass messages as initialMessages.'
+              'Please use useConversationHistory in component level and pass messages as initialMessages.',
           );
         })
         .catch((error) => {
@@ -516,7 +660,6 @@ export function useAgentChat(
   const confirmTool = useCallback(
     async (id: string, payload?: Record<string, any>) => {
       try {
-        // 查找工具确认 ID（从工具状态中获取）
         const toolState = pendingConfirmations.find((t) => t.id === id);
         if (!toolState?.confirmationId) {
           throw new Error('Tool confirmation ID not found');
@@ -524,15 +667,11 @@ export function useAgentChat(
 
         await api.toolConfirmations.confirm({
           id: toolState.confirmationId,
-          payload: payload,
+          payload,
         });
 
-        // 从待确认列表中移除
-        setPendingConfirmations((prev) =>
-          prev.filter((t) => t.id !== id)
-        );
+        setPendingConfirmations((prev) => prev.filter((t) => t.id !== id));
 
-        // 触发回调
         if (onToolConfirmation) {
           onToolConfirmation({
             ...toolState,
@@ -544,14 +683,12 @@ export function useAgentChat(
         throw error;
       }
     },
-    [pendingConfirmations, onToolConfirmation]
+    [pendingConfirmations, onToolConfirmation],
   );
 
-  // 拒绝工具
   const rejectTool = useCallback(
     async (id: string, reason?: string) => {
       try {
-        // 查找工具确认 ID
         const toolState = pendingConfirmations.find((t) => t.id === id);
         if (!toolState?.confirmationId) {
           throw new Error('Tool confirmation ID not found');
@@ -559,15 +696,11 @@ export function useAgentChat(
 
         await api.toolConfirmations.reject({
           id: toolState.confirmationId,
-          reason: reason,
+          reason,
         });
 
-        // 从待确认列表中移除
-        setPendingConfirmations((prev) =>
-          prev.filter((t) => t.id !== id)
-        );
+        setPendingConfirmations((prev) => prev.filter((t) => t.id !== id));
 
-        // 触发回调
         if (onToolConfirmation) {
           onToolConfirmation({
             ...toolState,
@@ -583,73 +716,38 @@ export function useAgentChat(
         throw error;
       }
     },
-    [pendingConfirmations, onToolConfirmation]
+    [pendingConfirmations, onToolConfirmation],
   );
 
-  // 包装 append 为 sendMessage
   const sendMessage = useCallback((message: string, options?: SendMessageOptions) => {
     const composerContext = normalizeComposerContext(options?.composerContext);
     if (composerContext) {
       composerContextQueueRef.current.push(composerContext);
     }
 
-    chat.append({
-      role: 'user',
-      content: message,
-      createdAt: new Date(), // 确保新消息有正确的时间戳
+    void chat.sendMessage({
+      text: message,
     });
+    setInput('');
   }, [chat]);
 
-  // 使用 ref 保存所有用户消息，防止 stop 时被移除
-  const userMessagesRef = useRef<Map<string, AISDKMessage>>(new Map());
-  
-  // 监听消息变化，保存所有用户消息
-  useEffect(() => {
-    chat.messages.forEach((msg) => {
-      if (msg.role === 'user') {
-        userMessagesRef.current.set(msg.id, msg);
-      }
-    });
-  }, [chat.messages]);
-
-  // 包装 stop 方法，确保用户消息不会被移除
   const stop = useCallback(() => {
-    // 调用原始的 stop 方法
     chat.stop();
-    
-    // 在下一个渲染周期后，检查并恢复被移除的用户消息
-    setTimeout(() => {
-      // 检查保存的用户消息是否还在 chat.messages 中
-      const currentUserMessageIds = new Set(
-        chat.messages.filter((msg) => msg.role === 'user').map((msg) => msg.id)
-      );
-      
-      // 恢复所有被移除的用户消息
-      userMessagesRef.current.forEach((savedMsg, savedId) => {
-        if (!currentUserMessageIds.has(savedId)) {
-          // 检查是否已经有相同内容的消息（通过内容匹配）
-          const hasSameContent = chat.messages.some(
-            (msg) => msg.role === 'user' && msg.content === savedMsg.content
-          );
-          
-          // 如果没有相同内容的消息，重新添加
-          if (!hasSameContent) {
-            chat.append({
-              role: 'user',
-              content: savedMsg.content,
-              createdAt: savedMsg.createdAt || new Date(),
-              id: savedMsg.id, // 保持相同的 ID
-            });
-          }
-        }
-      });
-    }, 0);
+  }, [chat]);
+
+  const reload = useCallback(() => {
+    void chat.regenerate();
   }, [chat]);
 
   return {
-    ...chat,
+    messages,
     sendMessage,
+    input,
+    setInput,
+    isLoading,
+    error: chat.error,
     stop,
+    reload,
     pendingConfirmations,
     confirmTool,
     rejectTool,

@@ -8,7 +8,7 @@
 
 **特点**:
 - 流式输出（Server-Sent Events）
-- 支持 vercel-ai 格式兼容
+- 支持 `format=vercel-ai`（AI SDK v6 UI Message Stream 协议）
 - 支持工具调用（tool_calls）
 - 自动管理对话历史
 - 隐式使用 `chat_conversation` agent
@@ -33,9 +33,19 @@
     // 允许业务透传其它上下文字段
     [key: string]: unknown;
   };
-  model?: string;
-  temperature?: number;
-  maxTokens?: number;
+  llm?: {
+    provider: 'openai' | 'claude' | 'gemini' | 'openai-compatible';
+    model: string;
+    temperature?: number;
+    maxOutputTokens?: number;
+    topP?: number;
+    topK?: number;
+    stopSequences?: string[];
+    seed?: number;
+    presencePenalty?: number;
+    frequencyPenalty?: number;
+    providerOptions?: Record<string, Record<string, unknown>>;
+  };
   userId?: string;
   conversationId?: string;
   sessionId?: string;
@@ -43,6 +53,15 @@
 ```
 
 **响应**: SSE 流式事件（agent.start, agent.delta, agent.message, tool.state, agent.end）
+
+**`format=vercel-ai` 协议说明**:
+- `Content-Type: text/event-stream; charset=utf-8`
+- Header: `x-vercel-ai-ui-message-stream: v1`
+- Body: `data: {...}` chunk 流 + 结尾 `data: [DONE]`
+
+**兼容约束**:
+- 顶层旧字段 `model`、`temperature`、`maxTokens`、`max_tokens` 已下线。
+- 这些字段若出现在 `/v1/agent/chat` 或 `/v1/agent/run` 请求体中，会返回 `400 invalid_llm_request`。
 
 **`context.composer` 约定**:
 - 用于承载前端聊天输入区（工具、多媒体、模式）元信息，仅透传元数据，不上传二进制内容。
@@ -89,6 +108,19 @@
     useCache?: boolean;
     forceRefresh?: boolean;
   };
+  llm?: {
+    provider: 'openai' | 'claude' | 'gemini' | 'openai-compatible';
+    model: string;
+    temperature?: number;
+    maxOutputTokens?: number;
+    topP?: number;
+    topK?: number;
+    stopSequences?: string[];
+    seed?: number;
+    presencePenalty?: number;
+    frequencyPenalty?: number;
+    providerOptions?: Record<string, Record<string, unknown>>;
+  };
   userId?: string;
   conversationId?: string;
   sessionId?: string;
@@ -115,7 +147,7 @@
 - 需要实时流式对话
 - 需要工具调用交互
 - 需要前端 Assistant-UI 集成
-- 需要 vercel-ai 格式兼容
+- 需要 AI SDK v6 UI Message Stream 兼容
 
 ### 使用 `/v1/agent/run` 当:
 - 需要执行预定义的 Agent 能力（brief, archive, insight 等）
@@ -132,6 +164,3 @@
 - `GET /action-panel/dashboard` → `agentId: 'network_action'`
 
 所有 legacy 端点保持响应格式不变，确保向后兼容。
-
-
-

@@ -5,6 +5,7 @@ import { Conversation } from '../../../entities/conversation.entity';
 import { AgentRuntimeExecutor } from '../../runtime/agent-runtime-executor.service';
 import { SnapshotService } from '../../snapshots/snapshot.service';
 import * as crypto from 'crypto';
+import type { LlmRequestConfig } from '../../../ai/providers/llm-types';
 
 export interface TitleSummaryInput {
   userId: string;
@@ -42,7 +43,7 @@ export class TitleSummaryService {
    */
   async generate(
     input: TitleSummaryInput,
-    options: { forceRefresh?: boolean } = {}
+    options: { forceRefresh?: boolean; llm?: LlmRequestConfig } = {}
   ): Promise<TitleSummaryOutput> {
     const { userId, conversationId } = input;
 
@@ -106,6 +107,7 @@ export class TitleSummaryService {
         forceRefresh: options.forceRefresh,
         userId,
         conversationId,
+        llm: options.llm,
         skipServiceRouting: true, // 跳过服务路由，直接使用通用流程
       },
     );
@@ -159,4 +161,3 @@ export class TitleSummaryService {
     return crypto.createHash('sha256').update(data).digest('hex');
   }
 }
-

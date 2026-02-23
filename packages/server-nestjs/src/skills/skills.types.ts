@@ -92,6 +92,66 @@ export interface SkillRuntimePlan {
   unloadActions: string[];
 }
 
+export type EnginePolicy = 'strict_openclaw' | 'fallback_local';
+export type OpenClawReloadProtocol = 'v1' | 'v2';
+
+export interface OpenClawReloadRequestV2 {
+  tenantId: string;
+  agentScope: string;
+  desiredHash: string;
+  skills: Array<{
+    key: string;
+    version: string;
+    checksum: string;
+    exportPath: string;
+  }>;
+  loadActions: string[];
+  unloadActions: string[];
+  traceId: string;
+  protocolVersion: 'v2';
+}
+
+export interface OpenClawReloadResponseV2 {
+  ok: boolean;
+  executionMode: 'control-plane-only' | string;
+  tenantId: string;
+  agentScope: string;
+  desiredHash: string;
+  acceptedAtMs: number;
+  summary?: Record<string, unknown>;
+}
+
+export interface SkillRuntimeMountDetailsV2 extends Record<string, unknown> {
+  warnings?: string[];
+  loadActions?: string[];
+  unloadActions?: string[];
+  appliedSkills?: Array<{
+    key: string;
+    version: string;
+    checksum: string;
+  }>;
+  traceId?: string;
+  phaseDurationsMs?: {
+    resolve: number;
+    buildPlan: number;
+    persistPending: number;
+    reload: number;
+    persistFinal: number;
+  };
+  reloadAttempts?: number;
+  gatewaySummary?: {
+    statusCode?: number;
+    executionMode?: string;
+    acceptedAtMs?: number;
+    responseSnippet?: string;
+    fallback?: boolean;
+  };
+  appliedAt?: string;
+  error?: string;
+  degraded?: boolean;
+  fallbackReason?: string;
+}
+
 export interface SkillParseError {
   code: string;
   message: string;

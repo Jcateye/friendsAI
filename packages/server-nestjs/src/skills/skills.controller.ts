@@ -8,9 +8,18 @@ import {
   Request,
   UnauthorizedException,
 } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiParam, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
+import {
+  ApiBearerAuth,
+  ApiBody,
+  ApiOperation,
+  ApiParam,
+  ApiQuery,
+  ApiResponse,
+  ApiTags,
+} from '@nestjs/swagger';
 import { SkillsService } from './skills.service';
 import type { ReconcileResult } from './skill-loader.service';
+import { ReconcileRuntimeDto, ReconcileRuntimeResponseDto } from './dto/reconcile-runtime.dto';
 
 @ApiTags('skills')
 @ApiBearerAuth()
@@ -108,8 +117,9 @@ export class SkillsController {
 
   @Post('runtime/reconcile')
   @ApiOperation({ summary: '重算并装载指定 tenant/agentScope 的 runtime skills' })
-  @ApiResponse({ status: 200, description: 'reconcile result' })
-  async reconcileRuntime(@Request() req: any, @Body() body: any): Promise<ReconcileResult> {
+  @ApiBody({ type: ReconcileRuntimeDto })
+  @ApiResponse({ status: 200, description: 'reconcile result', type: ReconcileRuntimeResponseDto })
+  async reconcileRuntime(@Request() req: any, @Body() body: ReconcileRuntimeDto): Promise<ReconcileResult> {
     const userId = req.user?.id ?? null;
     if (!userId) {
       throw new UnauthorizedException('User not found');

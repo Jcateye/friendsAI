@@ -6,7 +6,7 @@
  * - 添加到时间轴
  */
 
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Check, X, UserPlus, CalendarPlus, ChevronDown, ChevronUp, AlertCircle } from 'lucide-react'
 import type { ArchiveExtractData } from '../../lib/api/agent-types'
 import type { Contact } from '../../lib/api/types'
@@ -19,6 +19,7 @@ export interface ExtractedContact {
   company?: string
   position?: string
   email?: string
+  phone?: string
   role?: string
 }
 
@@ -61,12 +62,60 @@ function findExistingContact(
   existingContacts: Contact[] = []
 ): Contact | null {
   const normalizedName = extracted.name.toLowerCase().trim()
-  return (
-    existingContacts.find((c) => {
-      const existingName = c.name?.toLowerCase().trim() || ''
-      return existingName === normalizedName || existingName.includes(normalizedName)
-    }) || null
-  )
+  const normalizedEmail = extracted.email?.toLowerCase().trim()
+
+  if (normalizedEmail) {
+    const byEmail = existingContacts.find((c) => c.email?.toLowerCase().trim() === normalizedEmail)
+    if (byEmail) return byEmail
+  }
+
+  const byExactName = existingContacts.find((c) => (c.name?.toLowerCase().trim() || '') === normalizedName)
+  if (byExactName) return byExactName
+
+  return null
+}
+
+function buildContactLookupKeys(contact: ExtractedContact): string[] {
+  const keys: string[] = []
+  const normalizedName = contact.name?.toLowerCase().trim()
+  const normalizedEmail = contact.email?.toLowerCase().trim()
+  if (normalizedName) keys.push(`name:${normalizedName}`)
+  if (normalizedEmail) keys.push(`email:${normalizedEmail}`)
+  return keys
+}
+
+const NON_MEANINGFUL_VALUES = new Set([
+  '无',
+  '暂无',
+  '未知',
+  '不详',
+  '未提供',
+  'none',
+  'null',
+  'n/a',
+  '-',
+])
+
+function normalizeExtractedText(value?: string): string | undefined {
+  if (typeof value !== 'string') return undefined
+  const normalized = value.trim()
+  if (!normalized) return undefined
+  if (NON_MEANINGFUL_VALUES.has(normalized.toLowerCase())) return undefined
+  return normalized
+}
+
+function normalizeTags(input: Array<string | undefined | null>): string[] {
+  const result: string[] = []
+  const seen = new Set<string>()
+  for (const item of input) {
+    const normalized = normalizeExtractedText(item ?? undefined)
+    if (!normalized) continue
+    if (normalized === '已更新') continue
+    if (seen.has(normalized)) continue
+    seen.add(normalized)
+    result.push(normalized)
+  }
+  return result
 }
 
 // ==================== 子组件 ====================
@@ -392,6 +441,69 @@ export function ArchiveApplyPanel({
   const [factStates, setFactStates] = useState<Record<string, ApplyStatus>>(
     {}
   )
+  const [localContacts, setLocalContacts] = useState<Contact[]>(existingContacts)
+  const [resolvedContactIds, setResolvedContactIds] = useState<Record<string, string>>({})
+
+  useEffect(() => {
+    setLocalContacts(existingContacts)
+  }, [existingContacts])
+
+  const extractedContacts = useMemo(
+    () =>
+      contacts
+        .filter(
+          (contact): contact is ExtractedContact =>
+            typeof contact?.name === 'string' && contact.name.trim().length > 0,
+        )
+        .map((contact) => ({
+          ...contact,
+          name: contact.name.trim(),
+          company: normalizeExtractedText(contact.company),
+          position: normalizeExtractedText(contact.position),
+          email: normalizeExtractedText(contact.email),
+          phone: normalizeExtractedText(contact.phone),
+          role: normalizeExtractedText(contact.role),
+        })),
+    [contacts],
+  )
+
+  const rememberResolvedContact = (contact: ExtractedContact, contactId: string) => {
+    const keys = buildContactLookupKeys(contact)
+    setResolvedContactIds((prev) => {
+      const next = { ...prev }
+      for (const key of keys) {
+        next[key] = contactId
+      }
+      return next
+    })
+  }
+
+  const resolveBestContactId = (descriptionOrContent?: string): string | null => {
+    const normalizedText = (descriptionOrContent || '').toLowerCase()
+
+    for (const contact of extractedContacts) {
+      const keys = buildContactLookupKeys(contact)
+      for (const key of keys) {
+        const mapped = resolvedContactIds[key]
+        if (mapped && (!normalizedText || normalizedText.includes(contact.name.toLowerCase()))) {
+          return mapped
+        }
+      }
+    }
+
+    for (const contact of extractedContacts) {
+      const existing = findExistingContact(contact, localContacts)
+      if (existing) {
+        return existing.id
+      }
+    }
+
+    if (localContacts.length === 1) {
+      return localContacts[0].id
+    }
+
+    return null
+  }
 
   // 处理联系人创建
   const handleCreateContact = async (contact: ExtractedContact, index: number) => {
@@ -399,12 +511,24 @@ export function ArchiveApplyPanel({
     setContactStates((prev) => ({ ...prev, [key]: { type: 'loading' } }))
 
     try {
+      const company = normalizeExtractedText(contact.company)
+      const position = normalizeExtractedText(contact.position)
+      const email = normalizeExtractedText(contact.email)
+      const phone = normalizeExtractedText(contact.phone)
+      const role = normalizeExtractedText(contact.role)
+
       const newContact = await api.contacts.create({
         name: contact.name,
-        company: contact.company,
-        position: contact.position,
-        tags: [contact.company ? '公司' : '个人'].filter(Boolean),
+        email,
+        phone,
+        company,
+        position,
+        note: role ? `归档角色：${role}` : undefined,
+        tags: normalizeTags([company ? '公司' : '个人', role]),
       })
+
+      setLocalContacts((prev) => [newContact, ...prev.filter((c) => c.id !== newContact.id)])
+      rememberResolvedContact(contact, newContact.id)
 
       setContactStates((prev) => ({ ...prev, [key]: { type: 'success' } }))
       onApplySuccess?.('contact', 1)
@@ -442,23 +566,47 @@ export function ArchiveApplyPanel({
     setContactStates((prev) => ({ ...prev, [key]: { type: 'loading' } }))
 
     try {
+      const company = normalizeExtractedText(extracted.company)
+      const position = normalizeExtractedText(extracted.position)
+      const email = normalizeExtractedText(extracted.email)
+      const phone = normalizeExtractedText(extracted.phone)
+      const role = normalizeExtractedText(extracted.role)
+
+      const cleanedTags = normalizeTags([
+        ...(existing.tags || []),
+        company ? '公司' : null,
+        role,
+      ])
+
       // 合并现有信息和提取的信息
-      const updates: Parameters<typeof api.contacts.update>[1] = {
-        tags: [...(existing.tags || []), '已更新'].filter(Boolean),
-      }
+      const updates: Parameters<typeof api.contacts.update>[1] = {}
+      updates.tags = cleanedTags
 
       // 只有当提取的信息更完整时才更新
-      if (extracted.company && !existing.company) {
-        updates.company = extracted.company
+      if (company && !existing.company) {
+        updates.company = company
       }
-      if (extracted.position && !existing.position) {
-        updates.position = extracted.position
+      if (position && !existing.position) {
+        updates.position = position
       }
-      if (extracted.email && !existing.email) {
-        updates.email = extracted.email
+      if (email && !existing.email) {
+        updates.email = email
+      }
+      if (phone && !existing.phone) {
+        updates.phone = phone
+      }
+      if (role) {
+        const roleLine = `归档角色：${role}`
+        updates.note = existing.note?.includes(roleLine)
+          ? existing.note
+          : existing.note
+            ? `${existing.note}\n${roleLine}`
+            : roleLine
       }
 
-      await api.contacts.update(existing.id, updates)
+      const updated = await api.contacts.update(existing.id, updates)
+      setLocalContacts((prev) => [updated, ...prev.filter((c) => c.id !== updated.id)])
+      rememberResolvedContact(extracted, existing.id)
 
       setContactStates((prev) => ({ ...prev, [key]: { type: 'success' } }))
       onApplySuccess?.('contact', 1)
@@ -479,16 +627,28 @@ export function ArchiveApplyPanel({
     setDateStates((prev) => ({ ...prev, [key]: { type: 'loading' } }))
 
     try {
-      // 找到对话关联的联系人
-      const relatedContact = existingContacts[0] // 简化：使用第一个联系人
+      const contactId = resolveBestContactId(date.description)
+      if (!contactId) {
+        throw new Error('未找到可关联的联系人，请先创建/更新联系人后再创建时间事项')
+      }
+
+      const normalizedEventDate =
+        date.date && !Number.isNaN(new Date(date.date).getTime())
+          ? new Date(date.date).toISOString()
+          : undefined
 
       await api.events.create({
-        contactId: relatedContact?.id || '',
+        contactId,
         title: date.description,
         description: date.type
           ? `${date.type === 'deadline' ? '截止' : date.type === 'meeting' ? '会议' : '里程碑'}事项`
           : undefined,
-        details: date.date ? { occurredAt: new Date(date.date).toISOString() } : undefined,
+        eventDate: normalizedEventDate,
+        details: {
+          ...(normalizedEventDate ? { occurredAt: normalizedEventDate } : {}),
+          source: 'archive_apply_panel',
+          sourceConversationId: conversationId,
+        },
       })
 
       setDateStates((prev) => ({ ...prev, [key]: { type: 'success' } }))
@@ -510,8 +670,20 @@ export function ArchiveApplyPanel({
     setFactStates((prev) => ({ ...prev, [key]: { type: 'loading' } }))
 
     try {
-      // 这里可以调用 API 将事实添加到联系人上下文
-      // 暂时标记为成功
+      const contactId = resolveBestContactId(_fact.content)
+      if (!contactId) {
+        throw new Error('未找到可关联的联系人，请先创建/更新联系人后再应用信息点')
+      }
+
+      await api.contacts.addFact(contactId, {
+        content: _fact.content,
+        metadata: {
+          category: _fact.category ?? null,
+          source: 'archive_apply_panel',
+        },
+        sourceConversationId: conversationId,
+      })
+
       setFactStates((prev) => ({ ...prev, [key]: { type: 'success' } }))
       onApplySuccess?.('fact', 1)
     } catch (error) {
@@ -527,14 +699,14 @@ export function ArchiveApplyPanel({
 
   // 计算统计数据
   const contactStats = {
-    total: contacts.length,
+    total: extractedContacts.length,
     selected: Object.values(contactStates).filter(
       (s) => s.type === 'success' || s.message === 'selected'
     ).length,
-    existing: contacts.filter((c) => findExistingContact(c, existingContacts)).length,
+    existing: extractedContacts.filter((c) => findExistingContact(c, localContacts)).length,
   }
 
-  const hasAnyData = contacts.length > 0 || facts.length > 0 || dates.length > 0
+  const hasAnyData = extractedContacts.length > 0 || facts.length > 0 || dates.length > 0
 
   return (
     <div className="bg-bg-card rounded-lg shadow-sm overflow-hidden">
@@ -581,16 +753,16 @@ export function ArchiveApplyPanel({
         ) : (
           <div className="flex flex-col gap-4">
             {/* 联系人 */}
-            {contacts.length > 0 && (
+            {extractedContacts.length > 0 && (
               <div>
                 <h4 className="text-[13px] font-semibold text-text-secondary mb-2 flex items-center gap-2">
                   <UserPlus className="w-4 h-4" />
-                  识别的联系人 ({contacts.length})
+                  识别的联系人 ({extractedContacts.length})
                 </h4>
                 <div className="flex flex-col gap-2">
-                  {contacts.map((contact, index) => {
+                  {extractedContacts.map((contact, index) => {
                     const key = `contact-${index}`
-                    const existing = findExistingContact(contact, existingContacts)
+                    const existing = findExistingContact(contact, localContacts)
                     return (
                       <ContactItem
                         key={key}

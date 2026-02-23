@@ -6,161 +6,240 @@ import type {
   ToolStateUpdate,
   AgentContextPatch,
 } from '../client-types';
+import { generateUlid } from '../../utils/ulid';
 
 /**
- * Vercel AI SDK Stream Protocol Adapter
- * 
- * 将 AgentStreamEvent 转换为 Vercel AI SDK 兼容的流格式
- * 
- * 格式说明：
- * - 0: 文本增量 (text delta)
- * - d: 消息完成 (data)
- * - 9: 工具调用开始 (tool call)
- * - a: 工具执行结果 (tool result)
- * - 2: 自定义数据 (custom data, 用于 A2UI)
- * - 3: 错误 (error)
- * 
- * 参考: https://sdk.vercel.ai/docs/ai-sdk-ui/stream-protocol
+ * Vercel AI SDK v6 — UI Message Stream Protocol Adapter
+ *
+ * 将 AgentStreamEvent 转换为 AI SDK v6 的 UI Message Stream Protocol 格式。
+ *
+ * v6 使用 SSE (Server-Sent Events) 格式，每行 `data: <JSON>\n\n`，
+ * JSON 遵循 UIMessageChunk schema：
+ *
+ *   - { type: "start", messageId?: string }
+ *   - { type: "text-start", id: string }
+ *   - { type: "text-delta", id: string, delta: string }
+ *   - { type: "text-end", id: string }
+ *   - { type: "tool-input-available", toolCallId, toolName, input, dynamic: true }
+ *   - { type: "tool-output-available", toolCallId, output, dynamic: true }
+ *   - { type: "tool-output-error", toolCallId, errorText, dynamic: true }
+ *   - { type: "finish", finishReason: "stop" | "error" | ... }
+ *   - { type: "error", errorText: string }
+ *   - data: [DONE]
+ *
+ * 参考: https://ai-sdk.dev/docs/ai-sdk-ui/stream-protocol#ui-message-stream-protocol
  */
 export class VercelAiStreamAdapter {
+  private textPartId: string | null = null;
+  private messageStarted = false;
+  private messageId: string | null = null;
+
   /**
-   * 转换事件为 Vercel AI SDK 格式
-   * @param event AgentStreamEvent
-   * @returns 格式化的字符串，如果事件不需要转换则返回 null
+   * 转换事件为 AI SDK v6 UI Message Stream 格式
+   * @returns SSE 格式化的字符串，或 null（忽略事件）
    */
   transform(event: AgentStreamEvent): string | null {
     switch (event.event) {
+      case 'agent.start':
+        return this.transformStart();
+
       case 'agent.delta':
         return this.transformTextDelta(event.data);
-      
+
       case 'agent.message':
         return this.transformMessageComplete(event.data);
-      
+
       case 'tool.state':
         return this.transformToolState(event.data);
-      
+
       case 'error':
         return this.transformError(event.data);
-      
+
       case 'context.patch':
         return this.transformContextPatch(event.data);
-      
-      // 以下事件在 Vercel AI SDK 中不需要或通过其他方式处理
-      case 'agent.start':
+
       case 'agent.end':
+        return this.transformEnd();
+
       case 'ping':
         return null;
-      
+
       default:
-        // 未知事件类型，返回 null 忽略
         return null;
     }
   }
 
   /**
-   * 转换文本增量: agent.delta -> 0:
-   * 格式: 0:${JSON.stringify(text)}\n
+   * 返回流结束标记
+   */
+  done(): string {
+    return 'data: [DONE]\n\n';
+  }
+
+  // ── 内部方法 ──────────────────────────────────────────────
+
+  private sse(chunk: Record<string, unknown>): string {
+    return `data: ${JSON.stringify(chunk)}\n\n`;
+  }
+
+  private transformStart(): string {
+    this.messageId = generateUlid();
+    this.messageStarted = true;
+    return this.sse({ type: 'start', messageId: this.messageId });
+  }
+
+  /**
+   * agent.delta → text-start (首次) + text-delta
    */
   private transformTextDelta(delta: AgentMessageDelta): string {
-    return `0:${JSON.stringify(delta.delta)}\n`;
-  }
+    const parts: string[] = [];
 
-  /**
-   * 转换消息完成: agent.message -> d:
-   * 格式: d:${JSON.stringify({finishReason:'stop'})}\n
-   * 
-   * 同时检查 metadata 中是否有 A2UI 数据，如果有则发送 2: 事件
-   */
-  private transformMessageComplete(message: AgentMessage): string {
-    const result: string[] = [];
-    
-    // 发送完成事件
-    result.push(`d:${JSON.stringify({ finishReason: 'stop' })}\n`);
-    
-    // 检查是否有 A2UI 数据
-    if (message.metadata?.a2ui) {
-      const a2uiData = Array.isArray(message.metadata.a2ui)
-        ? message.metadata.a2ui
-        : [message.metadata.a2ui];
-      
-      result.push(`2:${JSON.stringify(a2uiData)}\n`);
+    // 确保 message 已经 start
+    if (!this.messageStarted) {
+      this.messageId = generateUlid();
+      this.messageStarted = true;
+      parts.push(this.sse({ type: 'start', messageId: this.messageId }));
     }
-    
-    return result.join('');
+
+    // 如果是第一个文本 part，先发 text-start
+    if (!this.textPartId) {
+      this.textPartId = generateUlid();
+      parts.push(this.sse({ type: 'text-start', id: this.textPartId }));
+    }
+
+    parts.push(
+      this.sse({ type: 'text-delta', id: this.textPartId, delta: delta.delta }),
+    );
+
+    return parts.join('');
   }
 
   /**
-   * 转换工具状态: tool.state -> 9: 或 a:
-   * - running: 9:${JSON.stringify(toolCall)}\n
-   * - succeeded: a:${JSON.stringify(result)}\n
+   * agent.message → text-end + finish
+   */
+  private transformMessageComplete(_message: AgentMessage): string {
+    const parts: string[] = [];
+
+    // 关闭打开的文本 part
+    if (this.textPartId) {
+      parts.push(this.sse({ type: 'text-end', id: this.textPartId }));
+      this.textPartId = null;
+    }
+
+    parts.push(this.sse({ type: 'finish', finishReason: 'stop' }));
+
+    return parts.join('');
+  }
+
+  /**
+   * tool.state → tool-input-available / tool-output-available / tool-output-error
    */
   private transformToolState(update: ToolStateUpdate): string | null {
+    const parts: string[] = [];
+
     switch (update.status) {
       case 'running':
       case 'queued':
-        // 工具调用开始
-        return `9:${JSON.stringify({
-          toolCallId: update.toolId,
-          toolName: update.name,
-          args: update.input || {},
-        })}\n`;
-      
+        // 先关闭打开的文本 part
+        if (this.textPartId) {
+          parts.push(this.sse({ type: 'text-end', id: this.textPartId }));
+          this.textPartId = null;
+        }
+        parts.push(
+          this.sse({
+            type: 'tool-input-available',
+            toolCallId: update.toolId,
+            toolName: update.name,
+            input: update.input || {},
+            dynamic: true,
+          }),
+        );
+        return parts.join('');
+
       case 'succeeded':
-        // 工具执行结果
-        return `a:${JSON.stringify({
-          toolCallId: update.toolId,
-          result: update.output || null,
-        })}\n`;
-      
+        parts.push(
+          this.sse({
+            type: 'tool-output-available',
+            toolCallId: update.toolId,
+            output: update.output ?? null,
+            dynamic: true,
+          }),
+        );
+        return parts.join('');
+
       case 'failed':
-        // 工具执行失败，作为错误处理
-        return `3:${JSON.stringify({
-          code: update.error?.code || 'tool_error',
-          message: update.error?.message || update.message || 'Tool execution failed',
-        })}\n`;
-      
+        parts.push(
+          this.sse({
+            type: 'tool-output-error',
+            toolCallId: update.toolId,
+            errorText:
+              update.error?.message ||
+              update.message ||
+              'Tool execution failed',
+            dynamic: true,
+          }),
+        );
+        return parts.join('');
+
       case 'awaiting_input':
-        // 等待用户确认：通过 2: 自定义事件透传 confirmationId 等信息
-        return `2:${JSON.stringify([{
-          type: 'tool.awaiting_input',
-          toolCallId: update.toolId,
-          toolName: update.name,
-          confirmationId: update.confirmationId,
-          input: update.input || {},
-          message: update.message,
-        }])}\n`;
-      
+        // 通过 data- 自定义事件透传 confirmationId 等信息
+        parts.push(
+          this.sse({
+            type: 'data-tool-awaiting-input',
+            id: update.toolId,
+            data: {
+              toolCallId: update.toolId,
+              toolName: update.name,
+              confirmationId: update.confirmationId,
+              input: update.input || {},
+              message: update.message,
+            },
+          }),
+        );
+        return parts.join('');
+
       default:
-        // 其他状态不需要转换
         return null;
     }
   }
 
   /**
-   * 转换错误: error -> 3:
-   * 格式: 3:${JSON.stringify(errorMessage)}\n
+   * error → { type: "error", errorText: string }
    */
   private transformError(error: AgentError): string {
-    return `3:${JSON.stringify(error.message)}\n`;
+    return this.sse({ type: 'error', errorText: error.message });
   }
 
   /**
-   * 转换上下文补丁: context.patch -> 2: (自定义数据)
-   * 格式: 2:${JSON.stringify([{type: 'conversation.created', conversationId: '...'}])}\n
-   * 
+   * context.patch → data-* 自定义事件
    * 用于传递 conversationId 等上下文信息给前端
    */
   private transformContextPatch(patch: AgentContextPatch): string | null {
-    // 只处理 session 层的 conversationId 更新
     if (patch.layer === 'session' && patch.patch.conversationId) {
-      return `2:${JSON.stringify([{
-        type: 'conversation.created',
-        conversationId: patch.patch.conversationId,
-      }])}\n`;
+      return this.sse({
+        type: 'data-conversation-created',
+        id: generateUlid(),
+        data: {
+          type: 'conversation.created',
+          conversationId: patch.patch.conversationId,
+        },
+      });
     }
     return null;
   }
+
+  /**
+   * agent.end → 关闭所有打开的 part，不重复发 finish（由 agent.message 触发）
+   */
+  private transformEnd(): string | null {
+    const parts: string[] = [];
+
+    // 安全关闭打开的文本 part（如果 agent.message 没有被发出）
+    if (this.textPartId) {
+      parts.push(this.sse({ type: 'text-end', id: this.textPartId }));
+      this.textPartId = null;
+    }
+
+    return parts.length > 0 ? parts.join('') : null;
+  }
 }
-
-
-

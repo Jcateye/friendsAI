@@ -1,8 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { HttpException } from '@nestjs/common';
 import { AgentController } from './agent.controller';
-import { AgentRuntimeExecutor } from './runtime/agent-runtime-executor.service';
-import { AgentOrchestrator } from './agent.orchestrator';
+import { EngineRouter } from './engines/engine.router';
 import { AgentMessageStore } from './agent-message.store';
 import { AgentListService } from './agent-list.service';
 import { AgentRunMetricsService } from '../action-tracking/agent-run-metrics.service';
@@ -12,20 +11,16 @@ import { AgentRuntimeError } from './errors/agent-runtime.error';
 
 describe('AgentController - POST /v1/agent/run', () => {
   let controller: AgentController;
-  let mockRuntimeExecutor: jest.Mocked<AgentRuntimeExecutor>;
-  let mockAgentOrchestrator: jest.Mocked<AgentOrchestrator>;
+  let mockEngineRouter: jest.Mocked<EngineRouter>;
   let mockMessageStore: jest.Mocked<AgentMessageStore>;
   let mockAgentListService: jest.Mocked<AgentListService>;
   let mockAgentRunMetricsService: jest.Mocked<AgentRunMetricsService>;
 
   beforeEach(async () => {
-    mockRuntimeExecutor = {
-      execute: jest.fn(),
-    } as unknown as jest.Mocked<AgentRuntimeExecutor>;
-
-    mockAgentOrchestrator = {
+    mockEngineRouter = {
+      run: jest.fn(),
       streamChat: jest.fn(),
-    } as unknown as jest.Mocked<AgentOrchestrator>;
+    } as unknown as jest.Mocked<EngineRouter>;
 
     mockMessageStore = {
       buildKey: jest.fn().mockReturnValue('test-key'),
@@ -47,8 +42,7 @@ describe('AgentController - POST /v1/agent/run', () => {
     const module: TestingModule = await Test.createTestingModule({
       controllers: [AgentController],
       providers: [
-        { provide: AgentRuntimeExecutor, useValue: mockRuntimeExecutor },
-        { provide: AgentOrchestrator, useValue: mockAgentOrchestrator },
+        { provide: EngineRouter, useValue: mockEngineRouter },
         { provide: AgentMessageStore, useValue: mockMessageStore },
         { provide: AgentListService, useValue: mockAgentListService },
         { provide: AgentRunMetricsService, useValue: mockAgentRunMetricsService },
@@ -92,12 +86,12 @@ describe('AgentController - POST /v1/agent/run', () => {
         },
       };
 
-      mockRuntimeExecutor.execute.mockResolvedValue(mockResult);
+      mockEngineRouter.run.mockResolvedValue(mockResult);
 
       const result = await controller.run({} as Request, validTitleSummaryRequest);
 
       // 验证调用参数
-      expect(mockRuntimeExecutor.execute).toHaveBeenCalledWith(
+      expect(mockEngineRouter.run).toHaveBeenCalledWith(
         'title_summary',           // agentId
         undefined,                 // operation (未指定时为 undefined)
         expect.objectContaining({
@@ -141,7 +135,7 @@ describe('AgentController - POST /v1/agent/run', () => {
         },
       };
 
-      mockRuntimeExecutor.execute.mockResolvedValue(mockResult);
+      mockEngineRouter.run.mockResolvedValue(mockResult);
 
       const result = await controller.run({} as Request, validTitleSummaryRequest);
 
@@ -159,7 +153,7 @@ describe('AgentController - POST /v1/agent/run', () => {
         },
       );
 
-      mockRuntimeExecutor.execute.mockRejectedValue(notFoundError);
+      mockEngineRouter.run.mockRejectedValue(notFoundError);
 
       await expect(controller.run({} as Request, {
         agentId: 'unknown_agent' as any,
@@ -189,7 +183,7 @@ describe('AgentController - POST /v1/agent/run', () => {
         },
       );
 
-      mockRuntimeExecutor.execute.mockRejectedValue(validationError);
+      mockEngineRouter.run.mockRejectedValue(validationError);
 
       await expect(controller.run({} as Request, validTitleSummaryRequest)).rejects.toThrow(
         HttpException,
@@ -214,7 +208,7 @@ describe('AgentController - POST /v1/agent/run', () => {
         },
       };
 
-      mockRuntimeExecutor.execute.mockImplementation(() => {
+      mockEngineRouter.run.mockImplementation(() => {
         throw new AgentRuntimeError({
           code: 'invalid_agent_input',
           message: 'messages is required',
@@ -245,7 +239,7 @@ describe('AgentController - POST /v1/agent/run', () => {
         },
       };
 
-      mockRuntimeExecutor.execute.mockResolvedValue(mockResult);
+      mockEngineRouter.run.mockResolvedValue(mockResult);
 
       const requestWithForceRefresh: AgentRunRequest = {
         ...validTitleSummaryRequest,
@@ -258,7 +252,7 @@ describe('AgentController - POST /v1/agent/run', () => {
       const result = await controller.run({} as Request, requestWithForceRefresh);
 
       // 验证 forceRefresh 参数传递正确（第4个参数）
-      const lastCall = mockRuntimeExecutor.execute.mock.calls[0];
+      const lastCall = mockEngineRouter.run.mock.calls[0];
       expect(lastCall[3].forceRefresh).toBe(true);
 
       expect(result.cached).toBe(false);
@@ -274,7 +268,7 @@ describe('AgentController - POST /v1/agent/run', () => {
         },
       };
 
-      mockRuntimeExecutor.execute.mockResolvedValue(mockResult);
+      mockEngineRouter.run.mockResolvedValue(mockResult);
 
       const englishRequest: AgentRunRequest = {
         ...validTitleSummaryRequest,
@@ -287,7 +281,7 @@ describe('AgentController - POST /v1/agent/run', () => {
       const result = await controller.run({} as Request, englishRequest);
 
       // 验证 language 参数在 input（第3个参数）中
-      const lastCall = mockRuntimeExecutor.execute.mock.calls[0];
+      const lastCall = mockEngineRouter.run.mock.calls[0];
       expect(lastCall[2].language).toBe('en');
 
       expect(result.data.title).toBe('Weather and Walking Suggestions');
@@ -300,7 +294,7 @@ describe('AgentController - POST /v1/agent/run', () => {
         data: { title: 'Test', summary: 'Test' },
       };
 
-      mockRuntimeExecutor.execute.mockResolvedValue(mockResult);
+      mockEngineRouter.run.mockResolvedValue(mockResult);
 
       const requestWithUser: AgentRunRequest = {
         ...validTitleSummaryRequest,
@@ -310,7 +304,7 @@ describe('AgentController - POST /v1/agent/run', () => {
       await controller.run({} as Request, requestWithUser);
 
       // 第四个参数 options 包含 userId
-      const lastCall = mockRuntimeExecutor.execute.mock.calls[0];
+      const lastCall = mockEngineRouter.run.mock.calls[0];
       expect(lastCall[3].userId).toBe('user-123');
     });
 
@@ -321,7 +315,7 @@ describe('AgentController - POST /v1/agent/run', () => {
         data: { title: 'Test', summary: 'Test' },
       };
 
-      mockRuntimeExecutor.execute.mockResolvedValue(mockResult);
+      mockEngineRouter.run.mockResolvedValue(mockResult);
 
       const mockReq = {
         user: { id: 'auth-user-456' },
@@ -330,7 +324,7 @@ describe('AgentController - POST /v1/agent/run', () => {
       await controller.run(mockReq, validTitleSummaryRequest);
 
       // 第四个参数 options 包含从 req.user 获取的 userId
-      const lastCall = mockRuntimeExecutor.execute.mock.calls[0];
+      const lastCall = mockEngineRouter.run.mock.calls[0];
       expect(lastCall[3].userId).toBe('auth-user-456');
     });
   });
@@ -361,12 +355,12 @@ describe('AgentController - POST /v1/agent/run', () => {
         },
       };
 
-      mockRuntimeExecutor.execute.mockResolvedValue(mockResult);
+      mockEngineRouter.run.mockResolvedValue(mockResult);
 
       const result = await controller.run({} as Request, contactInsightRequest);
 
       expect(result.agentId).toBe('contact_insight');
-      const lastCall = mockRuntimeExecutor.execute.mock.calls[0];
+      const lastCall = mockEngineRouter.run.mock.calls[0];
       expect(lastCall[0]).toBe('contact_insight');
       expect(lastCall[2]).toMatchObject({
         contactId: 'contact-123',
@@ -399,24 +393,90 @@ describe('AgentController - POST /v1/agent/run', () => {
         },
       };
 
-      mockRuntimeExecutor.execute.mockResolvedValue(mockResult);
+      mockEngineRouter.run.mockResolvedValue(mockResult);
 
       const result = await controller.run({} as Request, archiveBriefRequest);
 
       expect(result.agentId).toBe('archive_brief');
       expect(result.operation).toBe('brief_generate');
-      expect(mockRuntimeExecutor.execute).toHaveBeenCalledWith(
+      expect(mockEngineRouter.run).toHaveBeenCalledWith(
         'archive_brief',
         'brief_generate',
         expect.any(Object),
         expect.any(Object)
       );
     });
+
+    it('should reject legacy llm fields in /agent/run', async () => {
+      const requestWithLegacyField = {
+        agentId: 'title_summary',
+        input: {
+          conversationId: 'conv-123',
+          messages: [{ role: 'user', content: 'hello' }],
+        },
+        model: 'gpt-4.1-mini',
+      } as unknown as AgentRunRequest;
+
+      await expect(controller.run({} as Request, requestWithLegacyField)).rejects.toThrow(HttpException);
+
+      await controller.run({} as Request, requestWithLegacyField).catch((error) => {
+        expect(error).toBeInstanceOf(HttpException);
+        expect(error.getStatus()).toBe(400);
+        expect(error.getResponse()).toMatchObject({
+          code: 'invalid_llm_request',
+        });
+      });
+      expect(mockEngineRouter.run).not.toHaveBeenCalled();
+    });
+
+    it('should pass normalized llm config to engine router in /agent/run', async () => {
+      const requestWithLlm: AgentRunRequest = {
+        agentId: 'title_summary',
+        input: {
+          conversationId: 'conv-123',
+          messages: [{ role: 'user', content: 'hello' }],
+        },
+        llm: {
+          provider: 'claude',
+          model: 'claude-3-7-sonnet',
+          providerOptions: {
+            claude: {
+              thinking: { type: 'enabled', budgetTokens: 256 },
+            } as any,
+          },
+        },
+      };
+
+      mockEngineRouter.run.mockResolvedValue({
+        runId: 'run-llm',
+        cached: false,
+        data: { title: 'ok', summary: 'ok' },
+      });
+
+      await controller.run({} as Request, requestWithLlm);
+
+      expect(mockEngineRouter.run).toHaveBeenCalledWith(
+        'title_summary',
+        undefined,
+        expect.any(Object),
+        expect.objectContaining({
+          llm: expect.objectContaining({
+            provider: 'claude',
+            model: 'claude-3-7-sonnet',
+            providerOptions: {
+              anthropic: {
+                thinking: { type: 'enabled', budgetTokens: 256 },
+              },
+            },
+          }),
+        }),
+      );
+    });
   });
 
   describe('chat context sanitization', () => {
     it('should sanitize composer context before passing request to orchestrator', async () => {
-      mockAgentOrchestrator.streamChat.mockReturnValue((async function* () {
+      mockEngineRouter.streamChat.mockReturnValue((async function* () {
         yield {
           event: 'agent.end',
           data: {
@@ -472,8 +532,8 @@ describe('AgentController - POST /v1/agent/run', () => {
 
       await controller.chat(mockReq, mockRes, requestBody, 'sse');
 
-      expect(mockAgentOrchestrator.streamChat).toHaveBeenCalledTimes(1);
-      const forwardedRequest = mockAgentOrchestrator.streamChat.mock.calls[0][0];
+      expect(mockEngineRouter.streamChat).toHaveBeenCalledTimes(1);
+      const forwardedRequest = mockEngineRouter.streamChat.mock.calls[0][0];
 
       expect(forwardedRequest.userId).toBe('req-user-001');
       expect(forwardedRequest.context?.composer).toEqual({

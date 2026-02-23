@@ -24,6 +24,8 @@ export interface RecordAgentRunMetricInput {
 export class AgentRunMetricsService {
   private readonly logger = new Logger(AgentRunMetricsService.name);
   private readonly enabled = process.env.AGENT_METRICS_ENABLED !== 'false';
+  private schemaChecked = false;
+  private schemaAvailable = true;
 
   constructor(
     @InjectRepository(AgentRunMetric, 'v3')
@@ -32,6 +34,10 @@ export class AgentRunMetricsService {
 
   async recordRun(input: RecordAgentRunMetricInput): Promise<void> {
     if (!this.enabled) {
+      return;
+    }
+
+    if (!(await this.ensureSchemaAvailable())) {
       return;
     }
 
@@ -49,13 +55,29 @@ export class AgentRunMetricsService {
       });
       await this.metricRepo.save(entity);
     } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (message.includes('relation "agent_run_metrics" does not exist')) {
+        this.schemaAvailable = false;
+        this.logger.warn(
+          'agent_run_metrics table is missing in DATABASE_URL_V3; metric writes are disabled until schema is migrated.',
+        );
+        return;
+      }
       this.logger.warn(
-        `Failed to record agent metric: ${error instanceof Error ? error.message : String(error)}`,
+        `Failed to record agent metric: ${message}`,
       );
     }
   }
 
   async getMetrics(userId: string, days = 7): Promise<AgentMetricsSummary> {
+    if (!this.enabled) {
+      return this.emptySummary();
+    }
+
+    if (!(await this.ensureSchemaAvailable())) {
+      return this.emptySummary();
+    }
+
     const now = Date.now();
     const daysToUse = Number.isFinite(days) && days > 0 ? Math.floor(days) : 7;
     const start = new Date(now - daysToUse * 24 * 60 * 60 * 1000);
@@ -123,5 +145,43 @@ export class AgentRunMetricsService {
       return 0;
     }
     return Number(((part / total) * 100).toFixed(2));
+  }
+
+  private async ensureSchemaAvailable(): Promise<boolean> {
+    if (this.schemaChecked) {
+      return this.schemaAvailable;
+    }
+
+    this.schemaChecked = true;
+    try {
+      // Preflight check avoids INSERT attempts on missing tables (and noisy query-failed logs).
+      const rows = await this.metricRepo.query(
+        `SELECT to_regclass('public.agent_run_metrics') AS table_name`,
+      );
+      const tableName = rows?.[0]?.table_name;
+      this.schemaAvailable = typeof tableName === 'string' && tableName.length > 0;
+      if (!this.schemaAvailable) {
+        this.logger.warn(
+          'agent_run_metrics table is missing in DATABASE_URL_V3; metric writes are disabled until schema is migrated.',
+        );
+      }
+      return this.schemaAvailable;
+    } catch (error) {
+      this.schemaAvailable = false;
+      const message = error instanceof Error ? error.message : String(error);
+      this.logger.warn(`Failed to probe agent_run_metrics schema: ${message}`);
+      return false;
+    }
+  }
+
+  private emptySummary(): AgentMetricsSummary {
+    return {
+      totalRuns: 0,
+      successRate: 0,
+      cacheHitRate: 0,
+      validationFailRate: 0,
+      avgDurationMs: 0,
+      byAgent: [],
+    };
   }
 }

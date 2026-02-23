@@ -1,4 +1,4 @@
-import type { LlmMessage } from '../ai/providers/llm-types';
+import type { LlmMessage, LlmRequestConfig } from '../ai/providers/llm-types';
 import type {
   AgentContextPatch,
   AgentError,
@@ -38,10 +38,7 @@ export interface AgentChatRequest {
   messages?: AgentChatMessage[];
   prompt?: string;
   context?: AgentChatContext;
-  model?: string;
-  temperature?: number;
-  maxTokens?: number;
-  max_tokens?: number;
+  llm?: LlmRequestConfig;
   userId?: string;
   conversationId?: string;
   sessionId?: string;
@@ -88,6 +85,8 @@ export interface AgentRunRequest {
   sessionId?: string;
   /** 对话 ID */
   conversationId?: string;
+  /** LLM 调用配置 */
+  llm?: LlmRequestConfig;
 }
 
 /**

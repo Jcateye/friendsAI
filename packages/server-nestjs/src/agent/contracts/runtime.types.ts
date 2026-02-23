@@ -1,5 +1,6 @@
 import type { z } from 'zod';
 import type { AgentId } from './agent-definition.types';
+import type { LlmRequestConfig } from '../../ai/providers/llm-types';
 
 /**
  * 运行时上下文
@@ -66,12 +67,8 @@ export interface AgentRunRequest {
   sessionId?: string;
   /** 对话 ID */
   conversationId?: string;
-  /** 模型配置 */
-  model?: string;
-  /** 温度参数 */
-  temperature?: number;
-  /** 最大 token 数 */
-  maxTokens?: number;
+  /** LLM 配置 */
+  llm?: LlmRequestConfig;
   /** 其他配置 */
   [key: string]: unknown;
 }

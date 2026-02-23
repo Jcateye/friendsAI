@@ -40,6 +40,8 @@ export class ContactsService {
   constructor(
     @InjectRepository(Contact)
     private contactRepository: Repository<Contact>,
+    @InjectRepository(ContactFact)
+    private factRepository: Repository<ContactFact>,
   ) {}
 
   async create(createContactDto: CreateContactDto, userId?: string): Promise<Contact> {
@@ -47,9 +49,12 @@ export class ContactsService {
     if (!name || name.length === 0) {
       throw new BadRequestException('name is required');
     }
+
+    const tags = this.sanitizeTags(createContactDto.tags);
     const contact = this.contactRepository.create({
       ...createContactDto,
       name,
+      tags,
       userId: userId ?? null,
     });
     return this.contactRepository.save(contact);
@@ -66,7 +71,7 @@ export class ContactsService {
       take: limit,
       order: { createdAt: 'DESC' },
     });
-    return { items, total };
+    return { items: items.map((item) => this.sanitizeContact(item)), total };
   }
 
   async findOne(id: string, userId?: string): Promise<Contact> {
@@ -77,13 +82,48 @@ export class ContactsService {
     if (!contact) {
       throw new NotFoundException('Contact not found');
     }
-    return contact;
+    return this.sanitizeContact(contact);
   }
 
   async update(id: string, updateContactDto: UpdateContactDto, userId?: string): Promise<Contact> {
     const contact = await this.findOne(id, userId);
-    Object.assign(contact, updateContactDto);
+    const nextUpdates: UpdateContactDto = { ...updateContactDto };
+    if (Object.prototype.hasOwnProperty.call(updateContactDto, 'tags')) {
+      nextUpdates.tags = this.sanitizeTags(updateContactDto.tags) ?? [];
+    }
+    Object.assign(contact, nextUpdates);
     return this.contactRepository.save(contact);
+  }
+
+  async addFact(
+    contactId: string,
+    payload: {
+      content: string;
+      metadata?: Record<string, any>;
+      sourceConversationId?: string;
+    },
+    userId?: string,
+  ): Promise<ContactFact> {
+    const contact = await this.contactRepository.findOne({
+      where: userId ? { id: contactId, userId } : { id: contactId },
+    });
+    if (!contact) {
+      throw new NotFoundException('Contact not found');
+    }
+
+    const content = payload.content?.trim();
+    if (!content) {
+      throw new BadRequestException('content is required');
+    }
+
+    const fact = this.factRepository.create({
+      content,
+      metadata: payload.metadata ?? null,
+      sourceConversationId: payload.sourceConversationId ?? null,
+      contactId: contact.id,
+    });
+
+    return this.factRepository.save(fact);
   }
 
   async getContactContext(id: string, userId?: string): Promise<{
@@ -197,5 +237,34 @@ export class ContactsService {
 
       throw error;
     }
+  }
+
+  private sanitizeTags(tags?: string[] | null): string[] | undefined {
+    if (!Array.isArray(tags)) {
+      return undefined;
+    }
+
+    const result: string[] = [];
+    const seen = new Set<string>();
+    for (const tag of tags) {
+      if (typeof tag !== 'string') {
+        continue;
+      }
+      const normalized = tag.trim();
+      if (!normalized || normalized === '已更新') {
+        continue;
+      }
+      if (seen.has(normalized)) {
+        continue;
+      }
+      seen.add(normalized);
+      result.push(normalized);
+    }
+    return result;
+  }
+
+  private sanitizeContact(contact: Contact): Contact {
+    contact.tags = this.sanitizeTags(contact.tags) ?? [];
+    return contact;
   }
 }

@@ -6,6 +6,7 @@ import { Contact } from '../../../entities/contact.entity';
 import { AgentRuntimeExecutor } from '../../runtime/agent-runtime-executor.service';
 import { SnapshotService } from '../../snapshots/snapshot.service';
 import * as crypto from 'crypto';
+import type { LlmRequestConfig } from '../../../ai/providers/llm-types';
 
 export type ArchiveBriefOperation = 'archive_extract' | 'brief_generate';
 
@@ -65,7 +66,7 @@ export class ArchiveBriefService {
    */
   async extractArchive(
     input: ArchiveExtractInput,
-    options: { forceRefresh?: boolean } = {}
+    options: { forceRefresh?: boolean; llm?: LlmRequestConfig } = {}
   ): Promise<ArchiveExtractOutput> {
     const { userId, conversationId } = input;
 
@@ -132,6 +133,7 @@ export class ArchiveBriefService {
         forceRefresh: options.forceRefresh,
         userId,
         conversationId,
+        llm: options.llm,
         skipServiceRouting: true, // 跳过服务路由，直接使用通用流程
       },
     );
@@ -161,7 +163,7 @@ export class ArchiveBriefService {
    */
   async generateBrief(
     input: BriefGenerateInput,
-    options: { forceRefresh?: boolean } = {}
+    options: { forceRefresh?: boolean; llm?: LlmRequestConfig } = {}
   ): Promise<BriefGenerateOutput> {
     const { userId, contactId } = input;
 
@@ -241,6 +243,7 @@ export class ArchiveBriefService {
         useCache: false, // 我们在这里手动管理缓存
         forceRefresh: options.forceRefresh,
         userId,
+        llm: options.llm,
         skipServiceRouting: true, // 跳过服务路由，直接使用通用流程
       },
     );

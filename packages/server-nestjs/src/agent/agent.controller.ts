@@ -1,7 +1,6 @@
 import { Body, Controller, Get, HttpCode, HttpException, HttpStatus, Optional, Post, Query, Req, Res } from '@nestjs/common';
 import { ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
 import type { Request, Response } from 'express';
-import { AgentOrchestrator } from './agent.orchestrator';
 import { AgentMessageStore } from './agent-message.store';
 import type {
   AgentChatContext,
@@ -14,13 +13,15 @@ import type {
 } from './agent.types';
 import type { AgentError, AgentRunEnd, AgentSseEvent } from './client-types';
 import { VercelAiStreamAdapter } from './adapters/vercel-ai-stream.adapter';
-import { AgentRuntimeExecutor } from './runtime/agent-runtime-executor.service';
 import { AgentListService } from './agent-list.service';
 import { AgentListResponseDto } from './dto/agent-list.dto';
 import { AgentRuntimeError } from './errors/agent-runtime.error';
 import { AgentRunMetricsService } from '../action-tracking/agent-run-metrics.service';
 import { generateUlid } from '../utils/ulid';
 import { SkillsService } from '../skills/skills.service';
+import { EngineRouter } from './engines/engine.router';
+import { AgentLlmValidationError, findLegacyLlmFields, parseAgentLlmOrThrow } from './dto/agent-llm.schema';
+import type { LlmRequestConfig } from '../ai/providers/llm-types';
 
 @ApiTags('Agent')
 @Controller('agent')
@@ -35,14 +36,13 @@ export class AgentController {
   private readonly skillParserExecuteMode = process.env.SKILL_PARSER_EXECUTE_MODE ?? 'log-only';
 
   constructor(
-    private readonly agentOrchestrator: AgentOrchestrator,
+    private readonly engineRouter: EngineRouter,
     private readonly messageStore: AgentMessageStore,
-    private readonly agentRuntimeExecutor: AgentRuntimeExecutor,
     private readonly agentListService: AgentListService,
     private readonly agentRunMetricsService: AgentRunMetricsService,
     @Optional()
     private readonly skillsService?: SkillsService,
-  ) {}
+  ) { }
 
   @Post('chat')
   @ApiOperation({
@@ -50,12 +50,12 @@ export class AgentController {
     description:
       '发起与多 Agent 协调的流式对话，请求体支持 messages（多轮聊天记录）或 prompt（单轮提示），二者至少提供其一；' +
       '通过 format 查询参数选择输出流格式：sse 时返回 text/event-stream 的 Agent 事件（agent.start / agent.delta / agent.message 等），' +
-      'vercel-ai 时返回兼容 Vercel AI SDK 的纯文本增量流。常用于前端聊天框、打字机效果，以及需要实时看到工具调用进度的场景。',
+      'vercel-ai 时返回兼容 AI SDK v6 的 UI Message Stream（`data: {...}` + `data: [DONE]`）。常用于前端聊天框、打字机效果，以及需要实时看到工具调用进度的场景。',
   })
   @ApiQuery({
     name: 'format',
     required: false,
-    description: '响应格式：sse（默认，EventSource）或 vercel-ai（适配 Vercel AI SDK）',
+    description: '响应格式：sse（默认，EventSource）或 vercel-ai（AI SDK v6 UI Message Stream，header: x-vercel-ai-ui-message-stream: v1）',
     example: 'sse',
   })
   @HttpCode(200)
@@ -65,6 +65,18 @@ export class AgentController {
     @Body() body: AgentChatRequest,
     @Query('format') format: 'sse' | 'vercel-ai' = 'sse',
   ): Promise<void> {
+    let normalizedLlm: LlmRequestConfig | undefined;
+    try {
+      normalizedLlm = this.validateAndNormalizeLlm(body);
+    } catch (error) {
+      const llmError = this.toLlmValidationError(error);
+      if (llmError) {
+        res.status(400).json(llmError);
+        return;
+      }
+      throw error;
+    }
+
     const streamStartedAt = Date.now();
     const resolvedUserId = (req.user as { id?: string } | undefined)?.id ?? body.userId;
     const hasMessages = Array.isArray(body?.messages) && body.messages.length > 0;
@@ -76,15 +88,15 @@ export class AgentController {
     }
 
     res.status(200);
-    
+
     // 根据 format 设置响应头
     if (format === 'vercel-ai') {
-      res.setHeader('Content-Type', 'text/plain; charset=utf-8');
-      res.setHeader('X-Vercel-AI-Data-Stream', 'v1');
+      res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
+      res.setHeader('x-vercel-ai-ui-message-stream', 'v1');
     } else {
       res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
     }
-    
+
     res.setHeader('Cache-Control', 'no-cache, no-transform');
     res.setHeader('Connection', 'keep-alive');
     res.setHeader('X-Accel-Buffering', 'no');
@@ -117,6 +129,7 @@ export class AgentController {
         ...body,
         context: sanitizedContext,
         userId: resolvedUserId,
+        llm: normalizedLlm,
       };
 
       if (this.skillParserEnabled && this.skillsService && resolvedUserId) {
@@ -151,7 +164,7 @@ export class AgentController {
             const handled = await this.executeSkillIntentDirectly({
               res,
               format,
-              runRequest: body,
+              runRequest: preparedRequest,
               userId: resolvedUserId,
               parsedIntent,
             });
@@ -167,7 +180,7 @@ export class AgentController {
         }
       }
 
-      for await (const event of this.agentOrchestrator.streamChat(preparedRequest, {
+      for await (const event of this.engineRouter.streamChat(preparedRequest, {
         signal: abortController.signal,
       })) {
         if (res.writableEnded) {
@@ -181,7 +194,7 @@ export class AgentController {
           streamStatus = event.data.status === 'cancelled' ? 'cancelled' : event.data.status === 'succeeded' ? 'succeeded' : 'failed';
           streamErrorCode = event.data.error?.code ?? null;
         }
-        
+
         // 根据 format 选择写入方式
         if (adapter) {
           const transformed = adapter.transform(event);
@@ -201,7 +214,15 @@ export class AgentController {
           code: 'stream_error',
           message,
         };
-        this.writeEvent(res, { event: 'error', data: errorPayload });
+        const errorEvent: AgentStreamEvent = { event: 'error', data: errorPayload };
+        if (adapter) {
+          const transformed = adapter.transform(errorEvent);
+          if (transformed) {
+            res.write(transformed);
+          }
+        } else {
+          this.writeEvent(res, errorEvent);
+        }
       }
     } finally {
       req.off('close', handleClose);
@@ -219,7 +240,19 @@ export class AgentController {
           };
           streamStatus = 'failed';
           streamErrorCode = 'stream_error';
-          this.writeEvent(res, { event: 'agent.end', data: endPayload });
+          const endEvent: AgentStreamEvent = { event: 'agent.end', data: endPayload };
+          if (adapter) {
+            const transformed = adapter.transform(endEvent);
+            if (transformed) {
+              res.write(transformed);
+            }
+          } else {
+            this.writeEvent(res, endEvent);
+          }
+        }
+        // Send [DONE] marker for v6 UI Message Stream Protocol
+        if (adapter) {
+          res.write(adapter.done());
         }
         res.end();
       }
@@ -277,7 +310,8 @@ export class AgentController {
     const userId = (req.user as { id?: string } | undefined)?.id ?? body.userId;
 
     try {
-      const result = await this.agentRuntimeExecutor.execute(
+      const normalizedLlm = this.validateAndNormalizeLlm(body);
+      const result = await this.engineRouter.run(
         body.agentId,
         body.operation,
         body.input,
@@ -290,6 +324,7 @@ export class AgentController {
           intent: body.intent,
           relationshipMix: body.relationshipMix,
           timeBudgetMinutes: body.timeBudgetMinutes,
+          llm: normalizedLlm,
         }
       );
 
@@ -455,7 +490,7 @@ export class AgentController {
       executionInput.userId = input.userId;
     }
 
-    const result = await this.agentRuntimeExecutor.execute(
+    const result = await this.engineRouter.run(
       execution.agentId as AgentRunRequest['agentId'],
       execution.operation ?? null,
       executionInput,
@@ -464,6 +499,7 @@ export class AgentController {
         userId: input.userId,
         conversationId: input.runRequest.conversationId,
         sessionId: input.runRequest.sessionId,
+        llm: input.runRequest.llm,
       },
     );
 
@@ -475,8 +511,14 @@ export class AgentController {
     );
 
     if (input.format === 'vercel-ai') {
-      input.res.write(`0:${JSON.stringify(summaryText)}\n`);
-      input.res.write(`d:${JSON.stringify({ finishReason: 'stop' })}\n`);
+      const skillAdapter = new VercelAiStreamAdapter();
+      const startChunk = skillAdapter.transform({ event: 'agent.start', data: { runId: result.runId, createdAt: new Date().toISOString(), input: summaryText } });
+      if (startChunk) input.res.write(startChunk);
+      const deltaChunk = skillAdapter.transform({ event: 'agent.delta', data: { id: generateUlid(), delta: summaryText } });
+      if (deltaChunk) input.res.write(deltaChunk);
+      const msgChunk = skillAdapter.transform({ event: 'agent.message', data: { id: generateUlid(), role: 'assistant', content: summaryText, createdAt: new Date().toISOString(), createdAtMs: Date.now() } });
+      if (msgChunk) input.res.write(msgChunk);
+      input.res.write(skillAdapter.done());
       return { runId: result.runId };
     }
 
@@ -693,6 +735,41 @@ export class AgentController {
     return value !== null && typeof value === 'object' && !Array.isArray(value);
   }
 
+  private validateAndNormalizeLlm(body: unknown): LlmRequestConfig | undefined {
+    const legacyFields = findLegacyLlmFields(body);
+    if (legacyFields.length > 0) {
+      throw new AgentLlmValidationError(
+        'invalid_llm_request',
+        `Legacy LLM fields are no longer supported: ${legacyFields.join(', ')}. Use llm.* fields instead.`,
+        { legacyFields },
+      );
+    }
+
+    if (!this.isRecord(body) || body.llm === undefined) {
+      return undefined;
+    }
+
+    return parseAgentLlmOrThrow(body);
+  }
+
+  private toLlmValidationError(error: unknown):
+    | {
+      code: 'invalid_llm_request' | 'unsupported_llm_provider';
+      message: string;
+      details?: unknown;
+    }
+    | null {
+    if (!(error instanceof AgentLlmValidationError)) {
+      return null;
+    }
+
+    return {
+      code: error.code,
+      message: error.message,
+      details: error.details,
+    };
+  }
+
   private mapRunError(error: unknown): {
     statusCode: number;
     body: {
@@ -702,6 +779,18 @@ export class AgentController {
       retryable?: boolean;
     };
   } {
+    if (error instanceof AgentLlmValidationError) {
+      return {
+        statusCode: HttpStatus.BAD_REQUEST,
+        body: {
+          code: error.code,
+          message: error.message,
+          details: error.details,
+          retryable: false,
+        },
+      };
+    }
+
     if (error instanceof AgentRuntimeError) {
       return {
         statusCode: error.statusCode,

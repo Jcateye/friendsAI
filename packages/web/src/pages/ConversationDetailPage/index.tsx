@@ -6,16 +6,15 @@ import { ToolConfirmationOverlay } from '../../components/chat/ToolConfirmationO
 import { ChatInputBox, type ChatComposerSubmitPayload, type SkillActionOption, type ToolOption } from '../../components/chat/ChatInputBox';
 import { ArchiveApplyPanel } from '../../components/chat/ArchiveApplyPanel';
 import { useConversationHistory } from '../../hooks/useConversationHistory';
-import { useAgentChat } from '../../hooks/useAgentChat';
+import { useAgentChat, type AgentChatMessage } from '../../hooks/useAgentChat';
 import { useToolConfirmations } from '../../hooks/useToolConfirmations';
 import { sortMessagesByCreatedAt } from '../../lib/messages/sortMessagesByCreatedAt';
 import { resolveEpochMs } from '../../lib/time/timestamp';
-import type { Message as AISDKMessage } from 'ai';
 import type { ArchiveExtractData } from '../../lib/api/agent-types';
 import type { SkillCatalogItem } from '../../lib/api/types';
 import { api } from '../../lib/api/client';
 
-type MessageWithMs = AISDKMessage & {
+type MessageWithMs = AgentChatMessage & {
   createdAtMs?: number;
 };
 

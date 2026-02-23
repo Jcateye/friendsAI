@@ -3,9 +3,7 @@
 ## Purpose
 
 TBD
-
 ## Requirements
-
 ### Requirement: CHAT-010 User can create and list conversations
 系统 SHALL 提供 conversation 的创建与列表能力，用于承载多轮对话。
 
@@ -79,9 +77,18 @@ SSE 事件类型 MUST 至少包含：
 - **THEN** SSE `tool.state` 更新为 `status=succeeded` 或 `status=failed`，并包含 output/error
 
 ### Requirement: CHAT-060 Keep-alive pings
-系统 SHOULD 在长连接期间周期性发送 `ping` 事件，避免中间网络设备/浏览器断开连接。
+系统 SHALL 在长连接期间周期性发送 `ping` 事件，避免中间网络设备/浏览器断开连接。
 
 #### Scenario: Ping is periodically emitted
 - **GIVEN** 一次 agent run 持续时间较长
 - **WHEN** SSE 连接保持打开
 - **THEN** 客户端可观测到周期性的 `ping` 事件
+
+### Requirement: CHAT-070 Agent chat SSE contract remains stable across engine routing
+系统 MUST 保持 `POST /v1/agent/chat` 的 SSE 关键事件语义稳定，即使内部执行路径切换到 router/多引擎分发。
+
+#### Scenario: conversation and tool-awaiting-input semantics are preserved
+- **GIVEN** 客户端使用 `POST /v1/agent/chat?format=vercel-ai`
+- **WHEN** chat 请求经过 engine router 并由 local/openclaw 引擎执行
+- **THEN** `conversation.created` 与工具确认相关事件（例如 `tool.awaiting_input`）的语义与关键字段保持兼容
+

@@ -1,7 +1,27 @@
 import { useMessage } from '@assistant-ui/react';
 import { A2UIRenderer, ToolTraceCard } from '../a2ui';
 import type { A2UIDocument, A2UIAction } from '../a2ui/types';
-import type { Message as AISDKMessage } from 'ai';
+import { ThinkingProcess } from './ThinkingProcess';
+
+function extractThinkingProcess(content: string): { thinking: string | null; rest: string } {
+  const thinkRegex = /<think>([\s\S]*?)<\/think>/i;
+  const match = content.match(thinkRegex);
+  if (match) {
+    return {
+      thinking: match[1].trim(),
+      rest: content.replace(match[0], '').trim(),
+    };
+  }
+  const openThinkRegex = /<think>([\s\S]*)$/i;
+  const openMatch = content.match(openThinkRegex);
+  if (openMatch) {
+    return {
+      thinking: openMatch[1].trim(),
+      rest: content.replace(openMatch[0], '').trim(),
+    };
+  }
+  return { thinking: null, rest: content };
+}
 
 interface ToolInvocation {
   toolCallId?: string;
@@ -137,9 +157,8 @@ function renderMarkdown(content: string): React.ReactNode {
                   </div>
                 )}
                 <pre
-                  className={`bg-bg-surface rounded-md p-3 overflow-x-auto ${
-                    codeBlock.lang ? 'rounded-t-none' : ''
-                  }`}
+                  className={`bg-bg-surface rounded-md p-3 overflow-x-auto ${codeBlock.lang ? 'rounded-t-none' : ''
+                    }`}
                 >
                   <code className="text-[13px] font-mono text-text-primary whitespace-pre">
                     {codeBlock.content}
@@ -201,11 +220,40 @@ function InlineMessageRenderer({ message }: { message: MessageLike }) {
     }
   };
 
+  let thinkingContent: string | null = null;
+  let actualContent = message.content;
+
+  if (typeof message.content === 'string') {
+    const extracted = extractThinkingProcess(message.content);
+    thinkingContent = extracted.thinking;
+    actualContent = extracted.rest;
+  } else if (Array.isArray(message.content)) {
+    const newArray = [...message.content];
+    for (let i = 0; i < newArray.length; i++) {
+      if (typeof newArray[i] === 'string') {
+        const extracted = extractThinkingProcess(newArray[i] as string);
+        if (extracted.thinking) {
+          thinkingContent = (thinkingContent ? thinkingContent + '\n' : '') + extracted.thinking;
+          newArray[i] = extracted.rest;
+        }
+      } else if (isObject(newArray[i]) && typeof newArray[i].text === 'string') {
+        const extracted = extractThinkingProcess(newArray[i].text as string);
+        if (extracted.thinking) {
+          thinkingContent = (thinkingContent ? thinkingContent + '\n' : '') + extracted.thinking;
+          newArray[i] = { ...newArray[i], text: extracted.rest };
+        }
+      }
+    }
+    actualContent = newArray;
+  }
+
   return (
     <div className="flex flex-col gap-2">
-      {message.content !== undefined && message.content !== null && (
+      {thinkingContent && <ThinkingProcess content={thinkingContent} />}
+
+      {actualContent !== undefined && actualContent !== null && actualContent !== '' && (
         <div className="text-[15px] text-text-primary font-primary leading-relaxed">
-          {renderMessageContent(message.content)}
+          {renderMessageContent(actualContent)}
         </div>
       )}
 
@@ -244,7 +292,7 @@ function InlineMessageRenderer({ message }: { message: MessageLike }) {
   );
 }
 
-export function CustomMessageRenderer({ message: messageProp }: { message?: AISDKMessage } = {}) {
+export function CustomMessageRenderer({ message: messageProp }: { message?: MessageLike } = {}) {
   if (messageProp) {
     return <InlineMessageRenderer message={messageProp as MessageLike} />;
   }

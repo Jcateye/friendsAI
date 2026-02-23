@@ -1,129 +1,220 @@
-import { Test, TestingModule } from '@nestjs/testing';
+import { Test, type TestingModule } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
-import { InternalServerErrorException } from '@nestjs/common';
+import { embed, generateText, streamText } from 'ai';
 import fs from 'fs';
 import { AiService } from './ai.service';
+import { AiSdkProviderFactory } from './providers/ai-sdk-provider.factory';
+import { LlmCallError, LlmConfigurationError } from './providers/llm-config.types';
+import type { LlmMessage } from './providers/llm-types';
+
+jest.mock('ai', () => ({
+  embed: jest.fn(),
+  generateText: jest.fn(),
+  streamText: jest.fn(),
+  jsonSchema: jest.fn((schema: unknown) => schema),
+  tool: jest.fn((definition: unknown) => definition),
+}));
+
+type ConfigMap = Record<string, string | undefined>;
+
+const mockedEmbed = jest.mocked(embed);
+const mockedGenerateText = jest.mocked(generateText);
+const mockedStreamText = jest.mocked(streamText);
 
 describe('AiService', () => {
-  let service: AiService;
-  const mockProvider = {
-    name: 'openai-compatible',
-    generateEmbedding: jest.fn(),
-    generateText: jest.fn(),
-    streamChat: jest.fn(),
-  };
-
-  beforeEach(async () => {
-    const module: TestingModule = await Test.createTestingModule({
-      providers: [
-        AiService,
-        {
-          provide: ConfigService,
-          useValue: {
-            get: jest.fn((key: string) => {
-              if (key === 'LLM_API_KEY') return 'test-api-key';
-              if (key === 'LLM_MODEL') return 'gpt-4.1-mini';
-              if (key === 'LLM_EMBEDDING_MODEL') return 'text-embedding-ada-002';
-              if (key === 'NODE_ENV') return 'test';
-              return null;
-            }),
-          },
-        },
-      ],
-    }).compile();
-
-    service = module.get<AiService>(AiService);
-    (service as any).provider = mockProvider;
-
-    mockProvider.generateEmbedding.mockReset();
-    mockProvider.generateText.mockReset();
-    mockProvider.streamChat.mockReset();
+  beforeEach(() => {
+    jest.clearAllMocks();
+    jest.spyOn(fs, 'existsSync').mockReturnValue(false);
   });
 
   afterEach(() => {
     jest.restoreAllMocks();
   });
 
-  it('should be defined', () => {
-    expect(service).toBeDefined();
+  async function createService(configValues: ConfigMap): Promise<AiService> {
+    const configService: Partial<ConfigService> = {
+      get: jest.fn((key: string) => configValues[key]),
+    };
+
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        AiService,
+        {
+          provide: ConfigService,
+          useValue: configService,
+        },
+      ],
+    }).compile();
+
+    return module.get<AiService>(AiService);
+  }
+
+  function createTextStream(parts: unknown[]): AsyncIterable<unknown> {
+    return (async function* streamGenerator() {
+      for (const part of parts) {
+        yield part;
+      }
+    })();
+  }
+
+  it('uses default provider/model from config', async () => {
+    const createLanguageModelSpy = jest
+      .spyOn(AiSdkProviderFactory.prototype, 'createLanguageModel')
+      .mockReturnValue({} as never);
+
+    mockedGenerateText.mockResolvedValue({
+      text: 'ok',
+    } as never);
+
+    const service = await createService({
+      NODE_ENV: 'test',
+      LLM_PROVIDER: 'openai',
+      LLM_MODEL: 'gpt-4.1-mini',
+      LLM_API_KEY: 'openai-test-key',
+    });
+
+    const result = await service.callAgent('hello');
+
+    expect(result).toBe('ok');
+    expect(createLanguageModelSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        provider: 'openai',
+        model: 'gpt-4.1-mini',
+      }),
+    );
+    expect(mockedGenerateText).toHaveBeenCalledWith(
+      expect.objectContaining({
+        maxOutputTokens: 500,
+        temperature: 0.7,
+      }),
+    );
   });
 
-  it('should throw when LLM_API_KEY is missing', async () => {
-    jest.spyOn(fs, 'existsSync').mockReturnValue(false);
-    const prevLlmApiKey = process.env.LLM_API_KEY;
-    const prevOpenAiKey = process.env.OPENAI_API_KEY;
+  it('supports request-level llm override and providerOptions alias normalization', async () => {
+    const createLanguageModelSpy = jest
+      .spyOn(AiSdkProviderFactory.prototype, 'createLanguageModel')
+      .mockReturnValue({} as never);
+
+    mockedStreamText.mockReturnValue({
+      fullStream: createTextStream([
+        { type: 'text-delta', text: 'A' },
+        { type: 'text-delta', text: 'B' },
+        { type: 'finish', finishReason: 'stop' },
+      ]),
+    } as never);
+
+    const service = await createService({
+      NODE_ENV: 'test',
+      LLM_PROVIDER: 'openai',
+      LLM_MODEL: 'gpt-4.1-mini',
+      LLM_API_KEY: 'openai-test-key',
+    });
+
+    const messages: LlmMessage[] = [{ role: 'user', content: 'hello' }];
+    const stream = await service.streamChat(messages, {
+      llm: {
+        provider: 'claude',
+        model: 'claude-3-7-sonnet',
+        providerOptions: {
+          claude: { thinking: { type: 'enabled', budgetTokens: 512 } },
+          gemini: { safetySettings: [{ category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' }] },
+          'openai-compatible': { foo: 'bar' },
+        },
+      },
+    });
+
+    const chunks: unknown[] = [];
+    for await (const chunk of stream) {
+      chunks.push(chunk);
+    }
+
+    expect(chunks).toHaveLength(3);
+    expect(createLanguageModelSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        provider: 'claude',
+        model: 'claude-3-7-sonnet',
+        providerOptions: {
+          anthropic: { thinking: { type: 'enabled', budgetTokens: 512 } },
+          google: { safetySettings: [{ category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' }] },
+          openaiCompatible: { foo: 'bar' },
+        },
+      }),
+    );
+    expect(mockedStreamText).toHaveBeenCalled();
+  });
+
+  it('uses independent embedding provider config', async () => {
+    const createEmbeddingModelSpy = jest
+      .spyOn(AiSdkProviderFactory.prototype, 'createEmbeddingModel')
+      .mockReturnValue({} as never);
+
+    mockedEmbed.mockResolvedValue({
+      embedding: [0.1, 0.2, 0.3],
+    } as never);
+
+    const service = await createService({
+      NODE_ENV: 'test',
+      LLM_PROVIDER: 'openai',
+      LLM_MODEL: 'gpt-4.1-mini',
+      LLM_API_KEY: 'openai-test-key',
+      LLM_EMBEDDING_PROVIDER: 'gemini',
+      LLM_EMBEDDING_MODEL: 'text-embedding-004',
+      GOOGLE_GENERATIVE_AI_API_KEY: 'google-test-key',
+    });
+
+    const embedding = await service.generateEmbedding('hello');
+
+    expect(embedding).toEqual([0.1, 0.2, 0.3]);
+    expect(createEmbeddingModelSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        provider: 'gemini',
+        model: 'text-embedding-004',
+      }),
+    );
+  });
+
+  it('throws llm_provider_not_configured when provider key is missing', async () => {
+    const previousLlmApiKey = process.env.LLM_API_KEY;
+    const previousOpenAiApiKey = process.env.OPENAI_API_KEY;
     delete process.env.LLM_API_KEY;
     delete process.env.OPENAI_API_KEY;
 
-    await expect(
-      Test.createTestingModule({
-        providers: [
-          AiService,
-          {
-            provide: ConfigService,
-            useValue: {
-              get: jest.fn((key: string) => {
-                if (key === 'NODE_ENV') return 'test';
-                return null;
-              }),
-            },
-          },
-        ],
-      }).compile(),
-    ).rejects.toThrow(InternalServerErrorException);
+    try {
+      const service = await createService({
+        NODE_ENV: 'test',
+        LLM_PROVIDER: 'openai',
+        LLM_MODEL: 'gpt-4.1-mini',
+      });
 
-    if (prevLlmApiKey !== undefined) {
-      process.env.LLM_API_KEY = prevLlmApiKey;
-    }
-    if (prevOpenAiKey !== undefined) {
-      process.env.OPENAI_API_KEY = prevOpenAiKey;
+      await expect(service.callAgent('hello')).rejects.toMatchObject<LlmConfigurationError>({
+        code: 'llm_provider_not_configured',
+      });
+    } finally {
+      if (previousLlmApiKey !== undefined) {
+        process.env.LLM_API_KEY = previousLlmApiKey;
+      }
+      if (previousOpenAiApiKey !== undefined) {
+        process.env.OPENAI_API_KEY = previousOpenAiApiKey;
+      }
     }
   });
 
-  describe('generateEmbedding', () => {
-    it('delegates to provider', async () => {
-      mockProvider.generateEmbedding.mockResolvedValueOnce([0.1, 0.2]);
+  it('throws llm_call_failed when streamText throws unknown error', async () => {
+    jest
+      .spyOn(AiSdkProviderFactory.prototype, 'createLanguageModel')
+      .mockReturnValue({} as never);
 
-      const embedding = await service.generateEmbedding('hello');
-      expect(mockProvider.generateEmbedding).toHaveBeenCalledWith('hello');
-      expect(embedding).toEqual([0.1, 0.2]);
+    mockedStreamText.mockImplementation(() => {
+      throw new Error('network failed');
     });
 
-    it('throws InternalServerErrorException on provider failure', async () => {
-      mockProvider.generateEmbedding.mockRejectedValueOnce(new Error('boom'));
-      await expect(service.generateEmbedding('hello')).rejects.toThrow(InternalServerErrorException);
-    });
-  });
-
-  describe('callAgent', () => {
-    it('delegates to provider.generateText', async () => {
-      mockProvider.generateText.mockResolvedValueOnce('ok');
-
-      const result = await service.callAgent('hello');
-      expect(result).toBe('ok');
-      expect(mockProvider.generateText).toHaveBeenCalledWith(
-        [
-          { role: 'system', content: 'You are a helpful assistant.' },
-          { role: 'user', content: 'hello' },
-        ],
-        expect.objectContaining({
-          model: 'gpt-4.1-mini',
-          temperature: 0.7,
-          maxTokens: 500,
-        }),
-      );
+    const service = await createService({
+      NODE_ENV: 'test',
+      LLM_PROVIDER: 'openai',
+      LLM_MODEL: 'gpt-4.1-mini',
+      LLM_API_KEY: 'openai-test-key',
     });
 
-    it('includes context when provided', async () => {
-      mockProvider.generateText.mockResolvedValueOnce('ok');
-      await service.callAgent('hello', { key: 'value' });
-
-      const args = mockProvider.generateText.mock.calls[0][0];
-      expect(args).toEqual(
-        expect.arrayContaining([
-          { role: 'system', content: 'Context: {"key":"value"}' },
-        ]),
-      );
-    });
+    await expect(service.streamChat([{ role: 'user', content: 'hello' }])).rejects.toBeInstanceOf(LlmCallError);
   });
 });
