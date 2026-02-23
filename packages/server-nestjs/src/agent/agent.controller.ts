@@ -1,4 +1,4 @@
-import { Body, Controller, Get, HttpCode, HttpException, HttpStatus, Optional, Post, Query, Req, Res } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, HttpException, HttpStatus, NotFoundException, Optional, Param, Post, Query, Req, Res } from '@nestjs/common';
 import { ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
 import type { Request, Response } from 'express';
 import { AgentMessageStore } from './agent-message.store';
@@ -15,11 +15,13 @@ import type { AgentError, AgentRunEnd, AgentSseEvent } from './client-types';
 import { VercelAiStreamAdapter } from './adapters/vercel-ai-stream.adapter';
 import { AgentListService } from './agent-list.service';
 import { AgentListResponseDto } from './dto/agent-list.dto';
+import { AgentRunTimelineResponseDto } from './dto/agent-run-timeline.dto';
 import { AgentRuntimeError } from './errors/agent-runtime.error';
 import { AgentRunMetricsService } from '../action-tracking/agent-run-metrics.service';
 import { generateUlid } from '../utils/ulid';
 import { SkillsService } from '../skills/skills.service';
 import { EngineRouter } from './engines/engine.router';
+import { AgentRunTraceStore } from './agent-run-trace.store';
 import { AgentLlmValidationError, findLegacyLlmFields, parseAgentLlmOrThrow } from './dto/agent-llm.schema';
 import type { LlmRequestConfig } from '../ai/providers/llm-types';
 
@@ -38,6 +40,7 @@ export class AgentController {
   constructor(
     private readonly engineRouter: EngineRouter,
     private readonly messageStore: AgentMessageStore,
+    private readonly runTraceStore: AgentRunTraceStore,
     private readonly agentListService: AgentListService,
     private readonly agentRunMetricsService: AgentRunMetricsService,
     @Optional()
@@ -195,6 +198,8 @@ export class AgentController {
           streamErrorCode = event.data.error?.code ?? null;
         }
 
+        this.runTraceStore.append(event);
+
         // 根据 format 选择写入方式
         if (adapter) {
           const transformed = adapter.transform(event);
@@ -215,6 +220,7 @@ export class AgentController {
           message,
         };
         const errorEvent: AgentStreamEvent = { event: 'error', data: errorPayload };
+        this.runTraceStore.append(errorEvent);
         if (adapter) {
           const transformed = adapter.transform(errorEvent);
           if (transformed) {
@@ -241,6 +247,7 @@ export class AgentController {
           streamStatus = 'failed';
           streamErrorCode = 'stream_error';
           const endEvent: AgentStreamEvent = { event: 'agent.end', data: endPayload };
+          this.runTraceStore.append(endEvent);
           if (adapter) {
             const transformed = adapter.transform(endEvent);
             if (transformed) {
@@ -364,6 +371,32 @@ export class AgentController {
       });
       throw new HttpException(mapped.body, mapped.statusCode);
     }
+  }
+
+
+  @Get('runs/:runId/timeline')
+  @ApiOperation({
+    summary: '获取 Agent Run 完整时序链路（思维链/工具链可视化）',
+    description:
+      '返回某次 run 的完整时序事件，包含 agent.start/agent.delta/tool.state/context.patch/agent.end 等。' +
+      '用于前端可视化“推理过程摘要 + 工具执行过程”，并作为排障依据。',
+  })
+  @ApiResponse({
+    status: 200,
+    description: '返回 run 的时间线事件（按 seq 升序）',
+    type: AgentRunTimelineResponseDto,
+  })
+  @ApiResponse({ status: 404, description: 'runId 不存在或已过期' })
+  getRunTimeline(@Param('runId') runId: string): AgentRunTimelineResponseDto {
+    const timeline = this.runTraceStore.get(runId);
+    if (!timeline) {
+      throw new NotFoundException({
+        code: 'run_timeline_not_found',
+        message: `Run timeline not found: ${runId}`,
+      });
+    }
+
+    return timeline;
   }
 
   @Get('messages')

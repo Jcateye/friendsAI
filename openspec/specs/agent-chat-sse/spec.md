@@ -92,3 +92,27 @@ SSE 事件类型 MUST 至少包含：
 - **WHEN** chat 请求经过 engine router 并由 local/openclaw 引擎执行
 - **THEN** `conversation.created` 与工具确认相关事件（例如 `tool.awaiting_input`）的语义与关键字段保持兼容
 
+
+### Requirement: CHAT-080 Full timeline trace API for trust and troubleshooting
+系统 MUST 提供可查询的 run 全量时序轨迹接口，支持前端可视化展示“思维链（摘要化推理步骤）+ 工具链（工具状态流转）”，并用于复盘与排障。
+
+轨迹数据 SHOULD 覆盖以下事件序列（按时间排序）：
+- `agent.start`
+- `agent.delta`
+- `agent.message`
+- `tool.state`
+- `context.patch`
+- `agent.end`
+
+系统 SHOULD 支持通过 `GET /v1/agent/runs/:runId/timeline` 查询，响应至少包含：`runId`、`status`、`startedAt`、`endedAt?`、`events[]`（含 `seq/event/at/payload`）。
+
+#### Scenario: Frontend can replay timeline by runId
+- **GIVEN** 一次 Agent 对话运行成功并产生 `runId`
+- **WHEN** 前端调用 `GET /v1/agent/runs/:runId/timeline`
+- **THEN** 响应 `200` 且返回完整时序 events，可直接用于时间轴可视化
+
+#### Scenario: Unknown runId returns not found
+- **GIVEN** `runId` 不存在或已过期
+- **WHEN** 调用 `GET /v1/agent/runs/:runId/timeline`
+- **THEN** 响应 `404` 且包含可读错误码（例如 `run_timeline_not_found`）
+

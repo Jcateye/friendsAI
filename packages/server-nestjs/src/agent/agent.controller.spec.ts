@@ -5,6 +5,7 @@ import { EngineRouter } from './engines/engine.router';
 import { AgentMessageStore } from './agent-message.store';
 import { AgentListService } from './agent-list.service';
 import { AgentRunMetricsService } from '../action-tracking/agent-run-metrics.service';
+import { AgentRunTraceStore } from './agent-run-trace.store';
 import type { AgentChatRequest, AgentRunRequest, AgentRunResponse } from './agent.types';
 import type { Request, Response } from 'express';
 import { AgentRuntimeError } from './errors/agent-runtime.error';
@@ -15,6 +16,7 @@ describe('AgentController - POST /v1/agent/run', () => {
   let mockMessageStore: jest.Mocked<AgentMessageStore>;
   let mockAgentListService: jest.Mocked<AgentListService>;
   let mockAgentRunMetricsService: jest.Mocked<AgentRunMetricsService>;
+  let mockAgentRunTraceStore: jest.Mocked<AgentRunTraceStore>;
 
   beforeEach(async () => {
     mockEngineRouter = {
@@ -39,6 +41,12 @@ describe('AgentController - POST /v1/agent/run', () => {
       getMetrics: jest.fn(),
     } as unknown as jest.Mocked<AgentRunMetricsService>;
 
+
+    mockAgentRunTraceStore = {
+      append: jest.fn(),
+      get: jest.fn(),
+    } as unknown as jest.Mocked<AgentRunTraceStore>;
+
     const module: TestingModule = await Test.createTestingModule({
       controllers: [AgentController],
       providers: [
@@ -46,6 +54,7 @@ describe('AgentController - POST /v1/agent/run', () => {
         { provide: AgentMessageStore, useValue: mockMessageStore },
         { provide: AgentListService, useValue: mockAgentListService },
         { provide: AgentRunMetricsService, useValue: mockAgentRunMetricsService },
+        { provide: AgentRunTraceStore, useValue: mockAgentRunTraceStore },
       ],
     }).compile();
 
