@@ -24,7 +24,13 @@
     "test:e2e": "bun run --cwd packages/server-nestjs test:e2e",
     "db:migration:smoke": "bun run --cwd packages/server-nestjs migration:smoke",
     "web:bundle:check": "node scripts/check-web-bundle-size.js",
-    "test:ci": "bun run db:migration:smoke && bun run test && bun run test:e2e && bun run web:build && bun run web:bundle:check"
+    "test:ci": "bun run db:migration:smoke && bun run test && bun run test:e2e && bun run web:build && bun run web:bundle:check",
+    "ci:migration:smoke": "npm run migration:smoke --workspace server-nestjs",
+    "ci:server:test": "npm run test --workspace server-nestjs -- --runInBand",
+    "ci:server:e2e": "npm run test:e2e --workspace server-nestjs -- --runInBand",
+    "ci:web:build": "npm run build --workspace @friends-ai/web",
+    "ci:web:bundle:check": "node scripts/check-web-bundle-size.js",
+    "ci:verify": "bash scripts/ci/verify.sh"
   },
   "devDependencies": {
     "ajv": "^8.17.1",

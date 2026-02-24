@@ -289,6 +289,16 @@ OPENAI_API_KEY=你的智谱API密钥
 1. 所有 `.pen` 设计文件统一存放在 `designs/` 目录
 2. 使用 Pencil MCP 工具编辑设计文件
 
+
+### CI/CD
+1. GitHub Actions 会在 `main` 与 `work` 分支 push、以及所有 PR 时执行 `.github/workflows/ci.yml`。
+2. 标准化 CI 入口脚本为 `npm run ci:verify`（内部调用 `scripts/ci/verify.sh`），用于统一执行：
+   - 数据库迁移烟雾测试
+   - 后端单测 + e2e
+   - 前端构建 + 产物体积检查
+3. Cloudflare Workers & Pages 如果使用 Git Integration，需要将 Build command 指向：`npm run ci:web:build`，并将输出目录设置为：`packages/web/dist`。
+4. 如需在 Cloudflare 部署前先做完整质量门禁，可将 Build command 改为：`npm run ci:verify`（注意需要可访问 Postgres 的环境）。
+
 ## License
 
 Private
