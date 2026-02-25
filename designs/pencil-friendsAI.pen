@@ -5309,8 +5309,8 @@
       "y": 870,
       "name": "7. Settings",
       "clip": true,
-      "width": 375,
-      "height": 812,
+      "width": 398,
+      "height": 946,
       "fill": "#F7F6F3",
       "layout": "vertical",
       "children": [
@@ -5468,6 +5468,87 @@
                       "fontFamily": "Plus Jakarta Sans",
                       "fontSize": 15,
                       "fontWeight": "normal"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "HqXYG",
+              "name": "connectorSection",
+              "width": "fill_container",
+              "fill": "#FFFFFF",
+              "cornerRadius": 16,
+              "layout": "vertical",
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "zzCLi",
+                  "name": "connectorHeader",
+                  "width": "fill_container",
+                  "stroke": {
+                    "align": "inside",
+                    "thickness": {
+                      "bottom": 1
+                    },
+                    "fill": "#F0EFEC"
+                  },
+                  "padding": [
+                    12,
+                    16
+                  ],
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "KyAWv",
+                      "name": "dataTitle",
+                      "fill": "#8E8E93",
+                      "content": "数据",
+                      "fontFamily": "Plus Jakarta Sans",
+                      "fontSize": 12,
+                      "fontWeight": "500"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "k68C5",
+                  "name": "app1",
+                  "width": "fill_container",
+                  "stroke": {
+                    "align": "inside",
+                    "thickness": {
+                      "bottom": 1
+                    },
+                    "fill": "#F0EFEC"
+                  },
+                  "padding": [
+                    14,
+                    16
+                  ],
+                  "justifyContent": "space_between",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "u9WlY",
+                      "name": "app1Label",
+                      "fill": "#2D2D2D",
+                      "content": "飞书",
+                      "fontFamily": "Plus Jakarta Sans",
+                      "fontSize": 15,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "icon_font",
+                      "id": "RtS0w",
+                      "name": "appExportIcon",
+                      "width": 18,
+                      "height": 18,
+                      "iconFontName": "chevron-right",
+                      "iconFontFamily": "lucide",
+                      "fill": "#8E8E93"
                     }
                   ]
                 }
@@ -6414,8 +6495,8 @@
     {
       "type": "frame",
       "id": "2qCTH",
-      "x": 1701,
-      "y": 860,
+      "x": 1694,
+      "y": 878,
       "name": "C1. Settings - Connector",
       "clip": true,
       "width": 375,
