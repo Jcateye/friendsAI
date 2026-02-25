@@ -14,7 +14,6 @@ import {
   type ToolSet,
   type TextStreamPart,
 } from 'ai';
-import dotenv from 'dotenv';
 import fs from 'fs';
 import path from 'path';
 import {
@@ -661,10 +660,46 @@ export class AiService {
         continue;
       }
       const content = fs.readFileSync(candidate, 'utf8');
-      merged = { ...merged, ...dotenv.parse(content) };
+      merged = { ...merged, ...this.parseEnvFile(content) };
     }
 
     return merged;
+  }
+
+  private parseEnvFile(content: string): Record<string, string> {
+    const parsed: Record<string, string> = {};
+
+    for (const rawLine of content.split(/\r?\n/)) {
+      const line = rawLine.trim();
+      if (!line || line.startsWith('#')) {
+        continue;
+      }
+
+      const exportPrefix = 'export ';
+      const normalizedLine = line.startsWith(exportPrefix) ? line.slice(exportPrefix.length).trim() : line;
+      const separatorIndex = normalizedLine.indexOf('=');
+      if (separatorIndex <= 0) {
+        continue;
+      }
+
+      const key = normalizedLine.slice(0, separatorIndex).trim();
+      const rawValue = normalizedLine.slice(separatorIndex + 1).trim();
+
+      if (!key) {
+        continue;
+      }
+
+      if (
+        (rawValue.startsWith('"') && rawValue.endsWith('"')) ||
+        (rawValue.startsWith("'") && rawValue.endsWith("'"))
+      ) {
+        parsed[key] = rawValue.slice(1, -1);
+      } else {
+        parsed[key] = rawValue;
+      }
+    }
+
+    return parsed;
   }
 
   private isRecord(value: unknown): value is Record<string, unknown> {

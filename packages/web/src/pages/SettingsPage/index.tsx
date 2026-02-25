@@ -128,8 +128,8 @@ export function SettingsPage() {
       {
         title: 'AI',
         items: [
-          { label: '提取严格度', value: '平衡', showChevron: true },
-          { label: '隐私说明', showChevron: true },
+          { label: '提取严格度', value: '平衡', showChevron: false, disabled: true },
+          { label: '隐私说明', showChevron: false, disabled: true },
         ],
       },
       {
@@ -177,31 +177,43 @@ export function SettingsPage() {
               <span className="font-primary text-[12px] font-medium text-text-muted">{section.title}</span>
             </div>
 
-            {section.items.map((item, index) => (
-              <button
-                key={item.label}
-                className={`flex w-full items-center justify-between px-4 py-3.5 text-left ${
-                  index < section.items.length - 1 ? 'border-b border-border' : ''
-                } ${item.disabled ? 'cursor-not-allowed opacity-60' : ''}`}
-                disabled={item.disabled}
-                onClick={item.onClick}
-              >
-                <span className={`font-primary text-[15px] ${item.danger ? 'text-[#D4845E]' : 'text-text-primary'}`}>
-                  {item.label}
-                </span>
-                <div className="flex items-center gap-2">
-                  {item.value && (
-                    <span
-                      className={`font-primary text-[14px] ${item.value === '平衡' ? 'text-[#7C9070]' : 'text-text-muted'}`}
-                    >
-                      {item.value}
-                    </span>
-                  )}
-                  {item.rightElement}
-                  {item.showChevron && <ChevronRight className="h-[18px] w-[18px] text-text-muted" />}
+            {section.items.map((item, index) => {
+              const rowClassName = `flex w-full items-center justify-between px-4 py-3.5 text-left ${
+                index < section.items.length - 1 ? 'border-b border-border' : ''
+              } ${item.disabled ? 'cursor-not-allowed opacity-60' : ''}`
+              const rowContent = (
+                <>
+                  <span className={`font-primary text-[15px] ${item.danger ? 'text-[#D4845E]' : 'text-text-primary'}`}>
+                    {item.label}
+                  </span>
+                  <div className="flex items-center gap-2">
+                    {item.value && (
+                      <span
+                        className={`font-primary text-[14px] ${item.value === '平衡' ? 'text-[#7C9070]' : 'text-text-muted'}`}
+                      >
+                        {item.value}
+                      </span>
+                    )}
+                    {item.rightElement}
+                    {item.showChevron && <ChevronRight className="h-[18px] w-[18px] text-text-muted" />}
+                  </div>
+                </>
+              )
+
+              if (item.onClick) {
+                return (
+                  <button key={item.label} className={rowClassName} disabled={item.disabled} onClick={item.onClick}>
+                    {rowContent}
+                  </button>
+                )
+              }
+
+              return (
+                <div key={item.label} className={rowClassName} aria-disabled={item.disabled ? true : undefined}>
+                  {rowContent}
                 </div>
-              </button>
-            ))}
+              )
+            })}
           </div>
         ))}
       </div>
