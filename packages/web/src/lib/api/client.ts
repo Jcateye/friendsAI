@@ -41,6 +41,11 @@ import type {
   FeishuMessageTemplate,
   SendFeishuTemplateMessageRequest,
   SendFeishuTemplateMessageResponse,
+  FeishuOAuthAuthorizeMeResponse,
+  FeishuOAuthMyTokenResponse,
+  FeishuOAuthValidResponse,
+  FeishuOAuthDeleteResponse,
+  FeishuOAuthCallbackResponse,
   SkillCatalogResponse,
   SkillInvocationIntentResponse,
   AgentLlmRequest,
@@ -822,6 +827,56 @@ export const api = {
       const query = search.toString();
       const response = await fetchWithAuth(`${API_BASE}/relationships/risk-queue${query ? `?${query}` : ''}`);
       return handleResponse<RelationshipRiskQueue>(response);
+    },
+  },
+
+  feishuOAuth: {
+    async getAuthorizeUrlForMe(): Promise<FeishuOAuthAuthorizeMeResponse> {
+      const response = await fetchWithAuth(`${API_BASE}/connectors/feishu/oauth/authorize/me`);
+      return handleResponse<FeishuOAuthAuthorizeMeResponse>(response);
+    },
+
+    async getMyToken(): Promise<FeishuOAuthMyTokenResponse> {
+      const response = await fetchWithAuth(`${API_BASE}/connectors/feishu/oauth/token/me`);
+      return handleResponse<FeishuOAuthMyTokenResponse>(response);
+    },
+
+    async checkMyTokenValid(): Promise<FeishuOAuthValidResponse> {
+      const response = await fetchWithAuth(`${API_BASE}/connectors/feishu/oauth/token/me/valid`);
+      return handleResponse<FeishuOAuthValidResponse>(response);
+    },
+
+    async deleteMyToken(): Promise<FeishuOAuthDeleteResponse> {
+      const response = await fetchWithAuth(`${API_BASE}/connectors/feishu/oauth/token/me/delete`, {
+        method: 'POST',
+      });
+      return handleResponse<FeishuOAuthDeleteResponse>(response);
+    },
+
+    async handleCallback(params: {
+      code?: string;
+      state?: string;
+      error?: string;
+      error_description?: string;
+    }): Promise<FeishuOAuthCallbackResponse> {
+      const search = new URLSearchParams();
+      if (params.code) {
+        search.set('code', params.code);
+      }
+      if (params.state) {
+        search.set('state', params.state);
+      }
+      if (params.error) {
+        search.set('error', params.error);
+      }
+      if (params.error_description) {
+        search.set('error_description', params.error_description);
+      }
+
+      const queryString = search.toString();
+      const url = `${API_BASE}/connectors/feishu/oauth/callback${queryString ? `?${queryString}` : ''}`;
+      const response = await fetchWithAuth(url);
+      return handleResponse<FeishuOAuthCallbackResponse>(response);
     },
   },
 

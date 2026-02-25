@@ -14,6 +14,12 @@ const ContactDetailPage = lazy(() =>
 )
 const ActionsPage = lazy(() => import('../pages/ActionsPage').then((m) => ({ default: m.ActionsPage })))
 const SettingsPage = lazy(() => import('../pages/SettingsPage').then((m) => ({ default: m.SettingsPage })))
+const FeishuOAuthCallbackPage = lazy(() =>
+  import('../pages/FeishuOAuthCallbackPage').then((m) => ({ default: m.FeishuOAuthCallbackPage })),
+)
+const SettingsConnectorPage = lazy(() =>
+  import('../pages/SettingsConnectorPage').then((m) => ({ default: m.SettingsConnectorPage })),
+)
 
 function withSuspense(node: ReactNode) {
   return (
@@ -63,11 +69,25 @@ export const router = createBrowserRouter([
     ),
   },
   {
+    path: '/oauth/feishu/callback',
+    element: withSuspense(<FeishuOAuthCallbackPage />),
+  },
+  {
     path: '/settings',
     element: (
       <ProtectedRoute>
         <AppShell showTabBar={false}>
           {withSuspense(<SettingsPage />)}
+        </AppShell>
+      </ProtectedRoute>
+    ),
+  },
+  {
+    path: '/settings/connectors/feishu',
+    element: (
+      <ProtectedRoute>
+        <AppShell showTabBar={false}>
+          {withSuspense(<SettingsConnectorPage />)}
         </AppShell>
       </ProtectedRoute>
     ),

@@ -38,6 +38,7 @@ export class FeishuApiService {
       pageSize?: number;
       pageToken?: string;
       filter?: JsonObject;
+      accessToken?: string;
     },
   ): Promise<{
     records: JsonObject[];
@@ -50,6 +51,7 @@ export class FeishuApiService {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json; charset=utf-8',
+          ...(options?.accessToken ? { Authorization: `Bearer ${options.accessToken}` } : {}),
         },
         body: JSON.stringify({
           page_size: options?.pageSize ?? 100,
@@ -57,6 +59,7 @@ export class FeishuApiService {
           filter: options?.filter,
         }),
       },
+      options?.accessToken ? { useTenantToken: false } : undefined,
     );
 
     const data = this.unwrap(payload, 'search_records');
@@ -67,9 +70,18 @@ export class FeishuApiService {
     };
   }
 
-  async getRecord(appToken: string, tableId: string, recordId: string): Promise<JsonObject> {
+  async getRecord(
+    appToken: string,
+    tableId: string,
+    recordId: string,
+    accessToken?: string,
+  ): Promise<JsonObject> {
     const payload = await this.feishuClient.request<FeishuApiEnvelope<BitableRecordData>>(
       `/open-apis/bitable/v1/apps/${encodeURIComponent(appToken)}/tables/${encodeURIComponent(tableId)}/records/${encodeURIComponent(recordId)}`,
+      {
+        headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
+      },
+      accessToken ? { useTenantToken: false } : undefined,
     );
 
     const data = this.unwrap(payload, 'get_record');
@@ -84,6 +96,7 @@ export class FeishuApiService {
     tableId: string,
     recordId: string,
     fields: JsonObject,
+    accessToken?: string,
   ): Promise<JsonObject> {
     const payload = await this.feishuClient.request<FeishuApiEnvelope<BitableRecordData>>(
       `/open-apis/bitable/v1/apps/${encodeURIComponent(appToken)}/tables/${encodeURIComponent(tableId)}/records/${encodeURIComponent(recordId)}`,
@@ -91,13 +104,18 @@ export class FeishuApiService {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json; charset=utf-8',
+          ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
         },
         body: JSON.stringify({ fields }),
       },
+      accessToken ? { useTenantToken: false } : undefined,
     );
 
     const data = this.unwrap(payload, 'update_record');
-    return data?.record ?? {};
+    if (!data?.record) {
+      throw new BadGatewayException('Feishu API update_record returned empty record.');
+    }
+    return data.record;
   }
 
   async sendCardMessage(
@@ -175,9 +193,7 @@ export class FeishuApiService {
       throw new BadGatewayException(`Feishu API ${action} returned invalid payload.`);
     }
     if (payload.code !== 0) {
-      throw new BadGatewayException(
-        `Feishu API ${action} failed: code=${payload.code}, msg=${payload.msg ?? 'unknown error'}`,
-      );
+      throw new BadGatewayException(`Feishu API ${action} failed.`);
     }
     return payload.data;
   }

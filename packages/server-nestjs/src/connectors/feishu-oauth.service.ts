@@ -10,12 +10,27 @@ import { User } from '../entities/user.entity';
  */
 interface FeishuTokenResponse {
   code: number;
-  msg: string;
+  msg?: string;
+  message?: string;
   access_token?: string;
   refresh_token?: string;
   expires_in?: number;
+  token_type?: string;
+  data?: {
+    access_token?: string;
+    refresh_token?: string;
+    expires_in?: number;
+    token_type?: string;
+  };
 }
 
+interface FeishuAppAccessTokenResponse {
+  code: number;
+  msg?: string;
+  message?: string;
+  app_access_token?: string;
+  expire?: number;
+}
 /**
  * 飞书用户信息响应接口
  */
@@ -112,6 +127,205 @@ export class FeishuOAuthService {
     return redirectUri;
   }
 
+  private isAppAccessTokenInvalidError(payload: {
+    code: number;
+  }): boolean {
+    return payload.code === 20014;
+  }
+
+  private isUuid(value: string): boolean {
+    return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+      value,
+    );
+  }
+
+  private async getAppAccessToken(): Promise<string> {
+    const url = `${this.baseUrl}/open-apis/auth/v3/app_access_token/internal`;
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        app_id: this.appId,
+        app_secret: this.appSecret,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      const safeErrorText = errorText.replace(/[\r\n\t]/g, ' ').slice(0, 300);
+      this.logger.error(`Feishu app_access_token HTTP ${response.status}: ${safeErrorText}`);
+      throw new BadRequestException(`Feishu app_access_token failed: ${response.status}`);
+    }
+
+    const data = (await response.json()) as FeishuAppAccessTokenResponse;
+    const appAccessToken =
+      typeof data.app_access_token === 'string' && data.app_access_token.length > 0
+        ? data.app_access_token
+        : undefined;
+
+    if (data.code !== 0 || !appAccessToken) {
+      const providerMsg = data.msg ?? data.message;
+      const safeMsg =
+        typeof providerMsg === 'string'
+          ? providerMsg.replace(/[\r\n\t]/g, ' ').slice(0, 300)
+          : undefined;
+      this.logger.error(
+        `Feishu app_access_token error response: ${JSON.stringify({ code: data.code, msg: safeMsg })}`,
+      );
+      throw new UnauthorizedException(
+        safeMsg ? `Feishu app_access_token failed: ${safeMsg}` : 'Feishu app_access_token failed',
+      );
+    }
+
+    return appAccessToken;
+  }
+
+  private async exchangeTokenWithAppAccessToken(code: string): Promise<FeishuTokens> {
+    const appAccessToken = await this.getAppAccessToken();
+    const url = `${this.baseUrl}/open-apis/authen/v1/access_token`;
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${appAccessToken}`,
+      },
+      body: JSON.stringify({
+        grant_type: 'authorization_code',
+        code,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      const safeErrorText = errorText.replace(/[\r\n\t]/g, ' ').slice(0, 300);
+      this.logger.error(
+        `Feishu token exchange(app_access_token) HTTP ${response.status}: ${safeErrorText}`,
+      );
+      throw new BadRequestException(`Feishu token exchange failed: ${response.status}`);
+    }
+
+    const data = (await response.json()) as FeishuTokenResponse;
+    const tokenPayload = data.data ?? data;
+    const accessToken =
+      typeof tokenPayload.access_token === 'string' && tokenPayload.access_token.length > 0
+        ? tokenPayload.access_token
+        : undefined;
+    const refreshToken =
+      typeof tokenPayload.refresh_token === 'string' ? tokenPayload.refresh_token : '';
+    const rawExpiresIn = tokenPayload.expires_in;
+    const expiresIn =
+      typeof rawExpiresIn === 'number' &&
+      Number.isFinite(rawExpiresIn) &&
+      rawExpiresIn > 0 &&
+      rawExpiresIn <= 31_536_000
+        ? rawExpiresIn
+        : 7200;
+
+    if (data.code !== 0 || !accessToken) {
+      const providerMsg = data.msg ?? data.message;
+      const safeMsg =
+        typeof providerMsg === 'string'
+          ? providerMsg.replace(/[\r\n\t]/g, ' ').slice(0, 300)
+          : undefined;
+      this.logger.error(
+        `Feishu token exchange(app_access_token) error response: ${JSON.stringify({ code: data.code, msg: safeMsg, hasData: !!data.data })}`,
+      );
+      throw new UnauthorizedException(
+        safeMsg ? `Feishu token exchange failed: ${safeMsg}` : 'Feishu token exchange failed',
+      );
+    }
+
+    const expiresAt = new Date(Date.now() + expiresIn * 1000);
+
+    return {
+      accessToken,
+      refreshToken,
+      tokenType:
+        typeof tokenPayload.token_type === 'string' && tokenPayload.token_type.length > 0
+          ? tokenPayload.token_type
+          : 'Bearer',
+      expiresIn,
+      expiresAt,
+      scope: 'contact:user.base:readonly contact:user.email:readonly',
+    };
+  }
+
+  private async refreshAccessTokenWithAppAccessToken(refreshToken: string): Promise<FeishuTokens> {
+    const appAccessToken = await this.getAppAccessToken();
+    const url = `${this.baseUrl}/open-apis/authen/v1/refresh_access_token`;
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${appAccessToken}`,
+      },
+      body: JSON.stringify({
+        grant_type: 'refresh_token',
+        refresh_token: refreshToken,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      const safeErrorText = errorText.replace(/[\r\n\t]/g, ' ').slice(0, 300);
+      this.logger.error(
+        `Feishu token refresh(app_access_token) HTTP ${response.status}: ${safeErrorText}`,
+      );
+      throw new BadRequestException(`Feishu token refresh failed: ${response.status}`);
+    }
+
+    const data = (await response.json()) as FeishuTokenResponse;
+    const tokenPayload = data.data ?? data;
+    const accessToken =
+      typeof tokenPayload.access_token === 'string' && tokenPayload.access_token.length > 0
+        ? tokenPayload.access_token
+        : undefined;
+    const resolvedRefreshToken =
+      typeof tokenPayload.refresh_token === 'string' && tokenPayload.refresh_token.length > 0
+        ? tokenPayload.refresh_token
+        : refreshToken;
+    const rawExpiresIn = tokenPayload.expires_in;
+    const expiresIn =
+      typeof rawExpiresIn === 'number' &&
+      Number.isFinite(rawExpiresIn) &&
+      rawExpiresIn > 0 &&
+      rawExpiresIn <= 31_536_000
+        ? rawExpiresIn
+        : 7200;
+
+    if (data.code !== 0 || !accessToken) {
+      const providerMsg = data.msg ?? data.message;
+      const safeMsg =
+        typeof providerMsg === 'string'
+          ? providerMsg.replace(/[\r\n\t]/g, ' ').slice(0, 300)
+          : undefined;
+      this.logger.error(
+        `Feishu token refresh(app_access_token) error response: ${JSON.stringify({ code: data.code, msg: safeMsg, hasData: !!data.data })}`,
+      );
+      throw new UnauthorizedException(
+        safeMsg ? `Feishu token refresh failed: ${safeMsg}` : 'Feishu token refresh failed',
+      );
+    }
+
+    const expiresAt = new Date(Date.now() + expiresIn * 1000);
+
+    return {
+      accessToken,
+      refreshToken: resolvedRefreshToken,
+      tokenType:
+        typeof tokenPayload.token_type === 'string' && tokenPayload.token_type.length > 0
+          ? tokenPayload.token_type
+          : 'Bearer',
+      expiresIn,
+      expiresAt,
+    };
+  }
+
   /**
    * 生成授权 URL
    * @param userId 用户 ID，用于 state 参数
@@ -174,9 +388,14 @@ export class FeishuOAuthService {
         userId = state.split(':')[0];
       }
 
-      if (!userId) {
-        // 如果没有 userId，根据飞书用户信息查找或创建用户
+      const resolvedUserId =
+        typeof userId === 'string' && this.isUuid(userId) ? userId : undefined;
+
+      if (!resolvedUserId) {
+        // 如果没有有效 userId，根据飞书用户信息查找或创建用户
         userId = await this.findOrCreateUserByFeishuInfo(userInfo);
+      } else {
+        userId = resolvedUserId;
       }
 
       // 4. 存储 token
@@ -222,26 +441,63 @@ export class FeishuOAuthService {
 
     if (!response.ok) {
       const errorText = await response.text();
+      const safeErrorText = errorText.replace(/[\r\n\t]/g, ' ').slice(0, 300);
+      this.logger.error(
+        `Feishu token exchange HTTP ${response.status}: ${safeErrorText}`,
+      );
       throw new BadRequestException(
-        `Feishu token exchange failed: ${response.status} ${errorText}`,
+        `Feishu token exchange failed: ${response.status}`,
       );
     }
 
     const data = (await response.json()) as FeishuTokenResponse;
+    const tokenPayload = data.data ?? data;
+    const accessToken =
+      typeof tokenPayload.access_token === 'string' && tokenPayload.access_token.length > 0
+        ? tokenPayload.access_token
+        : undefined;
+    const refreshToken =
+      typeof tokenPayload.refresh_token === 'string' ? tokenPayload.refresh_token : '';
+    const rawExpiresIn = tokenPayload.expires_in;
+    const expiresIn =
+      typeof rawExpiresIn === 'number' &&
+      Number.isFinite(rawExpiresIn) &&
+      rawExpiresIn > 0 &&
+      rawExpiresIn <= 31_536_000
+        ? rawExpiresIn
+        : 7200; // 默认 2 小时
 
-    if (data.code !== 0 || !data.access_token) {
+    if (data.code !== 0 || !accessToken) {
+      const providerMsg = data.msg ?? data.message;
+      const safeMsg =
+        typeof providerMsg === 'string'
+          ? providerMsg.replace(/[\r\n\t]/g, ' ').slice(0, 300)
+          : undefined;
+
+      if (this.isAppAccessTokenInvalidError(data)) {
+        this.logger.warn(
+          `Feishu oidc token exchange returned code 20014, fallback to app_access_token flow. detail=${safeMsg ?? 'empty'}`,
+        );
+        return this.exchangeTokenWithAppAccessToken(code);
+      }
+
+      this.logger.error(
+        `Feishu token exchange error response: ${JSON.stringify({ code: data.code, msg: safeMsg, hasData: !!data.data })}`,
+      );
       throw new UnauthorizedException(
-        `Feishu token exchange error: ${data.msg || 'Unknown error'}`,
+        safeMsg ? `Feishu token exchange failed: ${safeMsg}` : 'Feishu token exchange failed',
       );
     }
 
-    const expiresIn = data.expires_in ?? 7200; // 默认 2 小时
     const expiresAt = new Date(Date.now() + expiresIn * 1000);
 
     return {
-      accessToken: data.access_token,
-      refreshToken: data.refresh_token ?? '',
-      tokenType: 'Bearer',
+      accessToken,
+      refreshToken,
+      tokenType:
+        typeof tokenPayload.token_type === 'string' && tokenPayload.token_type.length > 0
+          ? tokenPayload.token_type
+          : 'Bearer',
       expiresIn,
       expiresAt,
       scope: 'contact:user.base:readonly contact:user.email:readonly',
@@ -269,26 +525,65 @@ export class FeishuOAuthService {
 
     if (!response.ok) {
       const errorText = await response.text();
+      const safeErrorText = errorText.replace(/[\r\n\t]/g, ' ').slice(0, 300);
+      this.logger.error(
+        `Feishu token refresh HTTP ${response.status}: ${safeErrorText}`,
+      );
       throw new BadRequestException(
-        `Feishu token refresh failed: ${response.status} ${errorText}`,
+        `Feishu token refresh failed: ${response.status}`,
       );
     }
 
     const data = (await response.json()) as FeishuTokenResponse;
+    const tokenPayload = data.data ?? data;
+    const accessToken =
+      typeof tokenPayload.access_token === 'string' && tokenPayload.access_token.length > 0
+        ? tokenPayload.access_token
+        : undefined;
+    const resolvedRefreshToken =
+      typeof tokenPayload.refresh_token === 'string' && tokenPayload.refresh_token.length > 0
+        ? tokenPayload.refresh_token
+        : refreshToken;
+    const rawExpiresIn = tokenPayload.expires_in;
+    const expiresIn =
+      typeof rawExpiresIn === 'number' &&
+      Number.isFinite(rawExpiresIn) &&
+      rawExpiresIn > 0 &&
+      rawExpiresIn <= 31_536_000
+        ? rawExpiresIn
+        : 7200;
 
-    if (data.code !== 0 || !data.access_token) {
+    if (data.code !== 0 || !accessToken) {
+      const providerMsg = data.msg ?? data.message;
+      const safeMsg =
+        typeof providerMsg === 'string'
+          ? providerMsg.replace(/[\r\n\t]/g, ' ').slice(0, 300)
+          : undefined;
+
+      if (this.isAppAccessTokenInvalidError(data)) {
+        this.logger.warn(
+          `Feishu oidc token refresh returned code 20014, fallback to app_access_token flow. detail=${safeMsg ?? 'empty'}`,
+        );
+        return this.refreshAccessTokenWithAppAccessToken(refreshToken);
+      }
+
+      this.logger.error(
+        `Feishu token refresh error response: ${JSON.stringify({ code: data.code, msg: safeMsg, hasData: !!data.data })}`,
+      );
       throw new UnauthorizedException(
-        `Feishu token refresh error: ${data.msg || 'Unknown error'}`,
+        safeMsg ? `Feishu token refresh failed: ${safeMsg}` : 'Feishu token refresh failed',
       );
     }
 
-    const expiresIn = data.expires_in ?? 7200;
     const expiresAt = new Date(Date.now() + expiresIn * 1000);
 
     return {
-      accessToken: data.access_token,
-      refreshToken: data.refresh_token ?? refreshToken,
-      tokenType: 'Bearer',
+      accessToken,
+      refreshToken: resolvedRefreshToken,
+      tokenType:
+        typeof tokenPayload.token_type === 'string' && tokenPayload.token_type.length > 0
+          ? tokenPayload.token_type
+          : 'Bearer',
       expiresIn,
       expiresAt,
     };
@@ -462,29 +757,64 @@ export class FeishuOAuthService {
   private async findOrCreateUserByFeishuInfo(
     userInfo?: FeishuUserInfoResponse['data'],
   ): Promise<string> {
-    if (!userInfo?.email) {
-      throw new BadRequestException('Cannot create user without email');
+    const feishuOpenId = userInfo?.open_id;
+    const feishuUnionId = userInfo?.union_id;
+
+    if (!userInfo) {
+      throw new BadRequestException('Feishu user info is missing');
     }
 
-    // 尝试通过 email 查找用户
-    let user = await this.userRepository.findOne({
-      where: { email: userInfo.email },
-    });
+    // 先通过飞书身份标识查找历史绑定用户
+    if (feishuOpenId || feishuUnionId) {
+      const token = await this.connectorTokenRepository
+        .createQueryBuilder('token')
+        .select(['token.userId'])
+        .where('token.connectorType = :connectorType', {
+          connectorType: this.connectorType,
+        })
+        .andWhere(
+          '(token.metadata ->> :openIdKey = :openId OR token.metadata ->> :unionIdKey = :unionId)',
+          {
+            openIdKey: 'feishuOpenId',
+            unionIdKey: 'feishuUnionId',
+            openId: feishuOpenId ?? '',
+            unionId: feishuUnionId ?? '',
+          },
+        )
+        .orderBy('token.updatedAt', 'DESC')
+        .getOne();
 
-    if (!user) {
-      // 创建新用户
-      user = this.userRepository.create({
-        email: userInfo.email,
-        name: userInfo.name ?? userInfo.en_name ?? userInfo.email.split('@')[0],
+      if (token?.userId) {
+        return token.userId;
+      }
+    }
+
+    // 其次通过邮箱查找
+    if (userInfo.email) {
+      const existingUser = await this.userRepository.findOne({
+        where: { email: userInfo.email },
+      });
+      if (existingUser) {
+        return existingUser.id;
+      }
+    }
+
+    // 创建新用户（飞书用户可能未授权邮箱）
+    const derivedName =
+      userInfo.name ?? userInfo.en_name ?? userInfo.email?.split('@')[0] ?? 'Feishu User';
+
+    const user = await this.userRepository.save(
+      this.userRepository.create({
+        email: userInfo.email ?? null,
+        name: derivedName,
         password: '', // OAuth 用户没有密码
         phone: userInfo.mobile ?? null,
         createdAt: new Date(),
         updatedAt: new Date(),
-      });
-      user = await this.userRepository.save(user);
-      this.logger.log(`Created new user from Feishu: ${user.id}`);
-    }
+      }),
+    );
 
+    this.logger.log(`Created new user from Feishu: ${user.id}`);
     return user.id;
   }
 

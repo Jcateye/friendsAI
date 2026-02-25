@@ -446,6 +446,31 @@ export interface SendFeishuTemplateMessageResponse {
   error?: string;
 }
 
+export interface FeishuOAuthAuthorizeMeResponse {
+  success: boolean;
+  authorizeUrl: string;
+}
+
+export interface FeishuOAuthMyTokenResponse {
+  success: boolean;
+  valid?: boolean;
+}
+
+export interface FeishuOAuthValidResponse {
+  success: boolean;
+  valid: boolean;
+}
+
+export interface FeishuOAuthDeleteResponse {
+  success: boolean;
+}
+
+export interface FeishuOAuthCallbackResponse {
+  success: boolean;
+  userId?: string;
+  error?: string;
+}
+
 // ==================== Skills ====================
 
 export interface SkillActionOptionV2 {

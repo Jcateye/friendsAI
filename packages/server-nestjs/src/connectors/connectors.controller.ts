@@ -1,27 +1,127 @@
+import { Body, Controller, Get, Post, Query, Req, Res, UseGuards } from '@nestjs/common';
 import {
-  Body,
-  Controller,
-  Get,
-  Post,
-  Query,
-  Req,
-  UseGuards,
-  ForbiddenException,
-} from '@nestjs/common';
-import { ApiOperation, ApiQuery, ApiResponse, ApiTags, ApiBearerAuth } from '@nestjs/swagger';
+  ApiBearerAuth,
+  ApiBody,
+  ApiOperation,
+  ApiProperty,
+  ApiPropertyOptional,
+  ApiQuery,
+  ApiResponse,
+  ApiTags,
+} from '@nestjs/swagger';
 import { ConnectorsService } from './connectors.service';
-import { FeishuOAuthService, FeishuOAuthResult } from './feishu-oauth.service';
-import type { FeishuTokens } from './feishu-oauth.service';
+import { FeishuOAuthService } from './feishu-oauth.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { User as RequestUser } from '../entities/user.entity';
+import { Public } from '../auth/public.decorator';
+import { ConfigService } from '@nestjs/config';
+import type { Response } from 'express';
 
-interface FeishuOAuthTokenRequest {
+class FeishuTokensDto {
+  @ApiProperty()
+  accessToken: string;
+
+  @ApiProperty()
+  refreshToken: string;
+
+  @ApiProperty()
+  tokenType: string;
+
+  @ApiProperty()
+  expiresIn: number;
+
+  @ApiProperty({ type: String, format: 'date-time' })
+  expiresAt: Date;
+
+  @ApiPropertyOptional()
+  scope?: string;
+
+  @ApiPropertyOptional({ type: 'object', additionalProperties: true })
+  metadata?: Record<string, unknown>;
+}
+
+class FeishuOAuthTokenRequestDto {
+  @ApiProperty()
   code: string;
+
+  @ApiPropertyOptional()
   state?: string;
 }
 
-interface FeishuOAuthRefreshRequest {
+class FeishuOAuthRefreshRequestDto {
+  @ApiProperty()
   refreshToken: string;
+}
+
+class FeishuAuthorizeResultDto {
+  @ApiProperty()
+  configured: boolean;
+
+  @ApiPropertyOptional({ nullable: true })
+  authorizeUrl: string | null;
+
+  @ApiProperty({ type: [String] })
+  missing: string[];
+}
+
+class FeishuAuthorizeMeResponseDto {
+  @ApiProperty()
+  success: boolean;
+
+  @ApiProperty()
+  authorizeUrl: string;
+}
+
+class FeishuOAuthResultDto {
+  @ApiProperty()
+  success: boolean;
+
+  @ApiPropertyOptional()
+  userId?: string;
+
+  @ApiPropertyOptional({ type: FeishuTokensDto })
+  tokens?: FeishuTokensDto;
+
+  @ApiPropertyOptional({ type: 'object', additionalProperties: true })
+  userInfo?: Record<string, unknown>;
+
+  @ApiPropertyOptional()
+  error?: string;
+}
+
+class FeishuTokenActionResponseDto {
+  @ApiProperty()
+  success: boolean;
+
+  @ApiPropertyOptional({ type: FeishuTokensDto })
+  tokens?: FeishuTokensDto;
+
+  @ApiPropertyOptional()
+  error?: string;
+}
+
+class FeishuMyTokenResponseDto {
+  @ApiProperty()
+  success: boolean;
+
+  @ApiPropertyOptional({ type: FeishuTokensDto })
+  tokens?: FeishuTokensDto;
+
+  @ApiPropertyOptional()
+  valid?: boolean;
+}
+
+class FeishuTokenValidityResponseDto {
+  @ApiProperty()
+  success: boolean;
+
+  @ApiProperty()
+  valid: boolean;
+}
+
+class FeishuTokenDeleteResponseDto {
+  @ApiProperty()
+  success: boolean;
 }
 
 @ApiTags('connectors-feishu-oauth')
@@ -30,9 +130,11 @@ export class ConnectorsController {
   constructor(
     private readonly connectorsService: ConnectorsService,
     private readonly feishuOAuthService: FeishuOAuthService,
+    private readonly configService: ConfigService,
   ) {}
 
   @Get('authorize')
+  @Public()
   @ApiOperation({
     summary: '构建飞书 OAuth 授权链接',
     description:
@@ -56,6 +158,7 @@ export class ConnectorsController {
   @ApiResponse({
     status: 200,
     description: '成功返回可用于跳转的授权链接信息',
+    type: FeishuAuthorizeResultDto,
   })
   authorize(
     @Query('redirect_uri') redirectUri?: string,
@@ -83,6 +186,7 @@ export class ConnectorsController {
   @ApiResponse({
     status: 200,
     description: '成功返回可用于跳转的授权链接信息',
+    type: FeishuAuthorizeMeResponseDto,
   })
   authorizeForMe(@Req() req: { user: RequestUser }) {
     const userId = req.user.id;
@@ -94,6 +198,7 @@ export class ConnectorsController {
   }
 
   @Get('callback')
+  @Public()
   @ApiOperation({
     summary: '飞书 OAuth 授权回调',
     description:
@@ -114,31 +219,41 @@ export class ConnectorsController {
     description: '用户拒绝授权时的错误描述',
   })
   @ApiResponse({
-    status: 200,
-    description: '成功返回授权结果，包含 token 信息和用户信息',
+    status: 302,
+    description: '重定向回前端设置页并附带授权结果参数',
   })
   async callback(
-    @Query('code') code?: string,
-    @Query('state') state?: string,
-    @Query('error') error?: string,
-    @Query('error_description') errorDescription?: string,
-  ): Promise<FeishuOAuthResult> {
-    // 处理用户拒绝授权的情况
+    @Query('code') code: string | undefined,
+    @Query('state') state: string | undefined,
+    @Query('error') error: string | undefined,
+    @Query('error_description') errorDescription: string | undefined,
+    @Res() res: Response,
+  ): Promise<void> {
+    const frontendBaseUrl = this.configService.get<string>('WEB_APP_URL') ?? 'http://localhost:5173';
+    const base = frontendBaseUrl.replace(/\/$/, '');
+    const redirectUrl = new URL('/settings', base);
+
     if (error) {
-      return {
-        success: false,
-        error: errorDescription || error,
-      };
+      redirectUrl.searchParams.set('feishu_oauth', 'error');
+      redirectUrl.searchParams.set('reason', error === 'access_denied' ? 'oauth_denied' : 'oauth_failed');
+      return res.redirect(302, redirectUrl.toString());
     }
 
     if (!code) {
-      return {
-        success: false,
-        error: 'Authorization code is missing',
-      };
+      redirectUrl.searchParams.set('feishu_oauth', 'error');
+      redirectUrl.searchParams.set('reason', 'missing_code');
+      return res.redirect(302, redirectUrl.toString());
     }
 
-    return this.feishuOAuthService.handleCallback(code, state);
+    const result = await this.feishuOAuthService.handleCallback(code, state);
+    if (result.success) {
+      redirectUrl.searchParams.set('feishu_oauth', 'success');
+      return res.redirect(302, redirectUrl.toString());
+    }
+
+    redirectUrl.searchParams.set('feishu_oauth', 'error');
+    redirectUrl.searchParams.set('reason', 'oauth_failed');
+    return res.redirect(302, redirectUrl.toString());
   }
 
   @Post('token')
@@ -148,18 +263,16 @@ export class ConnectorsController {
       '使用飞书返回的授权 code 交换访问 token 和刷新 token。建议使用 callback 端点自动完成此流程。',
   })
   @ApiResponse({
-    status: 200,
-    description: '成功返回 token 信息',
-  })
-  @ApiResponse({
     status: 400,
     description: '授权码无效或已过期',
   })
-  async exchangeToken(@Body() body: FeishuOAuthTokenRequest): Promise<{
-    success: boolean;
-    tokens?: FeishuTokens;
-    error?: string;
-  }> {
+  @ApiBody({ type: FeishuOAuthTokenRequestDto })
+  @ApiResponse({
+    status: 200,
+    description: '成功返回 token 信息',
+    type: FeishuTokenActionResponseDto,
+  })
+  async exchangeToken(@Body() body: FeishuOAuthTokenRequestDto): Promise<FeishuTokenActionResponseDto> {
     if (!body.code) {
       return {
         success: false,
@@ -188,18 +301,16 @@ export class ConnectorsController {
       '使用 refresh_token 获取新的 access_token。建议使用 getUserToken 自动刷新功能。',
   })
   @ApiResponse({
-    status: 200,
-    description: '成功返回新的 token 信息',
-  })
-  @ApiResponse({
     status: 400,
     description: '刷新 token 无效',
   })
-  async refreshToken(@Body() body: FeishuOAuthRefreshRequest): Promise<{
-    success: boolean;
-    tokens?: FeishuTokens;
-    error?: string;
-  }> {
+  @ApiBody({ type: FeishuOAuthRefreshRequestDto })
+  @ApiResponse({
+    status: 200,
+    description: '成功返回新的 token 信息',
+    type: FeishuTokenActionResponseDto,
+  })
+  async refreshToken(@Body() body: FeishuOAuthRefreshRequestDto): Promise<FeishuTokenActionResponseDto> {
     if (!body.refreshToken) {
       return {
         success: false,
@@ -235,18 +346,15 @@ export class ConnectorsController {
     description: '获取当前用户存储的飞书 token，如果 token 即将过期会自动刷新。',
   })
   @ApiResponse({
-    status: 200,
-    description: '成功返回 token 信息',
-  })
-  @ApiResponse({
     status: 401,
     description: '未认证',
   })
-  async getMyToken(@Req() req: { user: RequestUser }): Promise<{
-    success: boolean;
-    tokens?: FeishuTokens;
-    valid?: boolean;
-  }> {
+  @ApiResponse({
+    status: 200,
+    description: '成功返回 token 信息',
+    type: FeishuMyTokenResponseDto,
+  })
+  async getMyToken(@Req() req: { user: RequestUser }): Promise<FeishuMyTokenResponseDto> {
     const userId = req.user.id;
     const tokens = await this.feishuOAuthService.getUserToken(userId);
 
@@ -277,11 +385,9 @@ export class ConnectorsController {
   @ApiResponse({
     status: 200,
     description: '返回 token 有效性状态',
+    type: FeishuTokenValidityResponseDto,
   })
-  async isMyTokenValid(@Req() req: { user: RequestUser }): Promise<{
-    success: boolean;
-    valid: boolean;
-  }> {
+  async isMyTokenValid(@Req() req: { user: RequestUser }): Promise<FeishuTokenValidityResponseDto> {
     const userId = req.user.id;
     const valid = await this.feishuOAuthService.isTokenValid(userId);
     return {
@@ -303,10 +409,9 @@ export class ConnectorsController {
   @ApiResponse({
     status: 200,
     description: '成功删除 token',
+    type: FeishuTokenDeleteResponseDto,
   })
-  async deleteMyToken(@Req() req: { user: RequestUser }): Promise<{
-    success: boolean;
-  }> {
+  async deleteMyToken(@Req() req: { user: RequestUser }): Promise<FeishuTokenDeleteResponseDto> {
     const userId = req.user.id;
     await this.feishuOAuthService.deleteUserToken(userId);
     return {
