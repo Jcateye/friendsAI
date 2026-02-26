@@ -11,7 +11,7 @@ import { useToolConfirmations } from '../../hooks/useToolConfirmations';
 import { sortMessagesByCreatedAt } from '../../lib/messages/sortMessagesByCreatedAt';
 import { resolveEpochMs } from '../../lib/time/timestamp';
 import type { ArchiveExtractData } from '../../lib/api/agent-types';
-import type { SkillCatalogItem } from '../../lib/api/types';
+import type { AgentLlmCatalogResponse, AgentLlmRequest, SkillCatalogItem } from '../../lib/api/types';
 import { api } from '../../lib/api/client';
 
 type MessageWithMs = AgentChatMessage & {
@@ -19,6 +19,34 @@ type MessageWithMs = AgentChatMessage & {
 };
 
 const DUPLICATE_WINDOW_MS = 5000;
+const LLM_SELECTION_STORAGE_KEY = 'chat_llm_selection_v1';
+
+function hasThinkingTag(content: string): boolean {
+  return /(?:<think>|&lt;think&gt;)/i.test(content);
+}
+
+function selectAssistantContent(existing: string, incoming: string): string {
+  const existingHasThinking = hasThinkingTag(existing);
+  const incomingHasThinking = hasThinkingTag(incoming);
+
+  if (existingHasThinking && !incomingHasThinking) {
+    return existing;
+  }
+  if (!existingHasThinking && incomingHasThinking) {
+    return incoming;
+  }
+
+  const existingTrimmed = existing.trim();
+  const incomingTrimmed = incoming.trim();
+  if (incomingTrimmed.length === 0 && existingTrimmed.length > 0) {
+    return existing;
+  }
+  if (existingTrimmed.length === 0 && incomingTrimmed.length > 0) {
+    return incoming;
+  }
+
+  return incoming.length >= existing.length ? incoming : existing;
+}
 
 const AVAILABLE_CHAT_TOOLS: ToolOption[] = [
   {
@@ -86,6 +114,45 @@ function mapCatalogToSkillActions(items: SkillCatalogItem[]): SkillActionOption[
   return actions;
 }
 
+function toLlmSelectionId(providerKey: string, model: string): string {
+  return `${providerKey}/${model}`;
+}
+
+function readStoredLlmSelectionId(): string | undefined {
+  try {
+    const raw = localStorage.getItem(LLM_SELECTION_STORAGE_KEY);
+    if (!raw) {
+      return undefined;
+    }
+
+    const parsed = JSON.parse(raw) as unknown;
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      return undefined;
+    }
+
+    const parsedRecord = parsed as Record<string, unknown>;
+    const llmIdRaw = parsedRecord.llmId;
+    if (typeof llmIdRaw === 'string' && llmIdRaw.trim().length > 0) {
+      return llmIdRaw.trim();
+    }
+
+    const providerKeyRaw = parsedRecord.providerKey;
+    const providerRaw = parsedRecord.provider;
+    const modelRaw = parsedRecord.model;
+    const providerKey = typeof providerKeyRaw === 'string' ? providerKeyRaw.trim() : '';
+    const provider = typeof providerRaw === 'string' ? providerRaw.trim() : '';
+    const model = typeof modelRaw === 'string' ? modelRaw.trim() : '';
+
+    if (!provider || !model) {
+      return undefined;
+    }
+
+    return toLlmSelectionId(providerKey || provider, model);
+  } catch {
+    return undefined;
+  }
+}
+
 export function ConversationDetailPage() {
   const { id } = useParams<{ id: string }>();
   const location = useLocation();
@@ -125,10 +192,129 @@ export function ConversationDetailPage() {
     }
   }, [conversationId, id, navigate]);
 
+  const [llmCatalog, setLlmCatalog] = useState<AgentLlmCatalogResponse | null>(null);
+  const [selectedLlmId, setSelectedLlmId] = useState<string>('');
+
+  const llmSelectionOptions = useMemo(
+    () =>
+      (llmCatalog?.providers ?? []).flatMap((provider) =>
+        provider.models.map((model) => ({
+          id: toLlmSelectionId(provider.key, model.model),
+          providerKey: provider.key,
+          provider: provider.provider,
+          providerLabel: provider.label,
+          model: model.model,
+          modelLabel: model.label,
+          reasoning: model.reasoning,
+          providerOptions: model.providerOptions,
+        })),
+      ),
+    [llmCatalog],
+  );
+
+  useEffect(() => {
+    let disposed = false;
+
+    const loadLlmCatalog = async () => {
+      try {
+        const catalog = await api.agent.getLlmCatalog();
+        if (disposed) {
+          return;
+        }
+
+        setLlmCatalog(catalog);
+
+        const optionIds = new Set(
+          catalog.providers.flatMap((provider) =>
+            provider.models.map((model) => toLlmSelectionId(provider.key, model.model)),
+          ),
+        );
+        const storedSelectionId = readStoredLlmSelectionId();
+        if (storedSelectionId && optionIds.has(storedSelectionId)) {
+          setSelectedLlmId(storedSelectionId);
+          return;
+        }
+
+        const defaultSelectionId = toLlmSelectionId(
+          catalog.defaultSelection.key,
+          catalog.defaultSelection.model,
+        );
+        if (optionIds.has(defaultSelectionId)) {
+          setSelectedLlmId(defaultSelectionId);
+          return;
+        }
+
+        const firstOptionId = catalog.providers
+          .flatMap((provider) => provider.models.map((model) => toLlmSelectionId(provider.key, model.model)))
+          .at(0);
+        setSelectedLlmId(firstOptionId ?? '');
+      } catch {
+        if (disposed) {
+          return;
+        }
+        setLlmCatalog(null);
+      }
+    };
+
+    void loadLlmCatalog();
+
+    return () => {
+      disposed = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!selectedLlmId) {
+      return;
+    }
+
+    localStorage.setItem(
+      LLM_SELECTION_STORAGE_KEY,
+      JSON.stringify({
+        llmId: selectedLlmId,
+      }),
+    );
+  }, [selectedLlmId]);
+
+  useEffect(() => {
+    if (llmSelectionOptions.length === 0) {
+      return;
+    }
+
+    const exists = llmSelectionOptions.some((option) => option.id === selectedLlmId);
+    if (!exists) {
+      setSelectedLlmId(llmSelectionOptions[0].id);
+    }
+  }, [llmSelectionOptions, selectedLlmId]);
+
+  const selectedLlmOption = useMemo(
+    () => llmSelectionOptions.find((option) => option.id === selectedLlmId),
+    [llmSelectionOptions, selectedLlmId],
+  );
+
+  const selectedLlmConfig = useMemo<AgentLlmRequest | undefined>(() => {
+    if (!selectedLlmOption) {
+      return undefined;
+    }
+
+    const llm: AgentLlmRequest = {
+      provider: selectedLlmOption.provider as AgentLlmRequest['provider'],
+      providerKey: selectedLlmOption.providerKey,
+      model: selectedLlmOption.model,
+    };
+
+    if (selectedLlmOption.providerOptions) {
+      llm.providerOptions = selectedLlmOption.providerOptions;
+    }
+
+    return llm;
+  }, [selectedLlmOption]);
+
   const chat = useAgentChat({
     conversationId,
     initialMessages,
     onConversationCreated: handleConversationCreated,
+    llm: selectedLlmConfig,
   });
 
   const toolStates = chat.pendingConfirmations;
@@ -169,6 +355,13 @@ export function ConversationDetailPage() {
           ...existingMessage,
           ...(message as MessageWithMs),
         };
+
+        if (existingMessage.role === 'assistant' && message.role === 'assistant') {
+          mergedMessage.content = selectAssistantContent(
+            existingMessage.content,
+            (message as MessageWithMs).content,
+          );
+        }
 
         const createdAtMs = resolveEpochMs(
           (message as MessageWithMs).createdAtMs,
@@ -313,12 +506,13 @@ export function ConversationDetailPage() {
           content: typeof msg.content === 'string' ? msg.content : String(msg.content),
         })),
         language: 'zh',
+        llm: selectedLlmConfig,
       })
       .catch((error) => {
         // 失败时只打日志，不打扰用户
         console.error('Failed to run title_summary agent:', error);
       });
-  }, [conversationId, sortedMessages]);
+  }, [conversationId, selectedLlmConfig, sortedMessages]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -443,7 +637,10 @@ export function ConversationDetailPage() {
 
     try {
       if (skillId === 'archive_brief' && operation === 'archive_extract' && conversationId) {
-        const result = await api.agent.runArchiveExtract({ conversationId });
+        const result = await api.agent.runArchiveExtract({
+          conversationId,
+          llm: selectedLlmConfig,
+        });
         const data = result.data as ArchiveExtractData;
 
         // 保存归档数据用于应用面板
@@ -500,6 +697,7 @@ export function ConversationDetailPage() {
           options: {
             useCache: true,
           },
+          llm: selectedLlmConfig,
         });
 
         const payload = JSON.stringify(result.data, null, 2);
@@ -519,7 +717,7 @@ export function ConversationDetailPage() {
         setSkillResult(null);
       }, 8000);
     }
-  }, [conversationId]);
+  }, [conversationId, selectedLlmConfig]);
 
   const handleComposerSkillAction = useCallback((action: SkillActionOption) => {
     void handleSkillSelect(action);
@@ -641,6 +839,27 @@ export function ConversationDetailPage() {
             }}
             onClose={() => setShowArchivePanel(false)}
           />
+        </div>
+      )}
+
+      {llmCatalog && (
+        <div className="border-t border-border bg-bg-card px-4 py-2">
+          <div className="flex items-center gap-2">
+            <span className="shrink-0 text-[12px] text-text-muted">模型</span>
+            <select
+              value={selectedLlmId}
+              onChange={(event) => setSelectedLlmId(event.target.value)}
+              className="h-8 flex-1 rounded-md border border-border bg-white px-2 text-[12px] text-text-primary outline-none focus:border-primary"
+              aria-label="选择模型"
+            >
+              {llmSelectionOptions.map((option) => (
+                <option key={option.id} value={option.id}>
+                  {option.providerLabel} / {option.modelLabel}
+                  {option.reasoning ? ' · 思考' : ''}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
       )}
 

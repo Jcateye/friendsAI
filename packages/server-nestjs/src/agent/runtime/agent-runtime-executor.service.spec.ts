@@ -334,6 +334,54 @@ describe('AgentRuntimeExecutor', () => {
       expect(result.data).toEqual({ content: 'This is plain text' });
     });
 
+    it('should normalize title_summary output from plain text response', async () => {
+      const agentId = 'title_summary';
+      const input = { conversationId: 'conv-123' };
+
+      registry.loadDefinition.mockResolvedValue({
+        ...mockBundle,
+        definition: {
+          ...mockBundle.definition,
+          id: 'title_summary',
+        },
+        outputSchema: {
+          type: 'object',
+          required: ['title', 'summary'],
+          properties: {
+            title: { type: 'string' },
+            summary: { type: 'string' },
+          },
+        },
+      });
+      templateRenderer.render.mockReturnValue({
+        system: 'System prompt',
+        user: 'User: Hello',
+        warnings: [],
+      });
+
+      const mockStream = (async function* () {
+        yield { choices: [{ delta: { content: '你好，我在的。' } }] };
+      })();
+
+      aiService.streamChat.mockResolvedValue(mockStream as any);
+      outputValidator.validate.mockReturnValue({ valid: true });
+      snapshotService.findSnapshot.mockResolvedValue({
+        snapshot: null,
+        cached: false,
+      });
+      snapshotService.createSnapshot.mockResolvedValue({
+        id: 'snapshot-123',
+      } as any);
+
+      const result = await service.execute(agentId, null, input, { skipServiceRouting: true });
+
+      expect(result.data).toMatchObject({
+        title: expect.any(String),
+        summary: expect.any(String),
+      });
+      expect((result.data as Record<string, unknown>).summary).toBe('你好，我在的。');
+    });
+
     it('should handle markdown-wrapped JSON', async () => {
       const agentId = 'test-agent';
       const input = { message: 'Hello' };
@@ -775,7 +823,10 @@ describe('AgentRuntimeExecutor', () => {
       const result = await service.execute(agentId, null, input, { skipServiceRouting: true });
 
       expect(titleSummaryService.generate).not.toHaveBeenCalled();
-      expect(result.data).toEqual({ response: 'OK' });
+      expect(result.data).toMatchObject({
+        title: expect.any(String),
+        summary: expect.any(String),
+      });
     });
   });
 });

@@ -1,10 +1,16 @@
 import { Body, Controller, Get, HttpCode, HttpException, HttpStatus, Optional, Post, Query, Req, Res } from '@nestjs/common';
 import { ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
 import type { Request, Response } from 'express';
+import fs from 'fs';
+import os from 'os';
+import path from 'path';
 import { AgentMessageStore } from './agent-message.store';
 import type {
   AgentChatContext,
   AgentChatRequest,
+  AgentLlmCatalogModel,
+  AgentLlmCatalogProvider,
+  AgentLlmCatalogResponse,
   AgentComposerAttachment,
   AgentComposerContext,
   AgentRunRequest,
@@ -21,7 +27,14 @@ import { generateUlid } from '../utils/ulid';
 import { SkillsService } from '../skills/skills.service';
 import { EngineRouter } from './engines/engine.router';
 import { AgentLlmValidationError, findLegacyLlmFields, parseAgentLlmOrThrow } from './dto/agent-llm.schema';
-import type { LlmCallSettings, LlmRequestConfig } from '../ai/providers/llm-types';
+import type { LlmCallSettings, LlmProviderName, LlmRequestConfig } from '../ai/providers/llm-types';
+
+const CATALOG_PROVIDER_OPTIONS_KEY_ALIAS_MAP: Record<string, string> = {
+  claude: 'anthropic',
+  gemini: 'google',
+  'openai-compatible': 'openaiCompatible',
+  openai_compatible: 'openaiCompatible',
+};
 
 @ApiTags('Agent')
 @Controller('agent')
@@ -119,6 +132,10 @@ export class AgentController {
     let streamErrorCode: string | null = null;
     const pingInterval = setInterval(() => {
       if (res.writableEnded) {
+        return;
+      }
+      if (adapter) {
+        this.writeKeepAlive(res);
         return;
       }
       this.writeEvent(res, {
@@ -374,6 +391,21 @@ export class AgentController {
     }
   }
 
+  @Get('llm/catalog')
+  @ApiOperation({
+    summary: '获取聊天可选 LLM Provider/Model 目录',
+    description:
+      '返回前端可用于下拉选择的 provider/model 列表。优先读取项目 LLM catalog 配置（默认 ~/.config/opencode/opencode.json），' +
+      '读取失败时回退到当前服务的环境变量默认值（LLM_PROVIDER/LLM_MODEL）。',
+  })
+  @ApiResponse({
+    status: 200,
+    description: '成功返回 LLM 目录信息',
+  })
+  getLlmCatalog(): AgentLlmCatalogResponse {
+    return this.buildLlmCatalog();
+  }
+
   @Get('messages')
   @ApiOperation({
     summary: '获取某个会话/会话 Session 的 Agent 消息缓存',
@@ -429,6 +461,10 @@ export class AgentController {
   private writeEvent(res: Response, event: AgentStreamEvent | AgentSseEvent): void {
     res.write(`event: ${event.event}\n`);
     res.write(`data: ${JSON.stringify(event)}\n\n`);
+  }
+
+  private writeKeepAlive(res: Response): void {
+    res.write(`: ping ${new Date().toISOString()}\n\n`);
   }
 
   private extractLatestUserText(messages?: AgentChatRequest['messages']): string | undefined {
@@ -801,11 +837,515 @@ export class AgentController {
       return undefined;
     }
 
-    return {
+    const providerKey =
+      typeof llm.providerKey === 'string' && llm.providerKey.trim().length > 0
+        ? llm.providerKey.trim()
+        : undefined;
+
+    return this.applyCatalogConnectionToLlm({
       ...llm,
       provider: llm.provider,
+      providerKey,
       model,
+    });
+  }
+
+  private buildLlmCatalog(): AgentLlmCatalogResponse {
+    const fallbackDefault = this.resolveEnvDefaultSelection();
+    const opencodeCatalog = this.readOpencodeCatalog();
+
+    if (opencodeCatalog) {
+      return opencodeCatalog;
+    }
+
+    const providerMap = new Map<string, AgentLlmCatalogProvider>();
+    this.addCatalogModel(providerMap, {
+      key: fallbackDefault.key,
+      provider: fallbackDefault.provider,
+      providerLabel: this.defaultProviderLabel(fallbackDefault.provider),
+      model: fallbackDefault.model,
+      modelLabel: fallbackDefault.model,
+      reasoning: false,
+    });
+
+    for (const provider of ['openai', 'claude', 'gemini', 'openai-compatible'] as const) {
+      const envModels = this.parseModelListFromEnv(provider);
+      for (const model of envModels) {
+        this.addCatalogModel(providerMap, {
+          key: provider,
+          provider,
+          providerLabel: this.defaultProviderLabel(provider),
+          model,
+          modelLabel: model,
+          reasoning: false,
+        });
+      }
+    }
+
+    return {
+      source: 'env',
+      defaultSelection: fallbackDefault,
+      providers: Array.from(providerMap.values()),
     };
+  }
+
+  private readOpencodeCatalog(): AgentLlmCatalogResponse | null {
+    const candidates = this.resolveOpencodeConfigCandidates();
+
+    for (const candidate of candidates) {
+      let parsed: unknown;
+      try {
+        if (!fs.existsSync(candidate)) {
+          continue;
+        }
+        const content = fs.readFileSync(candidate, 'utf8');
+        parsed = JSON.parse(content) as unknown;
+      } catch {
+        continue;
+      }
+
+      if (!this.isRecord(parsed)) {
+        continue;
+      }
+
+      const providers = this.parseProvidersFromCatalog(parsed);
+      if (providers.length === 0) {
+        continue;
+      }
+
+      const providerMap = new Map<string, AgentLlmCatalogProvider>();
+      for (const provider of providers) {
+        providerMap.set(provider.key, provider);
+      }
+
+      const fallbackDefault = this.resolveEnvDefaultSelection();
+      const configuredDefault = this.parseOpencodeDefaultSelection(parsed);
+      const defaultSelection = configuredDefault ?? fallbackDefault;
+      this.addCatalogModel(providerMap, {
+        key: defaultSelection.key,
+        provider: defaultSelection.provider,
+        providerLabel: this.defaultProviderLabel(defaultSelection.provider),
+        model: defaultSelection.model,
+        modelLabel: defaultSelection.model,
+        reasoning: false,
+      });
+
+      return {
+        source: 'opencode',
+        defaultSelection,
+        providers: Array.from(providerMap.values()),
+      };
+    }
+
+    return null;
+  }
+
+  private parseProvidersFromCatalog(config: Record<string, unknown>): AgentLlmCatalogProvider[] {
+    const providerRoot = this.isRecord(config.providers)
+      ? config.providers
+      : this.isRecord(config.provider)
+        ? config.provider
+        : undefined;
+    if (!providerRoot) {
+      return [];
+    }
+
+    const providerMap = new Map<string, AgentLlmCatalogProvider>();
+
+    for (const [rawProviderKey, rawProviderValue] of Object.entries(providerRoot)) {
+      if (!this.isRecord(rawProviderValue)) {
+        continue;
+      }
+
+      const provider = this.resolveCatalogProvider(rawProviderKey, rawProviderValue);
+      if (!provider) {
+        continue;
+      }
+
+      const providerLabel =
+        this.readStringField(rawProviderValue, ['label', 'name']) ??
+        this.defaultProviderLabel(provider);
+      const providerBaseURL = this.extractProviderBaseUrl(rawProviderValue);
+
+      const rawModels = rawProviderValue.models;
+      if (!this.isRecord(rawModels)) {
+        continue;
+      }
+
+      for (const [modelKey, modelValue] of Object.entries(rawModels)) {
+        const model = modelKey.trim();
+        if (!model) {
+          continue;
+        }
+
+        const modelRecord = this.isRecord(modelValue) ? modelValue : {};
+        const modelLabel = this.readStringField(modelRecord, ['label', 'name']) ?? model;
+        const reasoning = modelRecord.reasoning === true || modelRecord.thinking === true;
+        const providerOptions = this.extractCatalogModelProviderOptions(provider, modelRecord);
+
+        this.addCatalogModel(providerMap, {
+          key: rawProviderKey,
+          provider,
+          providerLabel,
+          providerBaseURL,
+          model,
+          modelLabel,
+          reasoning,
+          providerOptions,
+        });
+      }
+    }
+
+    return Array.from(providerMap.values());
+  }
+
+  private extractModelProviderOptions(
+    provider: LlmProviderName,
+    rawOptions: unknown,
+  ): Record<string, Record<string, unknown>> | undefined {
+    if (!this.isRecord(rawOptions)) {
+      return undefined;
+    }
+
+    const result: Record<string, Record<string, unknown>> = {};
+
+    if (provider === 'claude' && this.isRecord(rawOptions.thinking)) {
+      result.anthropic = {
+        thinking: rawOptions.thinking,
+      };
+    }
+
+    const reasoningEffort = this.readReasoningEffort(rawOptions);
+    if (typeof reasoningEffort === 'string' && reasoningEffort.trim().length > 0) {
+      if (provider === 'openai-compatible') {
+        result.openaiCompatible = {
+          reasoningEffort: reasoningEffort.trim(),
+        };
+      } else if (provider === 'openai') {
+        result.openai = {
+          reasoningEffort: reasoningEffort.trim(),
+        };
+      }
+    }
+
+    return Object.keys(result).length > 0 ? result : undefined;
+  }
+
+  private extractCatalogModelProviderOptions(
+    provider: LlmProviderName,
+    modelRecord: Record<string, unknown>,
+  ): Record<string, Record<string, unknown>> | undefined {
+    const normalizedProviderOptions = this.normalizeCatalogProviderOptions(modelRecord.providerOptions);
+    if (normalizedProviderOptions) {
+      return normalizedProviderOptions;
+    }
+
+    return this.extractModelProviderOptions(provider, modelRecord.options);
+  }
+
+  private normalizeCatalogProviderOptions(
+    rawOptions: unknown,
+  ): Record<string, Record<string, unknown>> | undefined {
+    if (!this.isRecord(rawOptions)) {
+      return undefined;
+    }
+
+    const normalized: Record<string, Record<string, unknown>> = {};
+    for (const [rawKey, rawValue] of Object.entries(rawOptions)) {
+      if (!this.isRecord(rawValue)) {
+        continue;
+      }
+
+      const key = CATALOG_PROVIDER_OPTIONS_KEY_ALIAS_MAP[rawKey] ?? rawKey;
+      normalized[key] = { ...rawValue };
+    }
+
+    return Object.keys(normalized).length > 0 ? normalized : undefined;
+  }
+
+  private readReasoningEffort(rawOptions: Record<string, unknown>): string | undefined {
+    if (typeof rawOptions.reasoningEffort === 'string') {
+      return rawOptions.reasoningEffort;
+    }
+
+    const reasoning = rawOptions.reasoning;
+    if (!this.isRecord(reasoning)) {
+      return undefined;
+    }
+
+    return typeof reasoning.effort === 'string' ? reasoning.effort : undefined;
+  }
+
+  private resolveCatalogProvider(
+    providerKey: string,
+    providerConfig: Record<string, unknown>,
+  ): LlmProviderName | undefined {
+    const sdkProvider = this.readStringField(providerConfig, ['sdkProvider', 'sdk_provider']);
+    if (sdkProvider) {
+      const normalized = this.normalizeCatalogProviderName(sdkProvider);
+      if (normalized) {
+        return normalized;
+      }
+    }
+
+    return this.inferLlmProvider(providerKey, providerConfig);
+  }
+
+  private normalizeCatalogProviderName(value: string): LlmProviderName | undefined {
+    const normalized = value.trim().toLowerCase();
+    if (!normalized) {
+      return undefined;
+    }
+
+    if (
+      normalized === 'openai' ||
+      normalized === 'claude' ||
+      normalized === 'anthropic' ||
+      normalized === 'gemini' ||
+      normalized === 'google' ||
+      normalized === 'openai-compatible' ||
+      normalized === 'openai_compatible' ||
+      normalized === 'openaicompatible'
+    ) {
+      return this.normalizeProviderName(normalized);
+    }
+
+    return undefined;
+  }
+
+  private parseOpencodeDefaultSelection(
+    config: Record<string, unknown>,
+  ): { key: string; provider: LlmProviderName; model: string } | undefined {
+    const rawModel =
+      typeof config.defaultModel === 'string'
+        ? config.defaultModel
+        : config.model;
+    if (typeof rawModel !== 'string') {
+      return undefined;
+    }
+
+    const value = rawModel.trim();
+    if (!value) {
+      return undefined;
+    }
+
+    const slashIndex = value.indexOf('/');
+    if (slashIndex <= 0 || slashIndex >= value.length - 1) {
+      return undefined;
+    }
+
+    const providerKey = value.slice(0, slashIndex).trim();
+    const model = value.slice(slashIndex + 1).trim();
+    if (!providerKey || !model) {
+      return undefined;
+    }
+
+    const providerConfigRoot = this.isRecord(config.providers)
+      ? config.providers
+      : this.isRecord(config.provider)
+        ? config.provider
+        : undefined;
+    const providerConfig = providerConfigRoot && this.isRecord(providerConfigRoot[providerKey])
+      ? (providerConfigRoot[providerKey] as Record<string, unknown>)
+      : undefined;
+    const provider = providerConfig
+      ? this.resolveCatalogProvider(providerKey, providerConfig)
+      : this.normalizeProviderName(providerKey);
+    if (!provider) {
+      return undefined;
+    }
+
+    return { key: providerKey, provider, model };
+  }
+
+  private resolveOpencodeConfigCandidates(): string[] {
+    const explicitCandidates = [
+      process.env.AGENT_LLM_CATALOG_PATH,
+    ]
+      .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
+      .map((value) => this.expandHomePath(value.trim()));
+
+    if (explicitCandidates.length > 0) {
+      return Array.from(new Set(explicitCandidates));
+    }
+
+    return [this.expandHomePath('~/.config/opencode/opencode.json')];
+  }
+
+  private expandHomePath(inputPath: string): string {
+    if (inputPath.startsWith('~/')) {
+      return path.join(os.homedir(), inputPath.slice(2));
+    }
+    return inputPath;
+  }
+
+  private resolveEnvDefaultSelection(): { key: string; provider: LlmProviderName; model: string } {
+    const providerRaw = process.env.LLM_PROVIDER ?? 'claude';
+    const provider = this.normalizeProviderName(providerRaw) ?? 'claude';
+
+    const modelRaw = process.env.LLM_MODEL;
+    const model = typeof modelRaw === 'string' && modelRaw.trim().length > 0
+      ? modelRaw.trim()
+      : provider === 'claude'
+        ? process.env.ANTHROPIC_DEFAULT_HAIKU_MODEL?.trim() || 'claude-3-5-haiku-latest'
+        : process.env.OPENAI_MODEL?.trim() || 'gpt-4.1-mini';
+
+    return { key: provider, provider, model };
+  }
+
+  private parseModelListFromEnv(provider: LlmProviderName): string[] {
+    const envSuffix = provider === 'openai-compatible' ? 'OPENAI_COMPATIBLE' : provider.toUpperCase();
+    const raw = process.env[`LLM_MODELS_${envSuffix}`];
+    if (!raw) {
+      return [];
+    }
+
+    return Array.from(
+      new Set(
+        raw
+          .split(',')
+          .map((item) => item.trim())
+          .filter((item) => item.length > 0),
+      ),
+    );
+  }
+
+  private addCatalogModel(
+    providerMap: Map<string, AgentLlmCatalogProvider>,
+    input: {
+      key: string;
+      provider: LlmProviderName;
+      providerLabel: string;
+      providerBaseURL?: string;
+      model: string;
+      modelLabel: string;
+      reasoning: boolean;
+      providerOptions?: Record<string, Record<string, unknown>>;
+    },
+  ): void {
+    const providerKey = input.key.trim();
+    if (!providerKey) {
+      return;
+    }
+
+    const normalizedModel = input.model.trim();
+    if (!normalizedModel) {
+      return;
+    }
+
+    const providerEntry =
+      providerMap.get(providerKey) ??
+      ({
+        key: providerKey,
+        provider: input.provider,
+        label: input.providerLabel,
+        baseURL: input.providerBaseURL,
+        models: [],
+      } satisfies AgentLlmCatalogProvider);
+
+    if (!providerMap.has(providerKey)) {
+      providerMap.set(providerKey, providerEntry);
+    } else if (!providerEntry.baseURL && input.providerBaseURL) {
+      providerEntry.baseURL = input.providerBaseURL;
+    }
+
+    const existing = providerEntry.models.find((item) => item.model === normalizedModel);
+    if (existing) {
+      if (input.reasoning) {
+        existing.reasoning = true;
+      }
+      if (!existing.providerOptions && input.providerOptions) {
+        existing.providerOptions = input.providerOptions;
+      }
+      return;
+    }
+
+    const modelEntry: AgentLlmCatalogModel = {
+      model: normalizedModel,
+      label: input.modelLabel,
+      reasoning: input.reasoning,
+    };
+
+    if (input.providerOptions) {
+      modelEntry.providerOptions = input.providerOptions;
+    }
+
+    providerEntry.models.push(modelEntry);
+  }
+
+  private inferLlmProvider(
+    providerKey: string,
+    providerConfig?: Record<string, unknown>,
+  ): LlmProviderName | undefined {
+    const normalizedKey = providerKey.trim().toLowerCase();
+    const byName = this.normalizeProviderName(normalizedKey);
+    if (byName) {
+      return byName;
+    }
+
+    if (normalizedKey.includes('anthropic') || normalizedKey.includes('claude')) {
+      return 'claude';
+    }
+    if (normalizedKey.includes('gemini') || normalizedKey.includes('google')) {
+      return 'gemini';
+    }
+    if (normalizedKey.includes('openai') && normalizedKey.includes('compatible')) {
+      return 'openai-compatible';
+    }
+    if (normalizedKey.includes('openai')) {
+      return 'openai';
+    }
+
+    if (providerConfig) {
+      const npmPackage = typeof providerConfig.npm === 'string' ? providerConfig.npm.toLowerCase() : '';
+      if (npmPackage.includes('openai-compatible')) {
+        return 'openai-compatible';
+      }
+      if (npmPackage.includes('anthropic')) {
+        return 'claude';
+      }
+      if (npmPackage.includes('@ai-sdk/google')) {
+        return 'gemini';
+      }
+      if (npmPackage.includes('@ai-sdk/openai')) {
+        return 'openai';
+      }
+    }
+
+    return undefined;
+  }
+
+  private normalizeProviderName(provider: string): LlmProviderName | undefined {
+    const normalized = provider.trim().toLowerCase();
+    if (!normalized) {
+      return undefined;
+    }
+
+    if (normalized === 'anthropic') {
+      return 'claude';
+    }
+    if (normalized === 'google') {
+      return 'gemini';
+    }
+    if (normalized === 'openai-compatible' || normalized === 'openai_compatible' || normalized === 'openaicompatible') {
+      return 'openai-compatible';
+    }
+    if (
+      normalized === 'openai' ||
+      normalized === 'claude' ||
+      normalized === 'gemini'
+    ) {
+      return normalized;
+    }
+
+    return undefined;
+  }
+
+  private defaultProviderLabel(provider: LlmProviderName): string {
+    if (provider === 'openai') return 'OpenAI';
+    if (provider === 'claude') return 'Anthropic Claude';
+    if (provider === 'gemini') return 'Google Gemini';
+    return 'OpenAI Compatible';
   }
 
   private validateAndNormalizeLlm(body: unknown): LlmRequestConfig | undefined {
@@ -822,7 +1362,104 @@ export class AgentController {
       return undefined;
     }
 
-    return parseAgentLlmOrThrow(body);
+    return this.applyCatalogConnectionToLlm(parseAgentLlmOrThrow(body));
+  }
+
+  private applyCatalogConnectionToLlm(llm: LlmRequestConfig): LlmRequestConfig {
+    const providerKey =
+      typeof llm.providerKey === 'string' && llm.providerKey.trim().length > 0
+        ? llm.providerKey.trim()
+        : llm.provider;
+    const catalog = this.buildLlmCatalog();
+    const providerEntry = catalog.providers.find((provider) => provider.key === providerKey);
+    if (!providerEntry) {
+      return llm;
+    }
+
+    const normalizedModel = llm.model.trim();
+    const modelEntry = providerEntry.models.find((model) => model.model === normalizedModel);
+    const mergedProviderOptions = this.mergeProviderOptions(
+      modelEntry?.providerOptions,
+      llm.providerOptions,
+    );
+    const baseURL = providerEntry.baseURL?.trim();
+
+    return {
+      ...llm,
+      provider: providerEntry.provider,
+      providerKey,
+      model: normalizedModel,
+      baseURL: baseURL && baseURL.length > 0 ? baseURL : llm.baseURL,
+      providerOptions: mergedProviderOptions ?? llm.providerOptions,
+    };
+  }
+
+  private mergeProviderOptions(
+    catalogOptions?: Record<string, Record<string, unknown>>,
+    requestOptions?: Record<string, Record<string, unknown>>,
+  ): Record<string, Record<string, unknown>> | undefined {
+    if (!catalogOptions && !requestOptions) {
+      return undefined;
+    }
+
+    if (!catalogOptions) {
+      return requestOptions;
+    }
+
+    if (!requestOptions) {
+      return catalogOptions;
+    }
+
+    const merged: Record<string, Record<string, unknown>> = {};
+    const keys = new Set([...Object.keys(catalogOptions), ...Object.keys(requestOptions)]);
+    for (const key of keys) {
+      const catalogValue = catalogOptions[key];
+      const requestValue = requestOptions[key];
+
+      if (this.isRecord(catalogValue) && this.isRecord(requestValue)) {
+        merged[key] = { ...catalogValue, ...requestValue };
+      } else if (this.isRecord(requestValue)) {
+        merged[key] = { ...requestValue };
+      } else if (this.isRecord(catalogValue)) {
+        merged[key] = { ...catalogValue };
+      }
+    }
+
+    return Object.keys(merged).length > 0 ? merged : undefined;
+  }
+
+  private extractProviderBaseUrl(providerConfig: Record<string, unknown>): string | undefined {
+    const direct = this.readStringField(
+      providerConfig,
+      ['baseURL', 'baseUrl', 'base_url', 'apiBaseUrl', 'api_base_url', 'endpoint'],
+    );
+    if (direct) {
+      return direct;
+    }
+
+    const options = this.isRecord(providerConfig.options) ? providerConfig.options : undefined;
+    if (!options) {
+      return undefined;
+    }
+
+    return this.readStringField(
+      options,
+      ['baseURL', 'baseUrl', 'base_url', 'apiBaseUrl', 'api_base_url', 'endpoint'],
+    );
+  }
+
+  private readStringField(
+    source: Record<string, unknown>,
+    fields: string[],
+  ): string | undefined {
+    for (const field of fields) {
+      const value = source[field];
+      if (typeof value === 'string' && value.trim().length > 0) {
+        return value.trim();
+      }
+    }
+
+    return undefined;
   }
 
   private toLlmValidationError(error: unknown):

@@ -1,0 +1,98 @@
+{
+  "version": 1,
+  "defaultModel": "zhipu_proxy/glm-4.5-air",
+  "providers": {
+    "zhipu_proxy": {
+      "label": "Zhipu OpenAI Compatible",
+      "sdkProvider": "openai-compatible",
+      "baseURL": "https://open.bigmodel.cn/api/paas/v4",
+      "apiKeyEnv": "AGENT_LLM_PROVIDER_ZHIPU_PROXY_API_KEY",
+      "models": {
+        "glm-4.5-air": {
+          "label": "GLM 4.5 Air"
+        },
+        "glm-4.5": {
+          "label": "GLM 4.5 (Reasoning)",
+          "reasoning": true,
+          "providerOptions": {
+            "openaiCompatible": {
+              "reasoningEffort": "medium"
+            }
+          }
+        }
+      }
+    },
+    "zai": {
+      "label": "Z.ai Anthropic Compatible",
+      "sdkProvider": "anthropic",
+      "baseURL": "https://api.z.ai/api/anthropic",
+      "apiKeyEnv": "AGENT_LLM_PROVIDER_ZAI_API_KEY",
+      "models": {
+        "glm-4.7-flash": {
+          "label": "GLM 4.7 Flash (Haiku)"
+        },
+        "glm-4.7": {
+          "label": "GLM 4.7 (Sonnet)"
+        },
+        "glm-5": {
+          "label": "GLM 5 (Opus)"
+        }
+      }
+    },
+    "claude_proxy": {
+      "label": "Anthropic / Claude Compatible",
+      "sdkProvider": "anthropic",
+      "baseURL": "https://api.z.ai/api/anthropic/v1",
+      "apiKeyEnv": "AGENT_LLM_PROVIDER_CLAUDE_PROXY_API_KEY",
+      "models": {
+        "glm-4.7-flash": {
+          "label": "GLM 4.7 Flash (Claude API)"
+        },
+        "claude-sonnet-4-5-thinking": {
+          "label": "Claude Sonnet 4.5 Thinking",
+          "reasoning": true,
+          "providerOptions": {
+            "anthropic": {
+              "thinking": {
+                "type": "enabled",
+                "budgetTokens": 2048
+              }
+            }
+          }
+        }
+      }
+    },
+    "claude-doge": {
+      "label": "Claude Doge Gateway",
+      "sdkProvider": "anthropic",
+      "baseURL": "http://2000.run:6543",
+      "apiKeyEnv": "AGENT_LLM_PROVIDER_CLAUDE_DOGE_API_KEY",
+      "models": {
+        "claude-haiku-4-5-20251001": {
+          "label": "Claude Haiku 4.5"
+        },
+        "claude-sonnet-4-6": {
+          "label": "Claude Sonnet 4.6"
+        },
+        "claude-opus-4-6": {
+          "label": "Claude Opus 4.6"
+        }
+      }
+    },
+    "gpt-doge": {
+      "label": "GPT Doge Gateway",
+      "sdkProvider": "anthropic",
+      "baseURL": "http://2000.run:6543",
+      "apiKeyEnv": "AGENT_LLM_PROVIDER_GPT_DOGE_API_KEY",
+      "models": {
+        "gpt-5.2": {
+          "label": "GPT 5.2"
+        },
+        "gpt-5.3-codex": {
+          "label": "GPT 5.3 Codex",
+          "reasoning": true
+        }
+      }
+    }
+  }
+}

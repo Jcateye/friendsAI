@@ -132,7 +132,9 @@ friendsAI/
     ```env
     DATABASE_URL=postgres://friendsai:friendsai@localhost:5434/friendsai_v2
     JWT_SECRET=dev-smoke-secret
-    OPENAI_API_KEY=your-openai-api-key
+    AGENT_LLM_CATALOG_PATH=../../llm-catalog.json
+    AGENT_LLM_PROVIDER_OPENAI_COMPATIBLE_API_KEY=your-zhipu-key
+    AGENT_LLM_PROVIDER_CLAUDE_API_KEY=your-claude-key
     ```
 
 3.  **安装依赖并运行 migrations**
@@ -165,7 +167,7 @@ node scripts/smoke-v2.js
 可选环境变量：
 `SMOKE_BASE_URL`（默认 `http://localhost:3000/v1`）、`SMOKE_EMAIL`、`SMOKE_PASSWORD`。
 
-> 注意：聊天与简报依赖 `OPENAI_API_KEY`。
+> 注意：聊天与简报依赖可用的 LLM 凭据（推荐按 provider key 独立配置）。
 
 ### 使用 bun 脚本（主线）
 
@@ -261,18 +263,21 @@ bun run build            # 构建前后端
 
 | 变量 | 说明 | 示例 |
 |------|------|------|
-| `OPENAI_API_KEY` | AI 服务密钥（必填） | `your_api_key` |
-| `OPENAI_BASE_URL` | API 端点（可选，默认 OpenAI 官方） | `https://open.bigmodel.cn/api/paas/v4` |
-| `OPENAI_MODEL` | 聊天模型（可选） | `glm-4-flash`、`gpt-4.1-mini` |
-| `OPENAI_EMBEDDING_MODEL` | 向量模型（可选） | `embedding-3`、`text-embedding-ada-002` |
+| `AGENT_LLM_CATALOG_PATH` | 模型目录文件路径（可选，未设置时回退到 `~/.config/opencode/opencode.json`） | `../../llm-catalog.json` |
+| `AGENT_LLM_PROVIDER_<KEY>_API_KEY` | 指定 provider key 的独立 token（推荐） | `AGENT_LLM_PROVIDER_ZHIPU_PROXY_API_KEY=...` |
+| `AGENT_LLM_PROVIDER_<KEY>_BASE_URL` | 指定 provider key 的独立网关地址（可选） | `AGENT_LLM_PROVIDER_ZHIPU_PROXY_BASE_URL=https://.../v1` |
+| `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` / `GOOGLE_GENERATIVE_AI_API_KEY` | 全局 provider 凭据（兼容旧配置） | `OPENAI_API_KEY=...` |
 
-支持所有兼容 OpenAI API 格式的服务商（智谱 GLM、OpenRouter 等），只需配置 `OPENAI_BASE_URL` 即可。
+`<KEY>` 取自 `llm-catalog.json` 的 provider key，后端会自动标准化（大写 + 非字母数字转 `_`）。
 
-**快速配置示例**（智谱 AI）：
+**独立 token 示例**（推荐）：
 
 ```bash
 # packages/server-nestjs/.env.dev.local（不会提交到 git）
-OPENAI_API_KEY=你的智谱API密钥
+AGENT_LLM_CATALOG_PATH=../../llm-catalog.json
+AGENT_LLM_PROVIDER_ZHIPU_PROXY_API_KEY=你的智谱API密钥
+AGENT_LLM_PROVIDER_ZHIPU_PROXY_BASE_URL=https://open.bigmodel.cn/api/paas/v4
+AGENT_LLM_PROVIDER_CLAUDE_OFFICIAL_API_KEY=你的Claude API密钥
 ```
 
 ### 前端配置

@@ -8,7 +8,9 @@ export type LlmProviderOptions = Record<string, Record<string, unknown>>;
 
 export interface LlmRequestConfig {
   provider: LlmProviderName;
+  providerKey?: string;
   model: string;
+  baseURL?: string;
   temperature?: number;
   maxOutputTokens?: number;
   topP?: number;
@@ -22,7 +24,9 @@ export interface LlmRequestConfig {
 
 export interface LlmCallSettings {
   provider?: LlmProviderName;
+  providerKey?: string;
   model?: string;
+  baseURL?: string;
   temperature?: number;
   maxOutputTokens?: number;
   topP?: number;
@@ -83,4 +87,5 @@ export interface LlmTextOptions {
 
 export interface LlmStreamChatOptions extends LlmTextOptions {
   tools?: LlmToolDefinition[];
+  includeReasoning?: boolean;
 }

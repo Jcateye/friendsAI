@@ -101,7 +101,7 @@ describe('VercelAiStreamAdapter', () => {
     expect(chunks[1]).toMatchObject({ type: 'finish', finishReason: 'stop' });
   });
 
-  it('emits finish only on agent.message when no text part is open', () => {
+  it('emits start + text chunks + finish on agent.message when no text part is open but content exists', () => {
     const chunks = parseSseChunks(
       adapter.transform({
         event: 'agent.message',
@@ -113,8 +113,29 @@ describe('VercelAiStreamAdapter', () => {
         },
       } as AgentStreamEvent),
     );
-    expect(chunks).toHaveLength(1);
-    expect(chunks[0]).toMatchObject({ type: 'finish', finishReason: 'stop' });
+    expect(chunks).toHaveLength(5);
+    expect(chunks[0]).toMatchObject({ type: 'start', messageId: expect.any(String) });
+    expect(chunks[1]).toMatchObject({ type: 'text-start', id: expect.any(String) });
+    expect(chunks[2]).toMatchObject({ type: 'text-delta', id: expect.any(String), delta: 'done' });
+    expect(chunks[3]).toMatchObject({ type: 'text-end', id: expect.any(String) });
+    expect(chunks[4]).toMatchObject({ type: 'finish', finishReason: 'stop' });
+  });
+
+  it('emits finish only on agent.message when no text part is open and content is empty', () => {
+    const chunks = parseSseChunks(
+      adapter.transform({
+        event: 'agent.message',
+        data: {
+          id: 'msg-1',
+          role: 'assistant',
+          content: '',
+          createdAt: '2026-01-01T00:00:00Z',
+        },
+      } as AgentStreamEvent),
+    );
+    expect(chunks).toHaveLength(2);
+    expect(chunks[0]).toMatchObject({ type: 'start', messageId: expect.any(String) });
+    expect(chunks[1]).toMatchObject({ type: 'finish', finishReason: 'stop' });
   });
 
   it('emits tool-input-available on running/queued tool state', () => {
@@ -258,14 +279,16 @@ describe('VercelAiStreamAdapter', () => {
     expect(adapter.transform({ event: 'unknown.event' } as AgentStreamEvent)).toBeNull();
   });
 
-  it('returns null for agent.end when no open text part, and text-end when open', () => {
+  it('returns null for agent.end when message never started', () => {
     expect(
       adapter.transform({
         event: 'agent.end',
         data: { runId: 'run-1', status: 'succeeded', finishedAt: '2026-01-01T00:00:00Z' },
       } as AgentStreamEvent),
     ).toBeNull();
+  });
 
+  it('emits text-end + finish(error) on agent.end when text part is open', () => {
     adapter.transform({
       event: 'agent.delta',
       data: { id: 'msg-1', delta: 'partial', role: 'assistant' },
@@ -277,8 +300,34 @@ describe('VercelAiStreamAdapter', () => {
         data: { runId: 'run-1', status: 'failed', finishedAt: '2026-01-01T00:00:00Z' },
       } as AgentStreamEvent),
     );
-    expect(chunks).toHaveLength(1);
+    expect(chunks).toHaveLength(2);
     expect(chunks[0]).toMatchObject({ type: 'text-end', id: expect.any(String) });
+    expect(chunks[1]).toMatchObject({ type: 'finish', finishReason: 'error' });
+  });
+
+  it('does not emit duplicated finish on agent.end after agent.message', () => {
+    adapter.transform({
+      event: 'agent.delta',
+      data: { id: 'msg-1', delta: 'partial', role: 'assistant' },
+    } as AgentStreamEvent);
+
+    adapter.transform({
+      event: 'agent.message',
+      data: {
+        id: 'msg-1',
+        role: 'assistant',
+        content: 'partial',
+        createdAt: '2026-01-01T00:00:00Z',
+      },
+    } as AgentStreamEvent);
+
+    const chunks = parseSseChunks(
+      adapter.transform({
+        event: 'agent.end',
+        data: { runId: 'run-1', status: 'failed', finishedAt: '2026-01-01T00:00:00Z' },
+      } as AgentStreamEvent),
+    );
+    expect(chunks).toHaveLength(0);
   });
 
   it('returns done marker', () => {

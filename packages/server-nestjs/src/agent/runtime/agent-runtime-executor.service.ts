@@ -260,6 +260,9 @@ export class AgentRuntimeExecutor {
         }));
       }
     }
+    if (agentId === 'title_summary') {
+      parsedOutput = this.normalizeTitleSummaryOutput(parsedOutput, aiResponse);
+    }
     if (agentId === 'contact_insight') {
       parsedOutput = this.normalizeContactInsightOutput(parsedOutput);
     }
@@ -744,6 +747,61 @@ export class AgentRuntimeExecutor {
         statusCode: 400,
       });
     }
+  }
+
+  private normalizeTitleSummaryOutput(parsedOutput: unknown, rawResponse: string): Record<string, unknown> {
+    const output = this.asRecord(parsedOutput);
+
+    const normalize = (value: unknown, fallback: string, maxLength: number): string => {
+      const text = typeof value === 'string' ? value.trim() : '';
+      const candidate = text.length > 0 ? text : fallback;
+      return candidate.replace(/\s+/g, ' ').slice(0, maxLength);
+    };
+
+    const extracted = this.extractTitleSummaryFromRaw(rawResponse);
+
+    const summaryFallback = normalize(
+      extracted.summary ?? rawResponse,
+      '该对话暂无可用摘要信息。',
+      300,
+    );
+
+    return {
+      title: normalize(output.title ?? extracted.title, '未分类对话', 50),
+      summary: normalize(output.summary ?? extracted.summary, summaryFallback, 300),
+    };
+  }
+
+  private extractTitleSummaryFromRaw(rawResponse: string): { title?: string; summary?: string } {
+    const trimmed = rawResponse.trim();
+    if (!trimmed) {
+      return {};
+    }
+
+    const candidates: string[] = [trimmed];
+    const fencedMatch = trimmed.match(/```(?:json)?\n([\s\S]*?)\n```/i);
+    if (fencedMatch?.[1]) {
+      candidates.unshift(fencedMatch[1].trim());
+    }
+
+    for (const candidate of candidates) {
+      try {
+        const parsed = JSON.parse(candidate) as unknown;
+        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+          const record = parsed as Record<string, unknown>;
+          return {
+            title: typeof record.title === 'string' ? record.title : undefined,
+            summary: typeof record.summary === 'string' ? record.summary : undefined,
+          };
+        }
+      } catch {
+        continue;
+      }
+    }
+
+    return {
+      summary: trimmed,
+    };
   }
 
   private normalizeContactInsightOutput(parsedOutput: unknown): Record<string, unknown> {

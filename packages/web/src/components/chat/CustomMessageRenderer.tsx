@@ -3,24 +3,35 @@ import { A2UIRenderer, ToolTraceCard } from '../a2ui';
 import type { A2UIDocument, A2UIAction } from '../a2ui/types';
 import { ThinkingProcess } from './ThinkingProcess';
 
+function normalizeThinkTags(content: string): string {
+  return content
+    .replace(/&lt;think&gt;/gi, '<think>')
+    .replace(/&lt;\/think&gt;/gi, '</think>');
+}
+
 function extractThinkingProcess(content: string): { thinking: string | null; rest: string } {
-  const thinkRegex = /<think>([\s\S]*?)<\/think>/i;
-  const match = content.match(thinkRegex);
-  if (match) {
+  const normalizedContent = normalizeThinkTags(content);
+  const thinkRegex = /<think>([\s\S]*?)<\/think>/gi;
+  const matches = Array.from(normalizedContent.matchAll(thinkRegex));
+  if (matches.length > 0) {
+    const thinking = matches
+      .map((item) => (item[1] ?? '').trim())
+      .filter((item) => item.length > 0)
+      .join('\n');
     return {
-      thinking: match[1].trim(),
-      rest: content.replace(match[0], '').trim(),
+      thinking: thinking.length > 0 ? thinking : null,
+      rest: normalizedContent.replace(thinkRegex, '').trim(),
     };
   }
   const openThinkRegex = /<think>([\s\S]*)$/i;
-  const openMatch = content.match(openThinkRegex);
+  const openMatch = normalizedContent.match(openThinkRegex);
   if (openMatch) {
     return {
       thinking: openMatch[1].trim(),
-      rest: content.replace(openMatch[0], '').trim(),
+      rest: normalizedContent.replace(openMatch[0], '').trim(),
     };
   }
-  return { thinking: null, rest: content };
+  return { thinking: null, rest: normalizedContent };
 }
 
 interface ToolInvocation {

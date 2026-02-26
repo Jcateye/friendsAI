@@ -49,6 +49,7 @@ import type {
   SkillCatalogResponse,
   SkillInvocationIntentResponse,
   AgentLlmRequest,
+  AgentLlmCatalogResponse,
 } from './types';
 import type {
   AgentRunResponse,
@@ -550,6 +551,14 @@ export const api = {
    * Agent 相关 API（统一的 /agent/run）
    */
   agent: {
+    /**
+     * 获取可选的 LLM provider/model 目录
+     */
+    async getLlmCatalog(): Promise<AgentLlmCatalogResponse> {
+      const response = await fetchWithAuth(`${API_BASE}/agent/llm/catalog`);
+      return handleResponse<AgentLlmCatalogResponse>(response);
+    },
+
     /**
      * 生成会话标题和摘要（title_summary）
      * 对应后端：POST /v1/agent/run，agentId=title_summary

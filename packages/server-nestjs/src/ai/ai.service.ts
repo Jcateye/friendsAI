@@ -46,12 +46,14 @@ export class AiService {
   private readonly providerFactory = new AiSdkProviderFactory();
   private readonly runtimeDefaults: ResolvedRuntimeLlmConfig;
   private readonly embeddingDefaults: ResolvedRuntimeEmbeddingConfig;
+  private readonly localEnvConfig: Record<string, string>;
   private readonly streamRetryAttempts = 3;
   private readonly streamRetryDelayMs: number;
 
   constructor(private readonly configService: ConfigService) {
     const nodeEnv = this.configService.get<string>('NODE_ENV') ?? process.env.NODE_ENV;
     const fileConfig = nodeEnv !== 'production' ? this.loadLocalEnv(nodeEnv ?? 'dev') : {};
+    this.localEnvConfig = fileConfig;
     this.streamRetryDelayMs = nodeEnv === 'test' ? 0 : 600;
 
     this.runtimeDefaults = this.resolveRuntimeDefaults(fileConfig);
@@ -137,6 +139,7 @@ export class AiService {
         tools,
         signal: options?.signal,
         providerOptions,
+        includeReasoning: options?.includeReasoning === true,
       });
     } catch (error) {
       if (error instanceof LlmConfigurationError) {
@@ -230,13 +233,31 @@ export class AiService {
       );
     }
 
+    const providerKey = this.normalizeProviderKey(override?.providerKey);
     const providerOptions = this.normalizeProviderOptions(override?.providerOptions);
+    const keyedConnection = providerKey
+      ? this.resolveProviderConnectionByKey(provider, providerKey, this.localEnvConfig)
+      : undefined;
+    const isBuiltInKey = providerKey ? this.normalizeProviderIfKnown(providerKey) === provider : false;
+    if (providerKey && !isBuiltInKey && !keyedConnection?.apiKey) {
+      const envToken = this.toProviderEnvToken(providerKey);
+      throw new LlmConfigurationError(
+        'llm_provider_not_configured',
+        `Missing API key for provider key "${providerKey}". Please set AGENT_LLM_PROVIDER_${envToken}_API_KEY.`,
+      );
+    }
+    const apiKey = keyedConnection?.apiKey ?? this.resolveProviderApiKey(provider, this.localEnvConfig);
+    const overrideBaseURL = this.normalizeConfiguredBaseUrl(provider, override?.baseURL);
+    const baseURL = overrideBaseURL
+      ?? keyedConnection?.baseURL
+      ?? this.resolveProviderBaseUrl(provider, this.localEnvConfig);
 
     return {
       provider,
+      providerKey,
       model,
-      apiKey: this.runtimeDefaults.apiKey,
-      baseURL: this.runtimeDefaults.baseURL,
+      apiKey: apiKey ?? (provider === this.runtimeDefaults.provider ? this.runtimeDefaults.apiKey : undefined),
+      baseURL: baseURL ?? (provider === this.runtimeDefaults.provider ? this.runtimeDefaults.baseURL : undefined),
       temperature: override?.temperature,
       maxOutputTokens: override?.maxOutputTokens,
       topP: override?.topP,
@@ -247,6 +268,62 @@ export class AiService {
       frequencyPenalty: override?.frequencyPenalty,
       providerOptions,
     };
+  }
+
+  private resolveProviderConnectionByKey(
+    provider: LlmProviderName,
+    providerKey: string,
+    fileConfig: Record<string, string>,
+  ): { apiKey?: string; baseURL?: string } | undefined {
+    const envToken = this.toProviderEnvToken(providerKey);
+
+    const apiKey = this.readConfigValue(fileConfig, [
+      `AGENT_LLM_PROVIDER_${envToken}_API_KEY`,
+      `LLM_PROVIDER_${envToken}_API_KEY`,
+    ]);
+    const rawBaseURL = this.readConfigValue(fileConfig, [
+      `AGENT_LLM_PROVIDER_${envToken}_BASE_URL`,
+      `LLM_PROVIDER_${envToken}_BASE_URL`,
+    ]);
+    const baseURL = provider === 'claude' ? this.normalizeClaudeBaseUrl(rawBaseURL) : rawBaseURL;
+
+    if (!apiKey && !baseURL) {
+      return undefined;
+    }
+
+    return { apiKey, baseURL };
+  }
+
+  private readConfigValue(fileConfig: Record<string, string>, keys: string[]): string | undefined {
+    for (const key of keys) {
+      const value = fileConfig[key] ?? this.configService.get<string>(key) ?? process.env[key];
+      if (typeof value === 'string' && value.trim().length > 0) {
+        return value.trim();
+      }
+    }
+    return undefined;
+  }
+
+  private normalizeProviderKey(value: unknown): string | undefined {
+    if (typeof value !== 'string') {
+      return undefined;
+    }
+
+    const trimmed = value.trim();
+    if (!trimmed) {
+      return undefined;
+    }
+
+    return trimmed.slice(0, 160);
+  }
+
+  private toProviderEnvToken(providerKey: string): string {
+    return providerKey
+      .trim()
+      .toUpperCase()
+      .replace(/[^A-Z0-9]+/g, '_')
+      .replace(/^_+|_+$/g, '')
+      .slice(0, 120);
   }
 
   private resolveProviderApiKey(
@@ -357,7 +434,32 @@ export class AiService {
     return parsed.toString().replace(/\/$/, '');
   }
 
+  private normalizeConfiguredBaseUrl(
+    provider: LlmProviderName,
+    rawBaseUrl: string | undefined,
+  ): string | undefined {
+    if (typeof rawBaseUrl !== 'string') {
+      return undefined;
+    }
+
+    const trimmed = rawBaseUrl.trim();
+    if (!trimmed) {
+      return undefined;
+    }
+
+    return provider === 'claude' ? this.normalizeClaudeBaseUrl(trimmed) : trimmed;
+  }
+
   private normalizeProvider(rawProvider: string): LlmProviderName {
+    const normalized = this.normalizeProviderIfKnown(rawProvider);
+    if (normalized) {
+      return normalized;
+    }
+
+    throw new LlmConfigurationError('unsupported_llm_provider', `Unsupported LLM provider: ${rawProvider}`);
+  }
+
+  private normalizeProviderIfKnown(rawProvider: string): LlmProviderName | undefined {
     const normalized = rawProvider.trim().toLowerCase();
 
     if (normalized in PROVIDER_ALIAS_MAP) {
@@ -373,7 +475,7 @@ export class AiService {
       return normalized;
     }
 
-    throw new LlmConfigurationError('unsupported_llm_provider', `Unsupported LLM provider: ${rawProvider}`);
+    return undefined;
   }
 
   private toModelMessages(messages: LlmMessage[]): ModelMessage[] {
@@ -465,12 +567,19 @@ export class AiService {
 
   private async *mapStream(
     stream: AsyncIterable<TextStreamPart<ToolSet>>,
+    includeReasoning: boolean,
   ): AsyncGenerator<LlmStreamChunk> {
     const toolCallOrder = new Map<string, number>();
+    let reasoningOpen = false;
 
     for await (const part of stream) {
       if (process.env.AI_STREAM_DEBUG === 'true') {
         this.logger.debug(`AI stream part type: ${part.type}`);
+      }
+
+      if (includeReasoning && part.type !== 'reasoning-delta' && reasoningOpen) {
+        yield this.buildReasoningChunk('</think>');
+        reasoningOpen = false;
       }
 
       if (part.type === 'text-delta') {
@@ -485,7 +594,17 @@ export class AiService {
       }
 
       if (part.type === 'reasoning-delta') {
-        // 推理内容不作为 assistant 可见文本输出，避免污染结构化响应
+        if (includeReasoning) {
+          const delta = part.text ?? '';
+          if (delta.length > 0) {
+            if (!reasoningOpen) {
+              yield this.buildReasoningChunk(`<think>${delta}`);
+              reasoningOpen = true;
+            } else {
+              yield this.buildReasoningChunk(delta);
+            }
+          }
+        }
         continue;
       }
 
@@ -550,10 +669,18 @@ export class AiService {
       }
 
       if (part.type === 'error') {
+        if (includeReasoning && reasoningOpen) {
+          yield this.buildReasoningChunk('</think>');
+          reasoningOpen = false;
+        }
         throw new LlmCallError(
           `LLM stream part error: ${part.error instanceof Error ? part.error.message : String(part.error)}`,
         );
       }
+    }
+
+    if (includeReasoning && reasoningOpen) {
+      yield this.buildReasoningChunk('</think>');
     }
   }
 
@@ -563,6 +690,7 @@ export class AiService {
     tools?: Record<string, ReturnType<typeof tool>>;
     signal?: AbortSignal;
     providerOptions?: Record<string, Record<string, JSONValue>>;
+    includeReasoning: boolean;
   }): AsyncGenerator<LlmStreamChunk> {
     for (let attempt = 1; attempt <= this.streamRetryAttempts; attempt += 1) {
       let emittedVisibleOutput = false;
@@ -585,7 +713,7 @@ export class AiService {
           providerOptions: params.providerOptions,
         });
 
-        for await (const chunk of this.mapStream(result.fullStream)) {
+        for await (const chunk of this.mapStream(result.fullStream, params.includeReasoning)) {
           if (!emittedVisibleOutput && this.hasVisibleChunkOutput(chunk)) {
             emittedVisibleOutput = true;
           }
@@ -615,6 +743,10 @@ export class AiService {
   }
 
   private hasVisibleChunkOutput(chunk: LlmStreamChunk): boolean {
+    if ((chunk as Record<string, unknown>).__reasoning === true) {
+      return false;
+    }
+
     const choice = chunk.choices?.[0];
     if (!choice) {
       return false;
@@ -626,6 +758,17 @@ export class AiService {
     }
 
     return Array.isArray(choice.delta?.tool_calls) && choice.delta.tool_calls.length > 0;
+  }
+
+  private buildReasoningChunk(content: string): LlmStreamChunk {
+    return {
+      __reasoning: true,
+      choices: [
+        {
+          delta: { content },
+        },
+      ],
+    };
   }
 
   private isRetryableStreamError(error: unknown): boolean {

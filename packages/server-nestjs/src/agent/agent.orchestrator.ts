@@ -137,6 +137,7 @@ export class AgentOrchestrator {
         llm: request.llm,
         signal: options?.signal,
         tools: tools.length > 0 ? tools : undefined,
+        includeReasoning: request.context?.composer?.thinkingEnabled === true,
       });
 
       let assistantMessage = '';

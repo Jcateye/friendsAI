@@ -1,4 +1,9 @@
-import type { LlmCallSettings, LlmMessage, LlmRequestConfig } from '../ai/providers/llm-types';
+import type {
+  LlmCallSettings,
+  LlmMessage,
+  LlmProviderName,
+  LlmRequestConfig,
+} from '../ai/providers/llm-types';
 import type {
   AgentContextPatch,
   AgentError,
@@ -135,3 +140,28 @@ export type AgentStreamPayload =
   | { event: 'context.patch'; data: AgentContextPatch }
   | { event: 'agent.end'; data: AgentRunEnd }
   | { event: 'error'; data: AgentError };
+
+export interface AgentLlmCatalogModel {
+  model: string;
+  label: string;
+  reasoning: boolean;
+  providerOptions?: Record<string, Record<string, unknown>>;
+}
+
+export interface AgentLlmCatalogProvider {
+  key: string;
+  provider: LlmProviderName;
+  label: string;
+  baseURL?: string;
+  models: AgentLlmCatalogModel[];
+}
+
+export interface AgentLlmCatalogResponse {
+  source: 'opencode' | 'env';
+  defaultSelection: {
+    key: string;
+    provider: LlmProviderName;
+    model: string;
+  };
+  providers: AgentLlmCatalogProvider[];
+}

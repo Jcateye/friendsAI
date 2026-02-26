@@ -189,6 +189,46 @@ describe('AgentOrchestrator', () => {
       );
     });
 
+    it('should enable includeReasoning when composer.thinkingEnabled is true', async () => {
+      const request: AgentChatRequest = {
+        prompt: 'Hello',
+        context: {
+          composer: {
+            thinkingEnabled: true,
+          },
+        },
+      };
+
+      contextBuilder.buildMessages.mockReturnValue([
+        { role: 'system', content: 'You are helpful' },
+        { role: 'user', content: 'Hello' },
+      ]);
+      toolRegistry.list.mockReturnValue([]);
+
+      const mockStream = (async function* () {
+        yield {
+          choices: [
+            {
+              delta: { content: 'ok' },
+              finish_reason: 'stop',
+            },
+          ],
+        } as any;
+      })();
+      aiService.streamChat.mockResolvedValue(mockStream);
+
+      for await (const _event of orchestrator.streamChat(request)) {
+        // drain
+      }
+
+      expect(aiService.streamChat).toHaveBeenCalledWith(
+        expect.any(Array),
+        expect.objectContaining({
+          includeReasoning: true,
+        }),
+      );
+    });
+
     it('should filter tools based on context.composer.enabledTools', async () => {
       const request: AgentChatRequest = {
         prompt: 'Use selected tool only',

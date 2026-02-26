@@ -52,6 +52,7 @@ export type AgentLlmProvider = 'openai' | 'claude' | 'gemini' | 'openai-compatib
 
 export interface AgentLlmRequest {
   provider: AgentLlmProvider | 'anthropic' | 'google';
+  providerKey?: string;
   model: string;
   temperature?: number;
   maxOutputTokens?: number;
@@ -62,6 +63,31 @@ export interface AgentLlmRequest {
   presencePenalty?: number;
   frequencyPenalty?: number;
   providerOptions?: Record<string, Record<string, unknown>>;
+}
+
+export interface AgentLlmCatalogModel {
+  model: string;
+  label: string;
+  reasoning: boolean;
+  providerOptions?: Record<string, Record<string, unknown>>;
+}
+
+export interface AgentLlmCatalogProvider {
+  key: string;
+  provider: AgentLlmProvider;
+  label: string;
+  baseURL?: string;
+  models: AgentLlmCatalogModel[];
+}
+
+export interface AgentLlmCatalogResponse {
+  source: 'opencode' | 'env';
+  defaultSelection: {
+    key: string;
+    provider: AgentLlmProvider;
+    model: string;
+  };
+  providers: AgentLlmCatalogProvider[];
 }
 
 // ==================== Contact ====================

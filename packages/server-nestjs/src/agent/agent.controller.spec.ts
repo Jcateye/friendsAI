@@ -1,5 +1,8 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { HttpException } from '@nestjs/common';
+import fs from 'fs';
+import os from 'os';
+import path from 'path';
 import { AgentController } from './agent.controller';
 import { EngineRouter } from './engines/engine.router';
 import { AgentMessageStore } from './agent-message.store';
@@ -472,6 +475,75 @@ describe('AgentController - POST /v1/agent/run', () => {
         }),
       );
     });
+
+    it('should resolve llm baseURL from catalog by providerKey in /agent/run', async () => {
+      const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'friendsai-llm-baseurl-'));
+      const configPath = path.join(tmpDir, 'opencode.json');
+      const previousCatalogPath = process.env.AGENT_LLM_CATALOG_PATH;
+
+      try {
+        fs.writeFileSync(
+          configPath,
+          JSON.stringify(
+            {
+              version: 1,
+              defaultModel: 'zhipu_proxy/glm-4.5-air',
+              providers: {
+                zhipu_proxy: {
+                  label: 'Zhipu Compatible',
+                  sdkProvider: 'openai-compatible',
+                  baseURL: 'https://zhipu-proxy.example/v1',
+                  models: {
+                    'glm-4.5-air': { label: 'GLM 4.5 Air' },
+                  },
+                },
+              },
+            },
+            null,
+            2,
+          ),
+          'utf8',
+        );
+
+        process.env.AGENT_LLM_CATALOG_PATH = configPath;
+
+        mockEngineRouter.run.mockResolvedValue({
+          runId: 'run-llm-baseurl',
+          cached: false,
+          data: { title: 'ok', summary: 'ok' },
+        });
+
+        await controller.run({} as Request, {
+          agentId: 'title_summary',
+          input: {
+            conversationId: 'conv-123',
+            messages: [{ role: 'user', content: 'hello' }],
+          },
+          llm: {
+            provider: 'openai-compatible',
+            providerKey: 'zhipu_proxy',
+            model: 'glm-4.5-air',
+          },
+        });
+
+        expect(mockEngineRouter.run).toHaveBeenCalledWith(
+          'title_summary',
+          undefined,
+          expect.any(Object),
+          expect.objectContaining({
+            llm: expect.objectContaining({
+              provider: 'openai-compatible',
+              providerKey: 'zhipu_proxy',
+              model: 'glm-4.5-air',
+              baseURL: 'https://zhipu-proxy.example/v1',
+            }),
+          }),
+        );
+      } finally {
+        process.env.AGENT_LLM_CATALOG_PATH = previousCatalogPath;
+        fs.rmSync(tmpDir, { recursive: true, force: true });
+      }
+    });
   });
 
   describe('chat context sanitization', () => {
@@ -680,6 +752,149 @@ describe('AgentController - POST /v1/agent/run', () => {
           },
         },
       });
+    });
+  });
+
+  describe('llm catalog', () => {
+    const envBackup = {
+      AGENT_LLM_CATALOG_PATH: process.env.AGENT_LLM_CATALOG_PATH,
+      LLM_PROVIDER: process.env.LLM_PROVIDER,
+      LLM_MODEL: process.env.LLM_MODEL,
+      LLM_MODELS_CLAUDE: process.env.LLM_MODELS_CLAUDE,
+    };
+
+    afterEach(() => {
+      process.env.AGENT_LLM_CATALOG_PATH = envBackup.AGENT_LLM_CATALOG_PATH;
+      process.env.LLM_PROVIDER = envBackup.LLM_PROVIDER;
+      process.env.LLM_MODEL = envBackup.LLM_MODEL;
+      process.env.LLM_MODELS_CLAUDE = envBackup.LLM_MODELS_CLAUDE;
+    });
+
+    it('should return env-based catalog when config file is unavailable', () => {
+      process.env.AGENT_LLM_CATALOG_PATH = '/tmp/non-exist-opencode-config.json';
+      process.env.LLM_PROVIDER = 'claude';
+      process.env.LLM_MODEL = 'glm-4.7-flash';
+      process.env.LLM_MODELS_CLAUDE = 'glm-4.7-flash, claude-3-5-haiku-latest';
+
+      const catalog = controller.getLlmCatalog();
+
+      expect(catalog.source).toBe('env');
+      expect(catalog.defaultSelection).toEqual({
+        key: 'claude',
+        provider: 'claude',
+        model: 'glm-4.7-flash',
+      });
+      expect(catalog.providers).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            key: 'claude',
+            provider: 'claude',
+            models: expect.arrayContaining([
+              expect.objectContaining({ model: 'glm-4.7-flash' }),
+              expect.objectContaining({ model: 'claude-3-5-haiku-latest' }),
+            ]),
+          }),
+        ]),
+      );
+    });
+
+    it('should parse catalog-style provider/model config', () => {
+      const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'friendsai-llm-catalog-'));
+      const configPath = path.join(tmpDir, 'opencode.json');
+
+      try {
+        fs.writeFileSync(
+          configPath,
+          JSON.stringify(
+            {
+              version: 1,
+              defaultModel: 'proxy/claude-sonnet-4-5-thinking',
+              providers: {
+                proxy: {
+                  label: 'Proxy Anthropic',
+                  sdkProvider: 'anthropic',
+                  baseURL: 'https://proxy-anthropic.example/v1',
+                  models: {
+                    'claude-sonnet-4-5-thinking': {
+                      label: 'Claude Sonnet 4.5 Thinking',
+                      reasoning: true,
+                      providerOptions: {
+                        claude: {
+                          thinking: {
+                            type: 'enabled',
+                            budgetTokens: 2048,
+                          },
+                        },
+                      },
+                    },
+                  },
+                },
+                zhipu_proxy: {
+                  label: 'Zhipu Compatible',
+                  sdkProvider: 'openai-compatible',
+                  baseURL: 'https://zhipu-proxy.example/v1',
+                  models: {
+                    'glm-4.5': {
+                      label: 'GLM 4.5',
+                    },
+                  },
+                },
+              },
+            },
+            null,
+            2,
+          ),
+          'utf8',
+        );
+
+        process.env.AGENT_LLM_CATALOG_PATH = configPath;
+        delete process.env.LLM_PROVIDER;
+        delete process.env.LLM_MODEL;
+
+        const catalog = controller.getLlmCatalog();
+
+        expect(catalog.source).toBe('opencode');
+        expect(catalog.defaultSelection).toEqual({
+          key: 'proxy',
+          provider: 'claude',
+          model: 'claude-sonnet-4-5-thinking',
+        });
+        expect(catalog.providers).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({
+              key: 'proxy',
+              provider: 'claude',
+              baseURL: 'https://proxy-anthropic.example/v1',
+              models: expect.arrayContaining([
+                expect.objectContaining({
+                  model: 'claude-sonnet-4-5-thinking',
+                  reasoning: true,
+                  providerOptions: {
+                    anthropic: {
+                      thinking: {
+                        type: 'enabled',
+                        budgetTokens: 2048,
+                      },
+                    },
+                  },
+                }),
+              ]),
+            }),
+            expect.objectContaining({
+              key: 'zhipu_proxy',
+              provider: 'openai-compatible',
+              baseURL: 'https://zhipu-proxy.example/v1',
+              models: expect.arrayContaining([
+                expect.objectContaining({
+                  model: 'glm-4.5',
+                }),
+              ]),
+            }),
+          ]),
+        );
+      } finally {
+        fs.rmSync(tmpDir, { recursive: true, force: true });
+      }
     });
   });
 });

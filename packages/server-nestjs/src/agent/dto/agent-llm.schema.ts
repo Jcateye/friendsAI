@@ -27,6 +27,7 @@ const NumberField = z
 
 const LlmSchema = z.object({
   provider: z.string().trim().min(1),
+  providerKey: z.string().trim().min(1).max(160).optional(),
   model: z.string().trim().min(1),
   temperature: NumberField.optional(),
   maxOutputTokens: z.number().int().positive().optional(),
@@ -84,6 +85,7 @@ export function parseAgentLlmOrThrow(body: unknown): LlmRequestConfig {
 
   const llm: LlmRequestConfig = {
     provider,
+    providerKey: parsed.data.providerKey,
     model: parsed.data.model,
     temperature: parsed.data.temperature,
     maxOutputTokens: parsed.data.maxOutputTokens,

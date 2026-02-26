@@ -3,6 +3,7 @@ import type {
   AgentError,
   AgentMessage,
   AgentMessageDelta,
+  AgentRunEnd,
   ToolStateUpdate,
   AgentContextPatch,
 } from '../client-types';
@@ -33,6 +34,7 @@ export class VercelAiStreamAdapter {
   private textPartId: string | null = null;
   private messageStarted = false;
   private messageId: string | null = null;
+  private messageFinished = false;
 
   /**
    * 转换事件为 AI SDK v6 UI Message Stream 格式
@@ -59,7 +61,7 @@ export class VercelAiStreamAdapter {
         return this.transformContextPatch(event.data);
 
       case 'agent.end':
-        return this.transformEnd();
+        return this.transformEnd(event.data);
 
       case 'ping':
         return null;
@@ -85,6 +87,7 @@ export class VercelAiStreamAdapter {
   private transformStart(): string {
     this.messageId = generateUlid();
     this.messageStarted = true;
+    this.messageFinished = false;
     return this.sse({ type: 'start', messageId: this.messageId });
   }
 
@@ -117,16 +120,31 @@ export class VercelAiStreamAdapter {
   /**
    * agent.message → text-end + finish
    */
-  private transformMessageComplete(_message: AgentMessage): string {
+  private transformMessageComplete(message: AgentMessage): string {
     const parts: string[] = [];
+
+    if (!this.messageStarted) {
+      this.messageId = generateUlid();
+      this.messageStarted = true;
+      parts.push(this.sse({ type: 'start', messageId: this.messageId }));
+    }
 
     // 关闭打开的文本 part
     if (this.textPartId) {
       parts.push(this.sse({ type: 'text-end', id: this.textPartId }));
       this.textPartId = null;
+    } else {
+      const content = typeof message.content === 'string' ? message.content : '';
+      if (content.trim().length > 0) {
+        const textPartId = generateUlid();
+        parts.push(this.sse({ type: 'text-start', id: textPartId }));
+        parts.push(this.sse({ type: 'text-delta', id: textPartId, delta: content }));
+        parts.push(this.sse({ type: 'text-end', id: textPartId }));
+      }
     }
 
     parts.push(this.sse({ type: 'finish', finishReason: 'stop' }));
+    this.messageFinished = true;
 
     return parts.join('');
   }
@@ -231,13 +249,19 @@ export class VercelAiStreamAdapter {
   /**
    * agent.end → 关闭所有打开的 part，不重复发 finish（由 agent.message 触发）
    */
-  private transformEnd(): string | null {
+  private transformEnd(end: AgentRunEnd): string | null {
     const parts: string[] = [];
 
     // 安全关闭打开的文本 part（如果 agent.message 没有被发出）
     if (this.textPartId) {
       parts.push(this.sse({ type: 'text-end', id: this.textPartId }));
       this.textPartId = null;
+    }
+
+    if (this.messageStarted && !this.messageFinished) {
+      const finishReason = end.status === 'succeeded' ? 'stop' : 'error';
+      parts.push(this.sse({ type: 'finish', finishReason }));
+      this.messageFinished = true;
     }
 
     return parts.length > 0 ? parts.join('') : null;

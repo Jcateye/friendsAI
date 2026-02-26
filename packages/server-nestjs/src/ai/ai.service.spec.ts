@@ -174,6 +174,144 @@ describe('AiService', () => {
     expect(mockedStreamText).toHaveBeenCalled();
   });
 
+  it('uses provider-specific credentials when request overrides provider', async () => {
+    const createLanguageModelSpy = jest
+      .spyOn(AiSdkProviderFactory.prototype, 'createLanguageModel')
+      .mockReturnValue({} as never);
+
+    mockedStreamText.mockReturnValue({
+      fullStream: createTextStream([{ type: 'finish', finishReason: 'stop' }]),
+    } as never);
+
+    const service = await createService({
+      NODE_ENV: 'test',
+      LLM_PROVIDER: 'claude',
+      LLM_MODEL: 'claude-3-5-haiku-latest',
+      ANTHROPIC_API_KEY: 'anthropic-test-key',
+      OPENAI_API_KEY: 'openai-test-key',
+      OPENAI_BASE_URL: 'https://api.openai-proxy.local/v1',
+    });
+
+    const stream = await service.streamChat([{ role: 'user', content: 'hello' }], {
+      llm: {
+        provider: 'openai',
+        model: 'gpt-4.1-mini',
+      },
+    });
+    for await (const _chunk of stream) {
+      // consume stream
+    }
+
+    expect(createLanguageModelSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        provider: 'openai',
+        model: 'gpt-4.1-mini',
+        apiKey: 'openai-test-key',
+        baseURL: 'https://api.openai-proxy.local/v1',
+      }),
+    );
+  });
+
+  it('uses provider-key credentials when providerKey is specified', async () => {
+    const createLanguageModelSpy = jest
+      .spyOn(AiSdkProviderFactory.prototype, 'createLanguageModel')
+      .mockReturnValue({} as never);
+
+    mockedStreamText.mockReturnValue({
+      fullStream: createTextStream([{ type: 'finish', finishReason: 'stop' }]),
+    } as never);
+
+    const service = await createService({
+      NODE_ENV: 'test',
+      LLM_PROVIDER: 'openai-compatible',
+      LLM_MODEL: 'glm-4.5-air',
+      OPENAI_API_KEY: 'global-openai-key',
+      OPENAI_BASE_URL: 'https://global.example/v1',
+      AGENT_LLM_PROVIDER_ZHIPU_PROXY_API_KEY: 'zhipu-key',
+      AGENT_LLM_PROVIDER_ZHIPU_PROXY_BASE_URL: 'https://zhipu-proxy.example/v1',
+    });
+
+    const stream = await service.streamChat([{ role: 'user', content: 'hello' }], {
+      llm: {
+        provider: 'openai-compatible',
+        providerKey: 'zhipu_proxy',
+        model: 'glm-4.5',
+      },
+    });
+    for await (const _chunk of stream) {
+      // consume stream
+    }
+
+    expect(createLanguageModelSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        provider: 'openai-compatible',
+        providerKey: 'zhipu_proxy',
+        model: 'glm-4.5',
+        apiKey: 'zhipu-key',
+        baseURL: 'https://zhipu-proxy.example/v1',
+      }),
+    );
+  });
+
+  it('requires provider-key api key for custom providerKey', async () => {
+    const service = await createService({
+      NODE_ENV: 'test',
+      LLM_PROVIDER: 'openai-compatible',
+      LLM_MODEL: 'glm-4.5-air',
+      OPENAI_API_KEY: 'global-openai-key',
+      OPENAI_BASE_URL: 'https://global.example/v1',
+    });
+
+    await expect(
+      service.streamChat([{ role: 'user', content: 'hello' }], {
+        llm: {
+          provider: 'openai-compatible',
+          providerKey: 'zhipu_proxy',
+          model: 'glm-4.5',
+        },
+      }),
+    ).rejects.toMatchObject<LlmConfigurationError>({
+      code: 'llm_provider_not_configured',
+    });
+  });
+
+  it('prefers request-level baseURL when provided', async () => {
+    const createLanguageModelSpy = jest
+      .spyOn(AiSdkProviderFactory.prototype, 'createLanguageModel')
+      .mockReturnValue({} as never);
+
+    mockedStreamText.mockReturnValue({
+      fullStream: createTextStream([{ type: 'finish', finishReason: 'stop' }]),
+    } as never);
+
+    const service = await createService({
+      NODE_ENV: 'test',
+      LLM_PROVIDER: 'openai-compatible',
+      LLM_MODEL: 'glm-4.5-air',
+      OPENAI_API_KEY: 'global-openai-key',
+      OPENAI_BASE_URL: 'https://global.example/v1',
+    });
+
+    const stream = await service.streamChat([{ role: 'user', content: 'hello' }], {
+      llm: {
+        provider: 'openai-compatible',
+        model: 'glm-4.5',
+        baseURL: 'https://catalog-config.example/v1',
+      },
+    });
+    for await (const _chunk of stream) {
+      // consume stream
+    }
+
+    expect(createLanguageModelSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        provider: 'openai-compatible',
+        model: 'glm-4.5',
+        baseURL: 'https://catalog-config.example/v1',
+      }),
+    );
+  });
+
   it('filters reasoning-delta and only emits visible text content', async () => {
     jest
       .spyOn(AiSdkProviderFactory.prototype, 'createLanguageModel')
@@ -212,6 +350,48 @@ describe('AiService', () => {
     expect(JSON.stringify(chunks)).not.toContain('internal reasoning');
     expect(
       (chunks[2].choices as Array<{ finish_reason?: string }>)?.[0]?.finish_reason,
+    ).toBe('stop');
+  });
+
+  it('includes reasoning-delta as <think> block when includeReasoning is enabled', async () => {
+    jest
+      .spyOn(AiSdkProviderFactory.prototype, 'createLanguageModel')
+      .mockReturnValue({} as never);
+
+    mockedStreamText.mockReturnValue({
+      fullStream: createTextStream([
+        { type: 'text-delta', text: 'A' },
+        { type: 'reasoning-delta', text: 'internal reasoning' },
+        { type: 'text-delta', text: 'B' },
+        { type: 'finish', finishReason: 'stop' },
+      ]),
+    } as never);
+
+    const service = await createService({
+      NODE_ENV: 'test',
+      LLM_PROVIDER: 'openai',
+      LLM_MODEL: 'gpt-4.1-mini',
+      LLM_API_KEY: 'openai-test-key',
+    });
+
+    const stream = await service.streamChat([{ role: 'user', content: 'hello' }], {
+      includeReasoning: true,
+    });
+
+    const chunks: Array<Record<string, unknown>> = [];
+    for await (const chunk of stream) {
+      chunks.push(chunk as Record<string, unknown>);
+    }
+
+    const visibleContents = chunks
+      .map((chunk) => (chunk.choices as Array<{ delta?: { content?: string } }>)?.[0]?.delta?.content)
+      .filter((content): content is string => typeof content === 'string');
+
+    expect(visibleContents).toEqual(['A', '<think>internal reasoning', '</think>', 'B']);
+    expect(chunks[1].__reasoning).toBe(true);
+    expect(chunks[2].__reasoning).toBe(true);
+    expect(
+      (chunks[4].choices as Array<{ finish_reason?: string }>)?.[0]?.finish_reason,
     ).toBe('stop');
   });
 
