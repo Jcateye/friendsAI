@@ -90,6 +90,37 @@ describe('AiService', () => {
     );
   });
 
+  it('normalizes claude baseURL to include /v1 when custom endpoint misses version segment', async () => {
+    const createLanguageModelSpy = jest
+      .spyOn(AiSdkProviderFactory.prototype, 'createLanguageModel')
+      .mockReturnValue({} as never);
+
+    mockedStreamText.mockReturnValue({
+      fullStream: createTextStream([{ type: 'finish', finishReason: 'stop' }]),
+    } as never);
+
+    const service = await createService({
+      NODE_ENV: 'test',
+      LLM_PROVIDER: 'claude',
+      LLM_MODEL: 'glm-4.7-flash',
+      ANTHROPIC_API_KEY: 'anthropic-test-key',
+      ANTHROPIC_BASE_URL: 'https://api.z.ai/api/anthropic',
+    });
+
+    const stream = await service.streamChat([{ role: 'user', content: 'hello' }]);
+    for await (const _chunk of stream) {
+      // consume stream
+    }
+
+    expect(createLanguageModelSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        provider: 'claude',
+        model: 'glm-4.7-flash',
+        baseURL: 'https://api.z.ai/api/anthropic/v1',
+      }),
+    );
+  });
+
   it('supports request-level llm override and providerOptions alias normalization', async () => {
     const createLanguageModelSpy = jest
       .spyOn(AiSdkProviderFactory.prototype, 'createLanguageModel')
@@ -141,6 +172,87 @@ describe('AiService', () => {
       }),
     );
     expect(mockedStreamText).toHaveBeenCalled();
+  });
+
+  it('filters reasoning-delta and only emits visible text content', async () => {
+    jest
+      .spyOn(AiSdkProviderFactory.prototype, 'createLanguageModel')
+      .mockReturnValue({} as never);
+
+    mockedStreamText.mockReturnValue({
+      fullStream: createTextStream([
+        { type: 'text-delta', text: 'A' },
+        { type: 'reasoning-delta', text: 'internal reasoning' },
+        { type: 'text-delta', text: 'B' },
+        { type: 'finish', finishReason: 'stop' },
+      ]),
+    } as never);
+
+    const service = await createService({
+      NODE_ENV: 'test',
+      LLM_PROVIDER: 'openai',
+      LLM_MODEL: 'gpt-4.1-mini',
+      LLM_API_KEY: 'openai-test-key',
+    });
+
+    const stream = await service.streamChat([{ role: 'user', content: 'hello' }]);
+
+    const chunks: Array<Record<string, unknown>> = [];
+    for await (const chunk of stream) {
+      chunks.push(chunk as Record<string, unknown>);
+    }
+
+    expect(chunks).toHaveLength(3);
+
+    const visibleContents = chunks
+      .map((chunk) => (chunk.choices as Array<{ delta?: { content?: string } }>)?.[0]?.delta?.content)
+      .filter((content): content is string => typeof content === 'string');
+
+    expect(visibleContents).toEqual(['A', 'B']);
+    expect(JSON.stringify(chunks)).not.toContain('internal reasoning');
+    expect(
+      (chunks[2].choices as Array<{ finish_reason?: string }>)?.[0]?.finish_reason,
+    ).toBe('stop');
+  });
+
+  it('retries stream when first attempt fails with rate-limit before output', async () => {
+    jest
+      .spyOn(AiSdkProviderFactory.prototype, 'createLanguageModel')
+      .mockReturnValue({} as never);
+
+    mockedStreamText
+      .mockReturnValueOnce({
+        fullStream: createTextStream([
+          { type: 'error', error: new Error('Rate limit reached for requests') },
+        ]),
+      } as never)
+      .mockReturnValueOnce({
+        fullStream: createTextStream([
+          { type: 'text-delta', text: '重试成功' },
+          { type: 'finish', finishReason: 'stop' },
+        ]),
+      } as never);
+
+    const service = await createService({
+      NODE_ENV: 'test',
+      LLM_PROVIDER: 'claude',
+      LLM_MODEL: 'glm-4.7-flash',
+      ANTHROPIC_API_KEY: 'anthropic-test-key',
+      ANTHROPIC_BASE_URL: 'https://api.z.ai/api/anthropic/v1',
+    });
+
+    const stream = await service.streamChat([{ role: 'user', content: 'hello' }]);
+    const chunks: Array<Record<string, unknown>> = [];
+    for await (const chunk of stream) {
+      chunks.push(chunk as Record<string, unknown>);
+    }
+
+    const visibleContents = chunks
+      .map((chunk) => (chunk.choices as Array<{ delta?: { content?: string } }>)?.[0]?.delta?.content)
+      .filter((content): content is string => typeof content === 'string');
+
+    expect(visibleContents).toEqual(['重试成功']);
+    expect(mockedStreamText).toHaveBeenCalledTimes(2);
   });
 
   it('uses independent embedding provider config', async () => {
@@ -204,9 +316,9 @@ describe('AiService', () => {
       .spyOn(AiSdkProviderFactory.prototype, 'createLanguageModel')
       .mockReturnValue({} as never);
 
-    mockedStreamText.mockImplementation(() => {
-      throw new Error('network failed');
-    });
+    mockedStreamText.mockReturnValue({
+      fullStream: createTextStream([{ type: 'error', error: new Error('network failed') }]),
+    } as never);
 
     const service = await createService({
       NODE_ENV: 'test',
@@ -215,6 +327,14 @@ describe('AiService', () => {
       LLM_API_KEY: 'openai-test-key',
     });
 
-    await expect(service.streamChat([{ role: 'user', content: 'hello' }])).rejects.toBeInstanceOf(LlmCallError);
+    const stream = await service.streamChat([{ role: 'user', content: 'hello' }]);
+
+    const consume = async () => {
+      for await (const _chunk of stream) {
+        // consume stream
+      }
+    };
+
+    await expect(consume()).rejects.toBeInstanceOf(LlmCallError);
   });
 });

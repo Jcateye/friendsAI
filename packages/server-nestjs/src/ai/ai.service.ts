@@ -46,10 +46,13 @@ export class AiService {
   private readonly providerFactory = new AiSdkProviderFactory();
   private readonly runtimeDefaults: ResolvedRuntimeLlmConfig;
   private readonly embeddingDefaults: ResolvedRuntimeEmbeddingConfig;
+  private readonly streamRetryAttempts = 3;
+  private readonly streamRetryDelayMs: number;
 
   constructor(private readonly configService: ConfigService) {
     const nodeEnv = this.configService.get<string>('NODE_ENV') ?? process.env.NODE_ENV;
     const fileConfig = nodeEnv !== 'production' ? this.loadLocalEnv(nodeEnv ?? 'dev') : {};
+    this.streamRetryDelayMs = nodeEnv === 'test' ? 0 : 600;
 
     this.runtimeDefaults = this.resolveRuntimeDefaults(fileConfig);
     this.embeddingDefaults = this.resolveEmbeddingDefaults(fileConfig, this.runtimeDefaults);
@@ -124,25 +127,17 @@ export class AiService {
   ): Promise<AsyncIterable<LlmStreamChunk>> {
     try {
       const runtimeConfig = this.resolveRuntimeCallSettings(options?.llm);
-      const model = this.providerFactory.createLanguageModel(runtimeConfig);
+      const modelMessages = this.toModelMessages(messages);
+      const tools = this.toAiSdkTools(options?.tools);
+      const providerOptions = this.toProviderOptions(runtimeConfig.providerOptions);
 
-      const result = streamText({
-        model,
-        messages: this.toModelMessages(messages),
-        tools: this.toAiSdkTools(options?.tools),
-        abortSignal: options?.signal,
-        temperature: runtimeConfig.temperature,
-        maxOutputTokens: runtimeConfig.maxOutputTokens,
-        topP: runtimeConfig.topP,
-        topK: runtimeConfig.topK,
-        stopSequences: runtimeConfig.stopSequences,
-        seed: runtimeConfig.seed,
-        presencePenalty: runtimeConfig.presencePenalty,
-        frequencyPenalty: runtimeConfig.frequencyPenalty,
-        providerOptions: this.toProviderOptions(runtimeConfig.providerOptions),
+      return this.streamWithRetries({
+        runtimeConfig,
+        messages: modelMessages,
+        tools,
+        signal: options?.signal,
+        providerOptions,
       });
-
-      return this.mapStream(result.fullStream);
     } catch (error) {
       if (error instanceof LlmConfigurationError) {
         throw error;
@@ -158,17 +153,22 @@ export class AiService {
       fileConfig.LLM_PROVIDER ??
       this.configService.get<string>('LLM_PROVIDER') ??
       process.env.LLM_PROVIDER ??
-      'openai-compatible';
+      'claude';
 
     const provider = this.normalizeProvider(providerRaw);
     const model =
       fileConfig.LLM_MODEL ??
       this.configService.get<string>('LLM_MODEL') ??
       process.env.LLM_MODEL ??
-      fileConfig.OPENAI_MODEL ??
-      this.configService.get<string>('OPENAI_MODEL') ??
-      process.env.OPENAI_MODEL ??
-      'gpt-4.1-mini';
+      (provider === 'claude'
+        ? fileConfig.ANTHROPIC_DEFAULT_HAIKU_MODEL ??
+          this.configService.get<string>('ANTHROPIC_DEFAULT_HAIKU_MODEL') ??
+          process.env.ANTHROPIC_DEFAULT_HAIKU_MODEL ??
+          'claude-3-5-haiku-latest'
+        : fileConfig.OPENAI_MODEL ??
+          this.configService.get<string>('OPENAI_MODEL') ??
+          process.env.OPENAI_MODEL ??
+          'gpt-4.1-mini');
 
     return {
       provider,
@@ -311,11 +311,11 @@ export class AiService {
     }
 
     if (provider === 'claude') {
-      return (
+      const rawBaseUrl =
         fileConfig.ANTHROPIC_BASE_URL ??
         this.configService.get<string>('ANTHROPIC_BASE_URL') ??
-        process.env.ANTHROPIC_BASE_URL
-      );
+        process.env.ANTHROPIC_BASE_URL;
+      return this.normalizeClaudeBaseUrl(rawBaseUrl);
     }
 
     if (provider === 'gemini') {
@@ -327,6 +327,34 @@ export class AiService {
     }
 
     return undefined;
+  }
+
+  private normalizeClaudeBaseUrl(rawBaseUrl: string | undefined): string | undefined {
+    if (!rawBaseUrl) {
+      return undefined;
+    }
+
+    const trimmed = rawBaseUrl.trim().replace(/^['"]|['"]$/g, '');
+    if (!trimmed) {
+      return undefined;
+    }
+
+    let parsed: URL;
+    try {
+      parsed = new URL(trimmed);
+    } catch {
+      return trimmed;
+    }
+
+    const pathname = parsed.pathname.replace(/\/+$/, '');
+    const hasVersionSegment = /(?:^|\/)v\d+(?:$|\/)/i.test(pathname);
+    if (hasVersionSegment) {
+      parsed.pathname = pathname || '/';
+      return parsed.toString().replace(/\/$/, '');
+    }
+
+    parsed.pathname = `${pathname || ''}/v1`;
+    return parsed.toString().replace(/\/$/, '');
   }
 
   private normalizeProvider(rawProvider: string): LlmProviderName {
@@ -441,6 +469,10 @@ export class AiService {
     const toolCallOrder = new Map<string, number>();
 
     for await (const part of stream) {
+      if (process.env.AI_STREAM_DEBUG === 'true') {
+        this.logger.debug(`AI stream part type: ${part.type}`);
+      }
+
       if (part.type === 'text-delta') {
         yield {
           choices: [
@@ -449,6 +481,11 @@ export class AiService {
             },
           ],
         };
+        continue;
+      }
+
+      if (part.type === 'reasoning-delta') {
+        // 推理内容不作为 assistant 可见文本输出，避免污染结构化响应
         continue;
       }
 
@@ -518,6 +555,117 @@ export class AiService {
         );
       }
     }
+  }
+
+  private async *streamWithRetries(params: {
+    runtimeConfig: ResolvedRuntimeLlmConfig;
+    messages: ModelMessage[];
+    tools?: Record<string, ReturnType<typeof tool>>;
+    signal?: AbortSignal;
+    providerOptions?: Record<string, Record<string, JSONValue>>;
+  }): AsyncGenerator<LlmStreamChunk> {
+    for (let attempt = 1; attempt <= this.streamRetryAttempts; attempt += 1) {
+      let emittedVisibleOutput = false;
+
+      try {
+        const model = this.providerFactory.createLanguageModel(params.runtimeConfig);
+        const result = streamText({
+          model,
+          messages: params.messages,
+          tools: params.tools,
+          abortSignal: params.signal,
+          temperature: params.runtimeConfig.temperature,
+          maxOutputTokens: params.runtimeConfig.maxOutputTokens,
+          topP: params.runtimeConfig.topP,
+          topK: params.runtimeConfig.topK,
+          stopSequences: params.runtimeConfig.stopSequences,
+          seed: params.runtimeConfig.seed,
+          presencePenalty: params.runtimeConfig.presencePenalty,
+          frequencyPenalty: params.runtimeConfig.frequencyPenalty,
+          providerOptions: params.providerOptions,
+        });
+
+        for await (const chunk of this.mapStream(result.fullStream)) {
+          if (!emittedVisibleOutput && this.hasVisibleChunkOutput(chunk)) {
+            emittedVisibleOutput = true;
+          }
+          yield chunk;
+        }
+        return;
+      } catch (error) {
+        const shouldRetry =
+          !emittedVisibleOutput &&
+          !params.signal?.aborted &&
+          this.isRetryableStreamError(error) &&
+          attempt < this.streamRetryAttempts;
+
+        if (!shouldRetry) {
+          throw error;
+        }
+
+        const delayMs = this.streamRetryDelayMs * attempt;
+        this.logger.warn(
+          `Retrying LLM stream after retryable error (attempt ${attempt}/${this.streamRetryAttempts - 1}): ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+        );
+        await this.sleep(delayMs, params.signal);
+      }
+    }
+  }
+
+  private hasVisibleChunkOutput(chunk: LlmStreamChunk): boolean {
+    const choice = chunk.choices?.[0];
+    if (!choice) {
+      return false;
+    }
+
+    const content = choice.delta?.content;
+    if (typeof content === 'string' && content.length > 0) {
+      return true;
+    }
+
+    return Array.isArray(choice.delta?.tool_calls) && choice.delta.tool_calls.length > 0;
+  }
+
+  private isRetryableStreamError(error: unknown): boolean {
+    const message = error instanceof Error ? error.message : String(error);
+    const normalized = message.toLowerCase();
+
+    return (
+      normalized.includes('rate limit') ||
+      normalized.includes('too many requests') ||
+      normalized.includes('status code: 429') ||
+      normalized.includes('"code":"1302"') ||
+      normalized.includes('"code":1302')
+    );
+  }
+
+  private async sleep(ms: number, signal?: AbortSignal): Promise<void> {
+    if (ms <= 0) {
+      return;
+    }
+
+    await new Promise<void>((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        signal?.removeEventListener('abort', onAbort);
+        resolve();
+      }, ms);
+
+      const onAbort = () => {
+        clearTimeout(timeout);
+        signal?.removeEventListener('abort', onAbort);
+        reject(new Error('aborted'));
+      };
+
+      if (signal?.aborted) {
+        clearTimeout(timeout);
+        reject(new Error('aborted'));
+        return;
+      }
+
+      signal?.addEventListener('abort', onAbort);
+    });
   }
 
   private parseJsonValue(value: unknown): JSONValue | undefined {

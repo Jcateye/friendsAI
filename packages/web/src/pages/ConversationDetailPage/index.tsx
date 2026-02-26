@@ -18,6 +18,8 @@ type MessageWithMs = AgentChatMessage & {
   createdAtMs?: number;
 };
 
+const DUPLICATE_WINDOW_MS = 5000;
+
 const AVAILABLE_CHAT_TOOLS: ToolOption[] = [
   {
     id: 'web_search',
@@ -141,6 +143,7 @@ export function ConversationDetailPage() {
 
   const sortedMessages = useMemo(() => {
     const allMessages = new Map<string, MessageWithMs>();
+    const initialMessageIdSet = new Set(initialMessages.map((message) => message.id));
 
     // 首先添加 initialMessages（来自数据库，ID 更稳定）
     initialMessages.forEach((message) => {
@@ -193,12 +196,17 @@ export function ConversationDetailPage() {
 
         let foundDuplicate = false;
         for (const [, existingMsg] of allMessages.entries()) {
+          const existingMessageTime =
+            existingMsg.createdAtMs ??
+            existingMsg.createdAt?.getTime();
           if (
+            initialMessageIdSet.has(existingMsg.id) &&
             existingMsg.role === messageRole &&
-            existingMsg.content === messageContent
+            existingMsg.content === messageContent &&
+            typeof existingMessageTime === 'number' &&
+            Math.abs(existingMessageTime - messageTime) < DUPLICATE_WINDOW_MS
           ) {
-            // 这里不再依赖时间戳阈值，只要角色 + 内容相同就认为是重复
-            // 主要解决后端历史消息和流式返回重复渲染的问题
+            // 仅在短时间窗口内视为同一条消息，避免误删后续“同内容”回复
             foundDuplicate = true;
             break;
           }
@@ -226,7 +234,7 @@ export function ConversationDetailPage() {
             msg.role === 'user' && 
             msg.content === backupMsg.content &&
             Math.abs((msg.createdAtMs ?? msg.createdAt?.getTime() ?? 0) - 
-                     (backupMsg.createdAtMs ?? backupMsg.createdAt?.getTime() ?? 0)) < 5000
+                     (backupMsg.createdAtMs ?? backupMsg.createdAt?.getTime() ?? 0)) < DUPLICATE_WINDOW_MS
         );
         
         // 如果没有相同内容的消息，添加备份的消息
@@ -239,17 +247,59 @@ export function ConversationDetailPage() {
     return sortMessagesByCreatedAt(Array.from(allMessages.values()));
   }, [initialMessages, chat.messages]);
 
+  const visibleMessages = useMemo(
+    () =>
+      sortedMessages.filter(
+        (message) =>
+          !(
+            message.role === 'assistant' &&
+            typeof message.content === 'string' &&
+            message.content.trim().length === 0
+          ),
+      ),
+    [sortedMessages],
+  );
+
   // 当对话消息数量达到一定阈值时，触发标题 & 摘要生成
   const hasRequestedTitleSummaryRef = useRef(false);
+  const initialConversationMessageCountRef = useRef<number>(0);
+
+  useEffect(() => {
+    const initialConversationMessages = initialMessages.filter(
+      (msg) =>
+        msg.role === 'user' ||
+        (msg.role === 'assistant' &&
+          typeof msg.content === 'string' &&
+          msg.content.trim().length > 0),
+    );
+    initialConversationMessageCountRef.current = initialConversationMessages.length;
+  }, [initialMessages]);
+
   useEffect(() => {
     if (!conversationId) return;
 
     // 只统计 user / assistant 消息
     const conversationMessages = sortedMessages.filter(
-      (msg) => msg.role === 'user' || msg.role === 'assistant'
+      (msg) =>
+        msg.role === 'user' ||
+        (msg.role === 'assistant' &&
+          typeof msg.content === 'string' &&
+          msg.content.trim().length > 0),
     );
 
     if (conversationMessages.length < 3) return;
+    if (conversationMessages.length <= initialConversationMessageCountRef.current) return;
+
+    const latestMessage = conversationMessages[conversationMessages.length - 1];
+    if (!latestMessage) return;
+    if (latestMessage.role !== 'assistant') return;
+    if (
+      typeof latestMessage.content !== 'string' ||
+      latestMessage.content.trim().length === 0
+    ) {
+      return;
+    }
+
     if (hasRequestedTitleSummaryRef.current) return;
 
     hasRequestedTitleSummaryRef.current = true;
@@ -486,7 +536,7 @@ export function ConversationDetailPage() {
           <div className="flex items-center justify-center h-full">
             <span className="text-text-muted">加载中...</span>
           </div>
-        ) : sortedMessages.length === 0 ? (
+        ) : visibleMessages.length === 0 ? (
           <div className="flex items-center justify-center h-full">
             <div className="text-center">
               <p className="text-[16px] text-text-secondary font-primary">
@@ -496,7 +546,7 @@ export function ConversationDetailPage() {
           </div>
         ) : (
           <div className="flex flex-col gap-4">
-            {sortedMessages.map((message) => (
+            {visibleMessages.map((message) => (
               <div
                 key={message.id}
                 className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
@@ -530,6 +580,18 @@ export function ConversationDetailPage() {
                     </div>
                     <span className="text-[13px] text-text-muted font-primary">思考中...</span>
                   </div>
+                </div>
+              </div>
+            )}
+            {!chat.isLoading && chat.error && (
+              <div className="flex justify-start">
+                <div className="max-w-[80%] rounded-2xl px-4 py-3 bg-red-50 border border-red-200 text-red-700">
+                  <p className="text-[13px] whitespace-pre-wrap">
+                    {(() => {
+                      const firstLine = chat.error?.message?.split('\n')[0]?.trim() || '请求失败，请稍后重试';
+                      return firstLine.slice(0, 240);
+                    })()}
+                  </p>
                 </div>
               </div>
             )}
