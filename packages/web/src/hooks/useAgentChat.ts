@@ -21,6 +21,7 @@ export interface AgentComposerContext {
   enabledTools?: string[];
   attachments?: ComposerAttachmentMetadata[];
   feishuEnabled?: boolean;
+  thinkingEnabled?: boolean;
   inputMode?: 'text' | 'voice';
   skillActionId?: string;
   rawInputs?: Record<string, unknown>;
@@ -184,6 +185,10 @@ function normalizeComposerContext(context: AgentComposerContext | undefined): Ag
 
   if (typeof context.feishuEnabled === 'boolean') {
     normalized.feishuEnabled = context.feishuEnabled;
+  }
+
+  if (typeof context.thinkingEnabled === 'boolean') {
+    normalized.thinkingEnabled = context.thinkingEnabled;
   }
 
   if (context.inputMode === 'text' || context.inputMode === 'voice') {

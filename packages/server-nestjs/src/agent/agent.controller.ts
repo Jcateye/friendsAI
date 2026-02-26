@@ -21,7 +21,7 @@ import { generateUlid } from '../utils/ulid';
 import { SkillsService } from '../skills/skills.service';
 import { EngineRouter } from './engines/engine.router';
 import { AgentLlmValidationError, findLegacyLlmFields, parseAgentLlmOrThrow } from './dto/agent-llm.schema';
-import type { LlmRequestConfig } from '../ai/providers/llm-types';
+import type { LlmCallSettings, LlmRequestConfig } from '../ai/providers/llm-types';
 
 @ApiTags('Agent')
 @Controller('agent')
@@ -32,6 +32,10 @@ export class AgentController {
   private readonly maxContextStringLength = 500;
   private readonly maxComposerTools = 12;
   private readonly maxComposerAttachments = 10;
+  private readonly defaultThinkingBudgetTokens = (() => {
+    const raw = Number.parseInt(process.env.AGENT_THINKING_BUDGET_TOKENS ?? '', 10);
+    return Number.isFinite(raw) && raw > 0 ? raw : 1024;
+  })();
   private readonly skillParserEnabled = process.env.SKILL_INPUT_PARSER_ENABLED === 'true';
   private readonly skillParserExecuteMode = process.env.SKILL_PARSER_EXECUTE_MODE ?? 'log-only';
 
@@ -125,11 +129,15 @@ export class AgentController {
 
     try {
       const sanitizedContext = this.sanitizeChatContext(body.context);
+      const effectiveLlm = this.applyComposerLlmOverrides(
+        normalizedLlm,
+        sanitizedContext?.composer,
+      );
       const preparedRequest: AgentChatRequest = {
         ...body,
         context: sanitizedContext,
         userId: resolvedUserId,
-        llm: normalizedLlm,
+        llm: effectiveLlm,
       };
 
       if (this.skillParserEnabled && this.skillsService && resolvedUserId) {
@@ -499,7 +507,7 @@ export class AgentController {
         userId: input.userId,
         conversationId: input.runRequest.conversationId,
         sessionId: input.runRequest.sessionId,
-        llm: input.runRequest.llm,
+        llm: this.toStrictLlmRequestConfig(input.runRequest.llm),
       },
     );
 
@@ -641,6 +649,10 @@ export class AgentController {
       sanitized.feishuEnabled = value.feishuEnabled;
     }
 
+    if (typeof value.thinkingEnabled === 'boolean') {
+      sanitized.thinkingEnabled = value.thinkingEnabled;
+    }
+
     if (value.inputMode === 'text' || value.inputMode === 'voice') {
       sanitized.inputMode = value.inputMode;
     }
@@ -733,6 +745,67 @@ export class AgentController {
 
   private isRecord(value: unknown): value is Record<string, unknown> {
     return value !== null && typeof value === 'object' && !Array.isArray(value);
+  }
+
+  private applyComposerLlmOverrides(
+    llm: LlmRequestConfig | undefined,
+    composer: AgentComposerContext | undefined,
+  ): LlmCallSettings | undefined {
+    if (!composer?.thinkingEnabled) {
+      return llm;
+    }
+
+    const effectiveLlm: LlmCallSettings = llm ? { ...llm } : {};
+    const providerOptions: Record<string, Record<string, unknown>> = this.isRecord(effectiveLlm.providerOptions)
+      ? Object.entries(effectiveLlm.providerOptions).reduce<Record<string, Record<string, unknown>>>(
+          (acc, [key, value]) => {
+            if (this.isRecord(value)) {
+              acc[key] = { ...value };
+            }
+            return acc;
+          },
+          {},
+        )
+      : {};
+
+    const anthropicOptions = this.isRecord(providerOptions.anthropic)
+      ? { ...providerOptions.anthropic }
+      : {};
+    if (anthropicOptions.thinking === undefined) {
+      anthropicOptions.thinking = {
+        type: 'enabled',
+        budgetTokens: this.defaultThinkingBudgetTokens,
+      };
+    }
+    providerOptions.anthropic = anthropicOptions;
+
+    const openaiCompatibleOptions = this.isRecord(providerOptions.openaiCompatible)
+      ? { ...providerOptions.openaiCompatible }
+      : {};
+    if (openaiCompatibleOptions.reasoningEffort === undefined) {
+      openaiCompatibleOptions.reasoningEffort = 'high';
+    }
+    providerOptions.openaiCompatible = openaiCompatibleOptions;
+
+    effectiveLlm.providerOptions = providerOptions;
+    return effectiveLlm;
+  }
+
+  private toStrictLlmRequestConfig(llm: AgentChatRequest['llm']): LlmRequestConfig | undefined {
+    if (!llm || llm.provider === undefined || typeof llm.model !== 'string') {
+      return undefined;
+    }
+
+    const model = llm.model.trim();
+    if (!model) {
+      return undefined;
+    }
+
+    return {
+      ...llm,
+      provider: llm.provider,
+      model,
+    };
   }
 
   private validateAndNormalizeLlm(body: unknown): LlmRequestConfig | undefined {

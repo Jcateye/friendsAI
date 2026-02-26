@@ -523,6 +523,7 @@ describe('AgentController - POST /v1/agent/run', () => {
               },
             ],
             feishuEnabled: true,
+            thinkingEnabled: true,
             inputMode: 'voice',
             ignored: 'composer-field',
           },
@@ -547,10 +548,138 @@ describe('AgentController - POST /v1/agent/run', () => {
           },
         ],
         feishuEnabled: true,
+        thinkingEnabled: true,
         inputMode: 'voice',
       });
       expect(typeof (forwardedRequest.context as any).veryLongText).toBe('string');
       expect(((forwardedRequest.context as any).veryLongText as string).length).toBeLessThanOrEqual(500);
+    });
+
+    it('should inject thinking providerOptions for chat when composer thinking is enabled', async () => {
+      mockEngineRouter.streamChat.mockReturnValue((async function* () {
+        yield {
+          event: 'agent.end',
+          data: {
+            runId: 'run-chat-thinking',
+            status: 'succeeded',
+            finishedAt: new Date('2026-02-15T10:00:00.000Z').toISOString(),
+          },
+        } as any;
+      })());
+
+      const mockReq = {
+        user: { id: 'req-user-001' },
+        on: jest.fn(),
+        off: jest.fn(),
+      } as unknown as Request;
+
+      const mockRes = {
+        status: jest.fn().mockReturnThis(),
+        json: jest.fn().mockReturnThis(),
+        setHeader: jest.fn(),
+        flushHeaders: jest.fn(),
+        write: jest.fn().mockReturnValue(true),
+        end: jest.fn(),
+        writableEnded: false,
+      } as unknown as Response;
+
+      const requestBody: AgentChatRequest = {
+        prompt: 'hello',
+        context: {
+          composer: {
+            thinkingEnabled: true,
+          },
+        },
+      };
+
+      await controller.chat(mockReq, mockRes, requestBody, 'sse');
+
+      const forwardedRequest = mockEngineRouter.streamChat.mock.calls[0][0];
+      expect(forwardedRequest.llm).toMatchObject({
+        providerOptions: {
+          anthropic: {
+            thinking: {
+              type: 'enabled',
+              budgetTokens: 1024,
+            },
+          },
+          openaiCompatible: {
+            reasoningEffort: 'high',
+          },
+        },
+      });
+    });
+
+    it('should not override explicit thinking providerOptions from llm request', async () => {
+      mockEngineRouter.streamChat.mockReturnValue((async function* () {
+        yield {
+          event: 'agent.end',
+          data: {
+            runId: 'run-chat-thinking-override',
+            status: 'succeeded',
+            finishedAt: new Date('2026-02-15T10:00:00.000Z').toISOString(),
+          },
+        } as any;
+      })());
+
+      const mockReq = {
+        user: { id: 'req-user-001' },
+        on: jest.fn(),
+        off: jest.fn(),
+      } as unknown as Request;
+
+      const mockRes = {
+        status: jest.fn().mockReturnThis(),
+        json: jest.fn().mockReturnThis(),
+        setHeader: jest.fn(),
+        flushHeaders: jest.fn(),
+        write: jest.fn().mockReturnValue(true),
+        end: jest.fn(),
+        writableEnded: false,
+      } as unknown as Response;
+
+      const requestBody: AgentChatRequest = {
+        prompt: 'hello',
+        llm: {
+          provider: 'claude',
+          model: 'claude-3-7-sonnet',
+          providerOptions: {
+            anthropic: {
+              thinking: {
+                type: 'enabled',
+                budgetTokens: 256,
+              },
+            },
+            openaiCompatible: {
+              reasoningEffort: 'medium',
+            },
+          },
+        },
+        context: {
+          composer: {
+            thinkingEnabled: true,
+          },
+        },
+      };
+
+      await controller.chat(mockReq, mockRes, requestBody, 'sse');
+
+      const forwardedRequest = mockEngineRouter.streamChat.mock.calls[0][0];
+      expect(forwardedRequest.llm).toMatchObject({
+        provider: 'claude',
+        model: 'claude-3-7-sonnet',
+        providerOptions: {
+          anthropic: {
+            thinking: {
+              type: 'enabled',
+              budgetTokens: 256,
+            },
+          },
+          openaiCompatible: {
+            reasoningEffort: 'medium',
+          },
+        },
+      });
     });
   });
 });

@@ -22,7 +22,7 @@ describe('ChatInputBox', () => {
     cleanup();
   });
 
-  it('submits composer payload with tool + feishu + inputMode', async () => {
+  it('submits composer payload with tool + feishu + thinking + inputMode', async () => {
     const onSendMessage = vi.fn();
 
     render(
@@ -40,6 +40,7 @@ describe('ChatInputBox', () => {
     fireEvent.click(screen.getByText('网络搜索'));
 
     fireEvent.click(screen.getByRole('button', { name: '飞书多维表' }));
+    fireEvent.click(screen.getByRole('button', { name: '深度思考' }));
     fireEvent.click(screen.getByRole('button', { name: '语音输入' }));
     fireEvent.click(screen.getByRole('button', { name: '发送消息' }));
 
@@ -48,6 +49,7 @@ describe('ChatInputBox', () => {
       content: '你好，帮我发一条消息',
       tools: ['web_search'],
       feishuEnabled: true,
+      thinkingEnabled: true,
       inputMode: 'voice',
     });
   });

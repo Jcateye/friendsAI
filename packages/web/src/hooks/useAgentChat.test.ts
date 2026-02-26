@@ -52,6 +52,7 @@ describe('useAgentChat', () => {
           enabledTools: ['web_search'],
           attachments: [{ name: 'demo.txt', kind: 'file', size: 12 }],
           feishuEnabled: true,
+          thinkingEnabled: true,
           inputMode: 'voice',
         },
       });
@@ -80,6 +81,7 @@ describe('useAgentChat', () => {
         enabledTools: ['web_search'],
         attachments: [{ name: 'demo.txt', kind: 'file', size: 12 }],
         feishuEnabled: true,
+        thinkingEnabled: true,
         inputMode: 'voice',
       },
     });

@@ -16,6 +16,7 @@ import {
   Grid,
   Check,
   Sparkles,
+  Brain,
 } from 'lucide-react';
 
 export interface AttachedFile {
@@ -51,6 +52,7 @@ export interface ChatComposerSubmitPayload {
   files: AttachedFile[];
   tools: string[];
   feishuEnabled: boolean;
+  thinkingEnabled: boolean;
   inputMode: 'text' | 'voice';
 }
 
@@ -94,6 +96,7 @@ export function ChatInputBox({
   const [showPlusMenu, setShowPlusMenu] = useState(false);
   const [menuPosition, setMenuPosition] = useState<{ x: number; y: number } | undefined>(undefined);
   const [feishuEnabled, setFeishuEnabled] = useState(false);
+  const [thinkingEnabled, setThinkingEnabled] = useState(false);
   const [inputMode, setInputMode] = useState<'text' | 'voice'>('text');
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -205,11 +208,12 @@ export function ChatInputBox({
       files: attachedFiles,
       tools: selectedTools,
       feishuEnabled,
+      thinkingEnabled,
       inputMode,
     });
 
     resetComposerAfterSend();
-  }, [attachedFiles, disabled, feishuEnabled, input, inputMode, onSendMessage, resetComposerAfterSend, selectedTools]);
+  }, [attachedFiles, disabled, feishuEnabled, thinkingEnabled, input, inputMode, onSendMessage, resetComposerAfterSend, selectedTools]);
 
   const handleStop = useCallback(() => {
     onStop?.();
@@ -442,6 +446,21 @@ export function ChatInputBox({
           >
             <Grid className="h-4 w-4" />
             多维表
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setThinkingEnabled((prev) => !prev)}
+            disabled={disabled}
+            aria-label="深度思考"
+            className={`inline-flex h-8 items-center gap-1 rounded-md border px-2.5 text-[12px] font-medium transition-colors ${
+              thinkingEnabled
+                ? 'border-primary bg-primary-tint text-primary'
+                : 'border-transparent bg-bg-surface text-text-secondary hover:bg-border'
+            }`}
+          >
+            <Brain className="h-4 w-4" />
+            深度思考
           </button>
 
           <div className="flex-1" />

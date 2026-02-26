@@ -1,4 +1,4 @@
-import type { LlmMessage, LlmRequestConfig } from '../ai/providers/llm-types';
+import type { LlmCallSettings, LlmMessage, LlmRequestConfig } from '../ai/providers/llm-types';
 import type {
   AgentContextPatch,
   AgentError,
@@ -24,6 +24,7 @@ export interface AgentComposerContext {
   enabledTools?: string[];
   attachments?: AgentComposerAttachment[];
   feishuEnabled?: boolean;
+  thinkingEnabled?: boolean;
   inputMode?: 'text' | 'voice';
   skillActionId?: string;
   rawInputs?: Record<string, unknown>;
@@ -38,7 +39,7 @@ export interface AgentChatRequest {
   messages?: AgentChatMessage[];
   prompt?: string;
   context?: AgentChatContext;
-  llm?: LlmRequestConfig;
+  llm?: LlmCallSettings;
   userId?: string;
   conversationId?: string;
   sessionId?: string;

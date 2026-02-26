@@ -370,6 +370,7 @@ export function ConversationDetailPage() {
           kind: item.type,
         })),
         feishuEnabled: payload.feishuEnabled,
+        thinkingEnabled: payload.thinkingEnabled,
         inputMode: payload.inputMode,
       },
     });
