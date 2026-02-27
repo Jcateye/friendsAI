@@ -280,6 +280,22 @@ AGENT_LLM_PROVIDER_ZHIPU_PROXY_BASE_URL=https://open.bigmodel.cn/api/paas/v4
 AGENT_LLM_PROVIDER_CLAUDE_OFFICIAL_API_KEY=你的Claude API密钥
 ```
 
+#### 钉钉闪记解析技能配置（最小闭环）
+
+- 自动触发依赖：
+  - `SKILL_INPUT_PARSER_ENABLED=true`
+  - `SKILL_PARSER_EXECUTE_MODE=enforce`
+- 抓取主链默认使用 Playwright：
+  - `SHANJI_FETCH_MODE=playwright`
+- MCP 仅作为项目内后备插槽（可选）：
+  - `SHANJI_ENABLE_MCP_FALLBACK=true|false`
+  - `SHANJI_MCP_CONFIG_PATH=../../config/mcp/opencode.project.example.json`
+  - `SHANJI_MCP_SERVER_NAME=web-reader`（推荐，远程 URL 读取）
+  - `SHANJI_MCP_SERVER_NAME=zai-mcp-server`（本地 stdio MCP）
+  - `SHANJI_MCP_TOOL_NAME=webReader`（可选，显式指定工具）
+
+> 说明：闪记解析所需 MCP 配置以仓库内 `config/mcp/opencode.project.example.json` 为模板，运行时不依赖 `~/.config/opencode/opencode.json`。
+
 ### 前端配置
 1. 前端环境文件位于 `packages/web/.env.development` / `packages/web/.env.production`
 2. 开发端口通过 `WEB_PORT` 配置（默认 10086）

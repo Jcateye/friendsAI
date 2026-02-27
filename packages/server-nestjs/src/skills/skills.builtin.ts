@@ -2,6 +2,23 @@ import type { SkillCatalogItem, SkillManifest } from './skills.types';
 
 const BUILTIN_MANIFESTS: SkillManifest[] = [
   {
+    key: 'dingtalk_shanji',
+    displayName: '钉钉闪记解析',
+    description: '解析钉钉闪记链接并提取摘要与音频链接',
+    operations: [
+      {
+        name: 'extract',
+        displayName: '解析闪记',
+        description: '提取闪记正文与音频播放链接',
+        riskLevel: 'low',
+        run: {
+          agentId: 'dingtalk_shanji',
+          operation: 'extract',
+        },
+      },
+    ],
+  },
+  {
     key: 'archive_brief',
     displayName: '会话归档',
     description: '提取归档信息并生成简报',

@@ -17,7 +17,7 @@ import type {
   AgentRunResponse,
   AgentStreamEvent,
 } from './agent.types';
-import type { AgentError, AgentRunEnd, AgentSseEvent } from './client-types';
+import type { AgentError, AgentRunEnd, AgentSseEvent, JsonValue } from './client-types';
 import { VercelAiStreamAdapter } from './adapters/vercel-ai-stream.adapter';
 import { AgentListService } from './agent-list.service';
 import { AgentListResponseDto } from './dto/agent-list.dto';
@@ -25,6 +25,8 @@ import { AgentRuntimeError } from './errors/agent-runtime.error';
 import { AgentRunMetricsService } from '../action-tracking/agent-run-metrics.service';
 import { generateUlid } from '../utils/ulid';
 import { SkillsService } from '../skills/skills.service';
+import { MessagesService } from '../conversations/messages.service';
+import { ShanjiExtractorService } from '../skills/shanji/shanji-extractor.service';
 import { EngineRouter } from './engines/engine.router';
 import { AgentLlmValidationError, findLegacyLlmFields, parseAgentLlmOrThrow } from './dto/agent-llm.schema';
 import type { LlmCallSettings, LlmProviderName, LlmRequestConfig } from '../ai/providers/llm-types';
@@ -59,7 +61,11 @@ export class AgentController {
     private readonly agentListService: AgentListService,
     private readonly agentRunMetricsService: AgentRunMetricsService,
     @Optional()
+    private readonly messagesService?: MessagesService,
+    @Optional()
     private readonly skillsService?: SkillsService,
+    @Optional()
+    private readonly shanjiExtractorService?: ShanjiExtractorService,
   ) { }
 
   @Post('chat')
@@ -731,6 +737,7 @@ export class AgentController {
     parsedIntent: {
       skillKey?: string;
       operation?: string;
+      args?: Record<string, unknown>;
       execution?: {
         agentId: string;
         operation?: string | null;
@@ -757,6 +764,16 @@ export class AgentController {
       executionInput.userId = input.userId;
     }
 
+    const isShanjiSkill =
+      input.parsedIntent.skillKey === 'dingtalk_shanji' ||
+      execution.agentId === 'dingtalk_shanji';
+    if (isShanjiSkill) {
+      return this.executeShanjiSkillDirectly({
+        ...input,
+        executionInput,
+      });
+    }
+
     const result = await this.engineRouter.run(
       execution.agentId as AgentRunRequest['agentId'],
       execution.operation ?? null,
@@ -776,36 +793,48 @@ export class AgentController {
       result.data,
       result.cached,
     );
+    const messageId = generateUlid();
+    const createdAtMs = Date.now();
+    const createdAt = new Date(createdAtMs).toISOString();
+    const metadata = {
+      skillInvocation: {
+        skillKey: input.parsedIntent.skillKey ?? null,
+        operation: input.parsedIntent.operation ?? null,
+        runId: result.runId,
+        cached: result.cached,
+      },
+    } as Record<string, JsonValue>;
+
+    await this.persistAssistantSkillMessage({
+      conversationId: input.runRequest.conversationId,
+      userId: input.userId,
+      messageId,
+      content: summaryText,
+      createdAtMs,
+      metadata,
+    });
 
     if (input.format === 'vercel-ai') {
       const skillAdapter = new VercelAiStreamAdapter();
-      const startChunk = skillAdapter.transform({ event: 'agent.start', data: { runId: result.runId, createdAt: new Date().toISOString(), input: summaryText } });
+      const startChunk = skillAdapter.transform({ event: 'agent.start', data: { runId: result.runId, createdAt, input: summaryText } });
       if (startChunk) input.res.write(startChunk);
       const deltaChunk = skillAdapter.transform({ event: 'agent.delta', data: { id: generateUlid(), delta: summaryText } });
       if (deltaChunk) input.res.write(deltaChunk);
-      const msgChunk = skillAdapter.transform({ event: 'agent.message', data: { id: generateUlid(), role: 'assistant', content: summaryText, createdAt: new Date().toISOString(), createdAtMs: Date.now() } });
+      const msgChunk = skillAdapter.transform({ event: 'agent.message', data: { id: messageId, role: 'assistant', content: summaryText, createdAt, createdAtMs } });
       if (msgChunk) input.res.write(msgChunk);
       input.res.write(skillAdapter.done());
       return { runId: result.runId };
     }
 
-    const now = new Date();
     const messageEvent = {
       event: 'agent.message' as const,
       data: {
-        id: generateUlid(),
+        id: messageId,
         role: 'assistant' as const,
         content: summaryText,
-        createdAt: now.toISOString(),
-        createdAtMs: now.getTime(),
-        metadata: {
-          skillInvocation: {
-            skillKey: input.parsedIntent.skillKey ?? null,
-            operation: input.parsedIntent.operation ?? null,
-            runId: result.runId,
-            cached: result.cached,
-          },
-        },
+        createdAt,
+        createdAtMs,
+        metadata,
       },
     };
 
@@ -813,7 +842,7 @@ export class AgentController {
       event: 'agent.start',
       data: {
         runId: result.runId,
-        createdAt: now.toISOString(),
+        createdAt,
         input: summaryText,
       },
     });
@@ -829,6 +858,214 @@ export class AgentController {
     });
 
     return { runId: result.runId };
+  }
+
+  private async executeShanjiSkillDirectly(input: {
+    res: Response;
+    format: 'sse' | 'vercel-ai';
+    runRequest: AgentChatRequest;
+    userId: string;
+    parsedIntent: {
+      skillKey?: string;
+      operation?: string;
+      args?: Record<string, unknown>;
+      execution?: {
+        agentId: string;
+        operation?: string | null;
+        input: Record<string, unknown>;
+      };
+    };
+    executionInput: Record<string, unknown>;
+  }): Promise<{ runId: string }> {
+    if (!this.shanjiExtractorService) {
+      throw new Error('[shanji_service_unavailable] Shanji extractor service is unavailable.');
+    }
+
+    const execution = input.parsedIntent.execution;
+    const urlFromExecution =
+      typeof input.executionInput.url === 'string' ? input.executionInput.url.trim() : '';
+    const urlFromArgs =
+      typeof input.parsedIntent.args?.url === 'string' ? input.parsedIntent.args.url.trim() : '';
+    const sourceUrl = urlFromExecution || urlFromArgs;
+    if (!sourceUrl) {
+      throw new Error('[shanji_url_missing] Shanji URL is required.');
+    }
+
+    const tokenFromExecution =
+      typeof input.executionInput.meetingAgentToken === 'string'
+        ? input.executionInput.meetingAgentToken.trim()
+        : '';
+    const tokenFromArgs =
+      typeof input.parsedIntent.args?.meetingAgentToken === 'string'
+        ? input.parsedIntent.args.meetingAgentToken.trim()
+        : '';
+    const meetingAgentToken = tokenFromExecution || tokenFromArgs;
+
+    const extractResult = await this.shanjiExtractorService.extractFromUrl({
+      url: sourceUrl,
+      meetingAgentToken: meetingAgentToken || undefined,
+    });
+
+    const summaryText = this.buildShanjiExecutionSummary(extractResult);
+    const runId = generateUlid();
+    const messageId = generateUlid();
+    const createdAtMs = Date.now();
+    const createdAt = new Date(createdAtMs).toISOString();
+    const metadata = {
+      skillInvocation: {
+        skillKey: input.parsedIntent.skillKey ?? 'dingtalk_shanji',
+        operation: input.parsedIntent.operation ?? execution?.operation ?? 'extract',
+        runId,
+        cached: false,
+      },
+      shanji: {
+        sourceUrl: extractResult.sourceUrl,
+        fetchMode: extractResult.fetchMode,
+        fetchedAt: extractResult.fetchedAt,
+        audioUrl: extractResult.audioUrl ?? null,
+        transcriptText: extractResult.transcriptText,
+        transcriptSegments: this.toJsonSafeTranscriptSegments(extractResult.transcriptSegments),
+      },
+    } as Record<string, JsonValue>;
+
+    await this.persistAssistantSkillMessage({
+      conversationId: input.runRequest.conversationId,
+      userId: input.userId,
+      messageId,
+      content: summaryText,
+      createdAtMs,
+      metadata,
+    });
+
+    if (input.format === 'vercel-ai') {
+      const skillAdapter = new VercelAiStreamAdapter();
+      const startChunk = skillAdapter.transform({
+        event: 'agent.start',
+        data: {
+          runId,
+          createdAt,
+          input: summaryText,
+        },
+      });
+      if (startChunk) input.res.write(startChunk);
+      const deltaChunk = skillAdapter.transform({
+        event: 'agent.delta',
+        data: { id: generateUlid(), delta: summaryText },
+      });
+      if (deltaChunk) input.res.write(deltaChunk);
+      const messageChunk = skillAdapter.transform({
+        event: 'agent.message',
+        data: {
+          id: messageId,
+          role: 'assistant',
+          content: summaryText,
+          createdAt,
+          createdAtMs,
+        },
+      });
+      if (messageChunk) input.res.write(messageChunk);
+      input.res.write(skillAdapter.done());
+      return { runId };
+    }
+
+    this.writeEvent(input.res, {
+      event: 'agent.start',
+      data: {
+        runId,
+        createdAt,
+        input: summaryText,
+      },
+    });
+    this.writeEvent(input.res, {
+      event: 'agent.message',
+      data: {
+        id: messageId,
+        role: 'assistant',
+        content: summaryText,
+        createdAt,
+        createdAtMs,
+        metadata,
+      },
+    });
+    this.writeEvent(input.res, {
+      event: 'agent.end',
+      data: {
+        runId,
+        status: 'succeeded',
+        finishedAt: new Date().toISOString(),
+        output: summaryText,
+      },
+    });
+
+    return { runId };
+  }
+
+  private buildShanjiExecutionSummary(result: {
+    summary: string;
+    keySnippets: string[];
+    audioUrl?: string;
+    sourceUrl: string;
+  }): string {
+    const snippetLines = result.keySnippets.slice(0, 5).map((snippet, idx) => `${idx + 1}. ${snippet}`);
+    const sections = [
+      '已解析钉钉闪记链接',
+      `来源：${result.sourceUrl}`,
+      `摘要：${result.summary}`,
+      snippetLines.length > 0 ? `关键片段：\n${snippetLines.join('\n')}` : null,
+      result.audioUrl ? `音频链接：${result.audioUrl}` : '音频链接：未解析到直链',
+    ].filter((item): item is string => Boolean(item));
+    return sections.join('\n\n');
+  }
+
+  private async persistAssistantSkillMessage(input: {
+    conversationId?: string;
+    userId?: string;
+    messageId: string;
+    content: string;
+    createdAtMs: number;
+    metadata?: Record<string, JsonValue>;
+  }): Promise<void> {
+    if (!this.messagesService || !input.conversationId) {
+      return;
+    }
+
+    try {
+      await this.messagesService.appendMessage(input.conversationId, {
+        id: input.messageId,
+        role: 'assistant',
+        content: input.content,
+        metadata: input.metadata as Record<string, any> | undefined,
+        createdAtMs: input.createdAtMs,
+        userId: input.userId,
+      });
+    } catch {
+      // Persist failure should not block skill stream response.
+    }
+  }
+
+  private toJsonSafeTranscriptSegments(segments: Array<{
+    index: number;
+    text: string;
+    startMs?: number;
+    endMs?: number;
+    speaker?: string;
+  }>): Array<Record<string, JsonValue>> {
+    return segments.map((segment) => {
+      const payload: Record<string, JsonValue> = {
+        index: segment.index,
+        text: segment.text,
+      };
+      if (typeof segment.startMs === 'number') {
+        payload.startMs = segment.startMs;
+      }
+      if (typeof segment.endMs === 'number') {
+        payload.endMs = segment.endMs;
+      }
+      if (typeof segment.speaker === 'string') {
+        payload.speaker = segment.speaker;
+      }
+      return payload;
+    });
   }
 
   private buildSkillExecutionSummary(

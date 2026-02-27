@@ -46,6 +46,7 @@ import { SkillsModule } from '../skills/skills.module';
 import { LocalEngine } from './engines/local.engine';
 import { EnginePolicyResolver } from './engines/engine-policy.resolver';
 import { EngineRouter } from './engines/engine.router';
+import { ShanjiExtractorService } from '../skills/shanji/shanji-extractor.service';
 
 @Module({
   imports: [
@@ -99,6 +100,7 @@ import { EngineRouter } from './engines/engine.router';
     LocalEngine,
     EnginePolicyResolver,
     EngineRouter,
+    ShanjiExtractorService,
     // Agent List Service
     AgentListService,
   ],

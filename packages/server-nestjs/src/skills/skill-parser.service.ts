@@ -37,6 +37,11 @@ export class SkillParserService {
       return fromCodeBlock;
     }
 
+    const fromShanjiLink = this.parseShanjiLink(text, input.catalog, traceId);
+    if (fromShanjiLink) {
+      return fromShanjiLink;
+    }
+
     if (text.length > 0) {
       return this.parseNaturalLanguage(text, input.catalog, traceId);
     }
@@ -234,6 +239,88 @@ export class SkillParserService {
         },
       },
     };
+  }
+
+  private parseShanjiLink(
+    text: string,
+    catalog: SkillCatalogItem[],
+    traceId: string,
+  ): SkillInvocationIntent | null {
+    if (!text) {
+      return null;
+    }
+
+    const url = this.extractShanjiUrl(text);
+    if (!url) {
+      return null;
+    }
+
+    const action = this.findAction('dingtalk_shanji', 'extract', catalog);
+    if (!action) {
+      return null;
+    }
+
+    const meetingAgentToken = this.extractShanjiMeetingToken(text);
+    const args: Record<string, unknown> = {
+      url,
+    };
+    if (meetingAgentToken) {
+      args.meetingAgentToken = meetingAgentToken;
+    }
+
+    return {
+      matched: true,
+      status: 'parsed',
+      skillKey: action.skillKey,
+      operation: action.operation,
+      args,
+      source: 'natural_language',
+      confidence: 1,
+      traceId,
+      warnings: [],
+      execution: {
+        agentId: action.run.agentId,
+        operation: action.run.operation,
+        input: {
+          ...(action.run.inputTemplate ?? {}),
+          ...args,
+        },
+      },
+    };
+  }
+
+  private extractShanjiUrl(text: string): string | undefined {
+    const match = text.match(
+      /https?:\/\/shanji\.dingtalk\.com\/app\/transcribes\/[A-Za-z0-9_%\-]+/i,
+    );
+    if (!match) {
+      return undefined;
+    }
+    return match[0].trim();
+  }
+
+  private extractShanjiMeetingToken(text: string): string | undefined {
+    if (!text) {
+      return undefined;
+    }
+
+    const explicitMatch = text.match(
+      /dt-meeting-agent-token[\s:=："']*([A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+)/i,
+    );
+    if (explicitMatch?.[1]) {
+      return explicitMatch[1].trim();
+    }
+
+    const jwtMatches = text.match(/[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g);
+    if (!jwtMatches || jwtMatches.length === 0) {
+      return undefined;
+    }
+
+    const likelyJwt = jwtMatches.find((item) => item.startsWith('eyJ'));
+    if (!likelyJwt) {
+      return undefined;
+    }
+    return likelyJwt.trim();
   }
 
   private parseNaturalLanguage(
