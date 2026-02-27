@@ -1,8 +1,9 @@
 import { Controller, Post, Get, Body, Param } from '@nestjs/common';
-import { ApiOperation, ApiParam, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiOperation, ApiParam, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { EventsService } from './events.service';
 
 @ApiTags('events')
+@ApiBearerAuth()
 @Controller('events')
 export class EventsController {
   constructor(private readonly eventsService: EventsService) {}

@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "defaultModel": "zhipu_proxy/glm-4.5-air",
+  "defaultModel": "claude-doge/claude-haiku-4-5-20251001",
   "providers": {
     "zhipu_proxy": {
       "label": "Zhipu OpenAI Compatible",
@@ -85,12 +85,30 @@
       "baseURL": "http://2000.run:6543",
       "apiKeyEnv": "AGENT_LLM_PROVIDER_GPT_DOGE_API_KEY",
       "models": {
+        "gpt-5.1": {
+          "label": "GPT 5.1"
+        },
         "gpt-5.2": {
           "label": "GPT 5.2"
         },
         "gpt-5.3-codex": {
           "label": "GPT 5.3 Codex",
           "reasoning": true
+        }
+      }
+    },
+    "gemini-doge": {
+      "label": "Gemini Doge Gateway",
+      "sdkProvider": "gemini",
+      "baseURL": "http://2000.run:6543",
+      "apiKeyEnv": "AGENT_LLM_PROVIDER_GEMINI_DOGE_API_KEY",
+      "models": {
+        "gemini-2.5-pro": {
+          "label": "Gemini 2.5 Pro",
+          "reasoning": true
+        },
+        "gemini-2.0-flash": {
+          "label": "Gemini 2.0 Flash"
         }
       }
     }

@@ -1,5 +1,5 @@
 import { Body, Controller, Get, HttpCode, HttpException, HttpStatus, Optional, Post, Query, Req, Res } from '@nestjs/common';
-import { ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
 import type { Request, Response } from 'express';
 import fs from 'fs';
 import os from 'os';
@@ -37,6 +37,7 @@ const CATALOG_PROVIDER_OPTIONS_KEY_ALIAS_MAP: Record<string, string> = {
 };
 
 @ApiTags('Agent')
+@ApiBearerAuth()
 @Controller('agent')
 export class AgentController {
   private readonly maxContextDepth = 3;
@@ -406,6 +407,129 @@ export class AgentController {
     return this.buildLlmCatalog();
   }
 
+  @Get('llm/provider-models')
+  @ApiOperation({
+    summary: '获取 Provider 实时模型列表',
+    description:
+      '按 providerKey 从 llm catalog 读取 baseURL，并请求上游 `/v1beta/models` 返回实时模型清单。' +
+      '用于在 Swagger 中快速查看网关当前可用模型。',
+  })
+  @ApiQuery({
+    name: 'providerKey',
+    required: false,
+    description: 'Provider key（未传时使用 llm catalog 默认 provider）',
+  })
+  @ApiResponse({
+    status: 200,
+    description: '成功返回上游模型列表',
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'providerKey 无效、未配置 baseURL 或未配置 API Key',
+  })
+  @ApiResponse({
+    status: 502,
+    description: '请求上游模型接口失败',
+  })
+  async getProviderModels(@Query('providerKey') providerKey?: string): Promise<{
+    providerKey: string;
+    provider: LlmProviderName;
+    baseURL: string;
+    endpoint: string;
+    modelCount: number;
+    models: Array<{
+      name: string;
+      displayName: string;
+      inputTokenLimit: number | null;
+      outputTokenLimit: number | null;
+      reasoning: boolean;
+    }>;
+  }> {
+    const catalog = this.buildLlmCatalog();
+    const resolvedProviderKey =
+      typeof providerKey === 'string' && providerKey.trim().length > 0
+        ? providerKey.trim()
+        : catalog.defaultSelection.key;
+
+    const provider = catalog.providers.find((item) => item.key === resolvedProviderKey);
+    if (!provider) {
+      throw new HttpException(
+        {
+          code: 'llm_provider_not_found',
+          message: `Provider key "${resolvedProviderKey}" is not configured in llm catalog.`,
+        },
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+    if (!provider.baseURL || provider.baseURL.trim().length === 0) {
+      throw new HttpException(
+        {
+          code: 'llm_provider_baseurl_missing',
+          message: `Provider "${resolvedProviderKey}" does not define baseURL in llm catalog.`,
+        },
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+
+    const apiKey = this.resolveProviderApiKeyByKey(resolvedProviderKey);
+    if (!apiKey) {
+      throw new HttpException(
+        {
+          code: 'llm_provider_api_key_missing',
+          message: `Missing API key for provider "${resolvedProviderKey}". Please set AGENT_LLM_PROVIDER_${this.toProviderEnvToken(
+            resolvedProviderKey,
+          )}_API_KEY.`,
+        },
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+
+    const endpoint = this.buildProviderModelsEndpoint(provider.baseURL);
+
+    let upstreamResponse: Awaited<ReturnType<typeof fetch>>;
+    try {
+      upstreamResponse = await fetch(endpoint, {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+        },
+      });
+    } catch (error) {
+      throw new HttpException(
+        {
+          code: 'llm_models_fetch_failed',
+          message: `Failed to request upstream models endpoint: ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+        },
+        HttpStatus.BAD_GATEWAY,
+      );
+    }
+
+    if (!upstreamResponse.ok) {
+      const errorText = await upstreamResponse.text().catch(() => '');
+      throw new HttpException(
+        {
+          code: 'llm_models_fetch_failed',
+          message: `Upstream models endpoint returned ${upstreamResponse.status}. ${errorText}`.trim(),
+        },
+        HttpStatus.BAD_GATEWAY,
+      );
+    }
+
+    const payload = (await upstreamResponse.json().catch(() => ({}))) as unknown;
+    const models = this.extractUpstreamModels(payload);
+
+    return {
+      providerKey: resolvedProviderKey,
+      provider: provider.provider,
+      baseURL: provider.baseURL,
+      endpoint,
+      modelCount: models.length,
+      models,
+    };
+  }
+
   @Get('messages')
   @ApiOperation({
     summary: '获取某个会话/会话 Session 的 Agent 消息缓存',
@@ -456,6 +580,105 @@ export class AgentController {
   async getAgentList(@Req() req: Request): Promise<AgentListResponseDto> {
     const resolvedUserId = (req.user as { id?: string } | undefined)?.id;
     return this.agentListService.getAgentList(resolvedUserId);
+  }
+
+  private buildProviderModelsEndpoint(baseURL: string): string {
+    const normalized = baseURL.trim();
+    if (!normalized) {
+      return '/v1beta/models';
+    }
+
+    try {
+      const url = new URL('/v1beta/models', normalized.endsWith('/') ? normalized : `${normalized}/`);
+      return url.toString();
+    } catch {
+      return `${normalized.replace(/\/$/, '')}/v1beta/models`;
+    }
+  }
+
+  private resolveProviderApiKeyByKey(providerKey: string): string | undefined {
+    const envToken = this.toProviderEnvToken(providerKey);
+    const value =
+      process.env[`AGENT_LLM_PROVIDER_${envToken}_API_KEY`] ??
+      process.env[`LLM_PROVIDER_${envToken}_API_KEY`];
+    if (typeof value !== 'string') {
+      return undefined;
+    }
+    const trimmed = value.trim();
+    return trimmed.length > 0 ? trimmed : undefined;
+  }
+
+  private toProviderEnvToken(providerKey: string): string {
+    return providerKey
+      .trim()
+      .toUpperCase()
+      .replace(/[^A-Z0-9]+/g, '_')
+      .replace(/^_+|_+$/g, '')
+      .slice(0, 120);
+  }
+
+  private extractUpstreamModels(payload: unknown): Array<{
+    name: string;
+    displayName: string;
+    inputTokenLimit: number | null;
+    outputTokenLimit: number | null;
+    reasoning: boolean;
+  }> {
+    if (!this.isRecord(payload) || !Array.isArray(payload.models)) {
+      return [];
+    }
+
+    const models = payload.models
+      .map((item) => {
+        if (!this.isRecord(item) || typeof item.name !== 'string') {
+          return null;
+        }
+
+        const name = item.name.trim();
+        if (!name) {
+          return null;
+        }
+
+        const displayName =
+          typeof item.displayName === 'string' && item.displayName.trim().length > 0
+            ? item.displayName.trim()
+            : name;
+
+        const inputTokenLimit =
+          typeof item.inputTokenLimit === 'number' && Number.isFinite(item.inputTokenLimit)
+            ? item.inputTokenLimit
+            : null;
+        const outputTokenLimit =
+          typeof item.outputTokenLimit === 'number' && Number.isFinite(item.outputTokenLimit)
+            ? item.outputTokenLimit
+            : null;
+        const reasoning =
+          (this.isRecord(item.thinking) && Object.keys(item.thinking).length > 0) ||
+          item.thinking === true ||
+          name.toLowerCase().includes('thinking');
+
+        return {
+          name,
+          displayName,
+          inputTokenLimit,
+          outputTokenLimit,
+          reasoning,
+        };
+      })
+      .filter(
+        (
+          item,
+        ): item is {
+          name: string;
+          displayName: string;
+          inputTokenLimit: number | null;
+          outputTokenLimit: number | null;
+          reasoning: boolean;
+        } => item !== null,
+      )
+      .sort((a, b) => a.name.localeCompare(b.name));
+
+    return models;
   }
 
   private writeEvent(res: Response, event: AgentStreamEvent | AgentSseEvent): void {

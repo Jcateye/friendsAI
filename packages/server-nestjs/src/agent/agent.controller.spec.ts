@@ -761,6 +761,7 @@ describe('AgentController - POST /v1/agent/run', () => {
       LLM_PROVIDER: process.env.LLM_PROVIDER,
       LLM_MODEL: process.env.LLM_MODEL,
       LLM_MODELS_CLAUDE: process.env.LLM_MODELS_CLAUDE,
+      AGENT_LLM_PROVIDER_GEMINI_DOGE_API_KEY: process.env.AGENT_LLM_PROVIDER_GEMINI_DOGE_API_KEY,
     };
 
     afterEach(() => {
@@ -768,6 +769,8 @@ describe('AgentController - POST /v1/agent/run', () => {
       process.env.LLM_PROVIDER = envBackup.LLM_PROVIDER;
       process.env.LLM_MODEL = envBackup.LLM_MODEL;
       process.env.LLM_MODELS_CLAUDE = envBackup.LLM_MODELS_CLAUDE;
+      process.env.AGENT_LLM_PROVIDER_GEMINI_DOGE_API_KEY =
+        envBackup.AGENT_LLM_PROVIDER_GEMINI_DOGE_API_KEY;
     });
 
     it('should return env-based catalog when config file is unavailable', () => {
@@ -893,6 +896,72 @@ describe('AgentController - POST /v1/agent/run', () => {
           ]),
         );
       } finally {
+        fs.rmSync(tmpDir, { recursive: true, force: true });
+      }
+    });
+
+    it('should expose upstream provider models via llm/provider-models', async () => {
+      const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'friendsai-llm-upstream-models-'));
+      const configPath = path.join(tmpDir, 'opencode.json');
+      const fetchSpy = jest.spyOn(globalThis as any, 'fetch').mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          models: [
+            { name: 'gemini-2.5-pro', displayName: 'Gemini 2.5 Pro', thinking: {} },
+            { name: 'gemini-2.0-flash', displayName: 'Gemini 2.0 Flash' },
+          ],
+        }),
+      } as any);
+
+      try {
+        fs.writeFileSync(
+          configPath,
+          JSON.stringify(
+            {
+              version: 1,
+              defaultModel: 'gemini-doge/gemini-2.5-pro',
+              providers: {
+                'gemini-doge': {
+                  label: 'Gemini Doge Gateway',
+                  sdkProvider: 'gemini',
+                  baseURL: 'http://2000.run:6543',
+                  models: {
+                    'gemini-2.5-pro': {
+                      label: 'Gemini 2.5 Pro',
+                    },
+                  },
+                },
+              },
+            },
+            null,
+            2,
+          ),
+          'utf8',
+        );
+        process.env.AGENT_LLM_CATALOG_PATH = configPath;
+        process.env.AGENT_LLM_PROVIDER_GEMINI_DOGE_API_KEY = 'test-gemini-key';
+
+        const result = await controller.getProviderModels('gemini-doge');
+
+        expect(fetchSpy).toHaveBeenCalledWith(
+          'http://2000.run:6543/v1beta/models',
+          expect.objectContaining({
+            method: 'GET',
+            headers: expect.objectContaining({
+              Authorization: 'Bearer test-gemini-key',
+            }),
+          }),
+        );
+        expect(result.providerKey).toBe('gemini-doge');
+        expect(result.endpoint).toBe('http://2000.run:6543/v1beta/models');
+        expect(result.modelCount).toBe(2);
+        expect(result.models.map((item) => item.name)).toEqual([
+          'gemini-2.0-flash',
+          'gemini-2.5-pro',
+        ]);
+      } finally {
+        fetchSpy.mockRestore();
         fs.rmSync(tmpDir, { recursive: true, force: true });
       }
     });
