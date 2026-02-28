@@ -39,3 +39,4 @@ packages/*/.swc/
 
 # Logs
 logs/
+tmp
