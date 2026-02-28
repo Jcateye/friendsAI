@@ -27,10 +27,12 @@ export interface AgentComposerAttachment {
 
 export interface AgentComposerContext {
   enabledTools?: string[];
+  enabledSkills?: string[];
   attachments?: AgentComposerAttachment[];
   feishuEnabled?: boolean;
   thinkingEnabled?: boolean;
   inputMode?: 'text' | 'voice';
+  skillInputs?: Record<string, Record<string, unknown>>;
   skillActionId?: string;
   rawInputs?: Record<string, unknown>;
   [key: string]: unknown;
@@ -84,6 +86,8 @@ export interface AgentRunRequest {
     useCache?: boolean;
     /** 是否强制刷新（忽略缓存） */
     forceRefresh?: boolean;
+    /** 是否将结果写回当前 conversation */
+    persistMessage?: boolean;
   };
   /** 用户 ID */
   userId?: string;
@@ -137,6 +141,7 @@ export type AgentStreamPayload =
   | { event: 'agent.delta'; data: AgentMessageDelta }
   | { event: 'agent.message'; data: AgentMessage }
   | { event: 'tool.state'; data: ToolStateUpdate }
+  | { event: 'skill.state'; data: import('./client-types').SkillStateUpdate }
   | { event: 'context.patch'; data: AgentContextPatch }
   | { event: 'agent.end'; data: AgentRunEnd }
   | { event: 'error'; data: AgentError };

@@ -30,6 +30,14 @@ import type {
   SkillManifest,
 } from './skills.types';
 
+const SYSTEM_AGENT_KEYS = new Set([
+  'archive_brief',
+  'contact_insight',
+  'network_action',
+  'title_summary',
+  'chat_conversation',
+]);
+
 interface CreateSkillInput {
   key: string;
   displayName: string;
@@ -121,21 +129,21 @@ export class SkillsService {
 
     if (!this.dynamicActionsEnabled) {
       return {
-        items: builtin,
+        items: this.filterChatSkills(builtin),
         warnings: ['dynamic_skills_disabled'],
       };
     }
 
     if (!this.centerEnabled) {
       return {
-        items: builtin,
+        items: this.filterChatSkills(builtin),
         warnings: ['skill_center_disabled'],
       };
     }
 
     if (!this.catalogSchemaAvailable) {
       return {
-        items: builtin,
+        items: this.filterChatSkills(builtin),
         warnings: ['skill_center_schema_missing'],
       };
     }
@@ -154,7 +162,7 @@ export class SkillsService {
           'Skills tables are missing in DATABASE_URL_V3; falling back to builtin skill catalog until migrations are applied.',
         );
         return {
-          items: builtin,
+          items: this.filterChatSkills(builtin),
           warnings: ['skill_center_schema_missing'],
         };
       }
@@ -163,7 +171,7 @@ export class SkillsService {
         `Failed to resolve dynamic skills catalog, fallback to builtin: ${error instanceof Error ? error.message : String(error)}`,
       );
       return {
-        items: builtin,
+        items: this.filterChatSkills(builtin),
         warnings: ['skill_center_resolver_error'],
       };
     }
@@ -177,9 +185,26 @@ export class SkillsService {
     }
 
     return {
-      items: Array.from(merged.values()),
+      items: this.filterChatSkills(Array.from(merged.values())),
       warnings: resolved.warnings,
     };
+  }
+
+  async isChatSkillKey(
+    tenantId: string,
+    key: string,
+    options?: {
+      agentScope?: string;
+      capability?: string;
+    },
+  ): Promise<boolean> {
+    const normalized = key.trim();
+    if (!normalized || SYSTEM_AGENT_KEYS.has(normalized)) {
+      return false;
+    }
+
+    const catalog = await this.getCatalog(tenantId, options);
+    return catalog.items.some((item) => item.key === normalized);
   }
 
   async createSkill(userId: string | null, tenantId: string, input: CreateSkillInput): Promise<SkillDefinition> {
@@ -621,6 +646,10 @@ export class SkillsService {
     if (candidate.key && candidate.key !== skillKey) {
       throw new BadRequestException('manifest.key must match route skillKey');
     }
+  }
+
+  private filterChatSkills(items: SkillCatalogItem[]): SkillCatalogItem[] {
+    return items.filter((item) => !SYSTEM_AGENT_KEYS.has(item.key));
   }
 
   private exportVersionSnapshot(

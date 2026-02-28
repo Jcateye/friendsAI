@@ -14,12 +14,15 @@ export class ShanjiPlaywrightFetcher {
     2500,
   );
   private readonly headless = process.env.SHANJI_PLAYWRIGHT_HEADLESS !== 'false';
-  private readonly executablePath =
-    process.env.SHANJI_PLAYWRIGHT_EXECUTABLE_PATH?.trim() ||
-    process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH?.trim() ||
-    '';
+  private readonly executablePath = this.resolveExecutablePath();
   private readonly storageStatePath =
     process.env.SHANJI_PLAYWRIGHT_STORAGE_STATE_PATH?.trim() || '';
+  private readonly tokenAliasKeys = [
+    'dt-meeting-agent-token',
+    'meeting-agent-token',
+    'meetingAgentToken',
+    'agent-token',
+  ];
 
   async fetch(
     url: string,
@@ -43,8 +46,37 @@ export class ShanjiPlaywrightFetcher {
       );
     }
 
+    const headlessModes = this.resolveHeadlessModes(options?.meetingAgentToken);
+    let lastError: unknown;
+    for (const headless of headlessModes) {
+      try {
+        return await this.fetchWithHeadless(playwright, sourceUrl, headless, options);
+      } catch (error) {
+        lastError = error;
+        if (
+          !options?.meetingAgentToken ||
+          !this.isAuthRequiredError(error) ||
+          headlessModes[headlessModes.length - 1] === headless
+        ) {
+          throw error;
+        }
+      }
+    }
+
+    throw lastError instanceof Error ? lastError : new Error(String(lastError));
+  }
+
+  private async fetchWithHeadless(
+    playwright: { chromium: { launch: (options?: unknown) => Promise<any> } },
+    sourceUrl: string,
+    headless: boolean,
+    options?: {
+      meetingAgentToken?: string;
+      meetingAgentTokenKey?: string;
+    },
+  ): Promise<ShanjiFetchPayload> {
     const launchOptions: Record<string, unknown> = {
-      headless: this.headless,
+      headless,
       timeout: this.timeoutMs,
       args: ['--disable-dev-shm-usage', '--no-sandbox'],
     };
@@ -52,7 +84,12 @@ export class ShanjiPlaywrightFetcher {
       launchOptions.executablePath = this.executablePath;
     }
 
-    const browser = await playwright.chromium.launch(launchOptions);
+    let browser: any;
+    try {
+      browser = await playwright.chromium.launch(launchOptions);
+    } catch (error) {
+      throw this.toLaunchError(error);
+    }
     try {
       const contextOptions: Record<string, unknown> = {};
       if (this.storageStatePath && fs.existsSync(this.storageStatePath)) {
@@ -64,6 +101,7 @@ export class ShanjiPlaywrightFetcher {
       const page = await context.newPage();
 
       const apiPayloads: unknown[] = [];
+      const interestingResponses: Array<{ url: string; status: number; body?: unknown }> = [];
       page.on('response', async (response: any) => {
         const requestUrl = String(response.url?.() ?? '');
         if (!this.isInterestingNetworkUrl(requestUrl)) {
@@ -82,6 +120,11 @@ export class ShanjiPlaywrightFetcher {
         try {
           const payload = await response.json();
           apiPayloads.push(payload);
+          interestingResponses.push({
+            url: requestUrl,
+            status: typeof response.status === 'function' ? Number(response.status()) : 0,
+            body: payload,
+          });
         } catch {
           // ignore invalid json payloads
         }
@@ -91,6 +134,7 @@ export class ShanjiPlaywrightFetcher {
         waitUntil: 'domcontentloaded',
         timeout: this.timeoutMs,
       });
+      await this.waitForTranscriptSignals(page, options?.meetingAgentToken);
       await page.waitForTimeout(this.settleMs);
 
       const domData = (await page.evaluate(() => {
@@ -164,20 +208,33 @@ export class ShanjiPlaywrightFetcher {
 
       const networkSegments: ShanjiTranscriptSegment[] = [];
       const networkAudioCandidates: string[] = [];
+      let preferredTranscriptText = '';
       for (const payload of apiPayloads) {
         this.extractFromPayload(payload, networkSegments, networkAudioCandidates, 0);
+        const structuredTranscript = this.extractPreferredTranscriptText(payload);
+        if (structuredTranscript && structuredTranscript.length > preferredTranscriptText.length) {
+          preferredTranscriptText = structuredTranscript;
+        }
       }
 
       const domSegments = this.linesToSegments(domData.lineCandidates);
       const transcriptSegments = this.dedupeSegments([...networkSegments, ...domSegments]);
-      const transcriptText = transcriptSegments
-        .map((segment) => segment.text)
-        .join('\n')
-        .trim() || domData.bodyText.trim();
+      const transcriptText =
+        preferredTranscriptText ||
+        transcriptSegments
+          .map((segment) => segment.text)
+          .join('\n')
+          .trim() ||
+        domData.bodyText.trim();
 
       if (!transcriptText) {
         throw new Error('[shanji_playwright_empty] No transcript content extracted from page.');
       }
+
+      this.assertNoAuthInterstitial(
+        transcriptText,
+        interestingResponses.map((item) => item.body),
+      );
 
       const audioUrl = this.pickBestAudioUrl([
         ...networkAudioCandidates,
@@ -195,6 +252,19 @@ export class ShanjiPlaywrightFetcher {
     }
   }
 
+  private resolveHeadlessModes(meetingAgentToken?: string): boolean[] {
+    if (!meetingAgentToken) {
+      return [this.headless];
+    }
+
+    return this.headless ? [true, false] : [false, true];
+  }
+
+  private isAuthRequiredError(error: unknown): boolean {
+    const message = error instanceof Error ? error.message : String(error);
+    return message.includes('[shanji_auth_required]');
+  }
+
   private normalizeAndValidateUrl(url: string): string {
     const normalized = typeof url === 'string' ? url.trim() : '';
     if (!normalized) {
@@ -204,6 +274,69 @@ export class ShanjiPlaywrightFetcher {
       throw new Error('[shanji_url_invalid] Unsupported Shanji URL.');
     }
     return normalized;
+  }
+
+  private resolveExecutablePath(): string {
+    const explicit =
+      process.env.SHANJI_PLAYWRIGHT_EXECUTABLE_PATH?.trim() ||
+      process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH?.trim() ||
+      '';
+    if (explicit) {
+      return explicit;
+    }
+
+    for (const candidate of this.getBrowserExecutableCandidates()) {
+      if (candidate && fs.existsSync(candidate)) {
+        return candidate;
+      }
+    }
+
+    return '';
+  }
+
+  private getBrowserExecutableCandidates(): string[] {
+    switch (process.platform) {
+      case 'darwin':
+        return [
+          '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+          '/Applications/Chromium.app/Contents/MacOS/Chromium',
+          '/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge',
+        ];
+      case 'win32': {
+        const prefixes = [
+          process.env.PROGRAMFILES,
+          process.env['PROGRAMFILES(X86)'],
+          process.env.LOCALAPPDATA,
+        ].filter((value): value is string => typeof value === 'string' && value.trim().length > 0);
+        return prefixes.flatMap((prefix) => [
+          `${prefix}\\Google\\Chrome\\Application\\chrome.exe`,
+          `${prefix}\\Chromium\\Application\\chrome.exe`,
+          `${prefix}\\Microsoft\\Edge\\Application\\msedge.exe`,
+        ]);
+      }
+      default:
+        return [
+          '/usr/bin/google-chrome',
+          '/usr/bin/google-chrome-stable',
+          '/usr/bin/chromium',
+          '/usr/bin/chromium-browser',
+          '/snap/bin/chromium',
+          '/usr/bin/microsoft-edge',
+        ];
+    }
+  }
+
+  private toLaunchError(error: unknown): Error {
+    const message = error instanceof Error ? error.message : String(error);
+    if (message.includes("Executable doesn't exist")) {
+      const hint =
+        this.executablePath
+          ? `Configured executable not found: ${this.executablePath}`
+          : 'No browser executable was auto-detected. Set SHANJI_PLAYWRIGHT_EXECUTABLE_PATH or install Google Chrome / Chromium / Microsoft Edge.';
+      return new Error(`[shanji_playwright_launch_failed] ${hint}; original=${message}`);
+    }
+
+    return new Error(`[shanji_playwright_launch_failed] ${message}`);
   }
 
   private isInterestingNetworkUrl(url: string): boolean {
@@ -292,6 +425,62 @@ export class ShanjiPlaywrightFetcher {
       }
     }
     return undefined;
+  }
+
+  private extractPreferredTranscriptText(payload: unknown, depth = 0): string | undefined {
+    if (depth > 8 || payload === null || payload === undefined) {
+      return undefined;
+    }
+
+    if (Array.isArray(payload)) {
+      let longest = '';
+      for (const item of payload) {
+        const candidate = this.extractPreferredTranscriptText(item, depth + 1);
+        if (candidate && candidate.length > longest.length) {
+          longest = candidate;
+        }
+      }
+      return longest || undefined;
+    }
+
+    if (typeof payload !== 'object') {
+      return undefined;
+    }
+
+    const record = payload as Record<string, unknown>;
+    const fullTextSummary = this.readFullTextSummary(record);
+    if (fullTextSummary) {
+      return fullTextSummary;
+    }
+
+    let longest = '';
+    for (const value of Object.values(record)) {
+      const candidate = this.extractPreferredTranscriptText(value, depth + 1);
+      if (candidate && candidate.length > longest.length) {
+        longest = candidate;
+      }
+    }
+
+    return longest || undefined;
+  }
+
+  private readFullTextSummary(record: Record<string, unknown>): string | undefined {
+    const candidate = record.fullTextSummary;
+    if (typeof candidate === 'string') {
+      const normalized = candidate.replace(/\s+/g, ' ').trim();
+      return normalized.length > 20 ? normalized : undefined;
+    }
+    if (!candidate || typeof candidate !== 'object') {
+      return undefined;
+    }
+
+    const value = (candidate as Record<string, unknown>).value;
+    if (typeof value !== 'string') {
+      return undefined;
+    }
+
+    const normalized = value.trim();
+    return normalized.length > 20 ? normalized.slice(0, 120000) : undefined;
   }
 
   private pickAudioCandidate(record: Record<string, unknown>): string | undefined {
@@ -438,8 +627,8 @@ export class ShanjiPlaywrightFetcher {
       sameSite: 'Lax' | 'None' | 'Strict';
     }>) => Promise<void>;
     addInitScript: (
-      script: (input: { token: string; key: string }) => void,
-      arg: { token: string; key: string },
+      script: (input: { token: string; key: string; keys: string[] }) => void,
+      arg: { token: string; key: string; keys: string[] },
     ) => Promise<void>;
     },
     options?: {
@@ -460,35 +649,203 @@ export class ShanjiPlaywrightFetcher {
         ? options.meetingAgentTokenKey.trim()
         : 'dt-meeting-agent-token';
 
-    await context.addCookies([
-      {
-        name: tokenKey,
+    const cookieKeys = Array.from(new Set([tokenKey, ...this.tokenAliasKeys]));
+    await context.addCookies(
+      cookieKeys.map((key) => ({
+        name: key,
         value: token,
         domain: 'shanji.dingtalk.com',
         path: '/',
         secure: true,
         httpOnly: false,
-        sameSite: 'Lax',
-      },
-    ]);
+        sameSite: 'Lax' as const,
+      })),
+    );
 
     await context.addInitScript(
-      ({ token, key }) => {
+      ({ token, key, keys }) => {
         try {
-          localStorage.setItem(key, token);
+          for (const alias of keys) {
+            try {
+              localStorage.setItem(alias, token);
+            } catch {
+              // ignore storage errors
+            }
+            try {
+              sessionStorage.setItem(alias, token);
+            } catch {
+              // ignore storage errors
+            }
+          }
         } catch {
           // ignore storage errors
         }
         try {
-          sessionStorage.setItem(key, token);
+          document.cookie = `${encodeURIComponent(key)}=${encodeURIComponent(token)}; path=/; domain=shanji.dingtalk.com; secure; SameSite=Lax`;
         } catch {
-          // ignore storage errors
+          // ignore cookie write errors
         }
       },
       {
         token,
         key: tokenKey,
+        keys: cookieKeys,
       },
+    );
+  }
+
+  private async waitForTranscriptSignals(
+    page: {
+      waitForResponse: (
+        predicate: (response: any) => boolean,
+        options?: { timeout?: number },
+      ) => Promise<unknown>;
+      waitForFunction: (
+        pageFunction: () => boolean,
+        options?: { timeout?: number },
+      ) => Promise<unknown>;
+      waitForTimeout: (timeout: number) => Promise<void>;
+    },
+    meetingAgentToken?: string,
+  ): Promise<void> {
+    const authTimeout = Math.min(this.timeoutMs, 12000);
+    const transcriptTimeout = Math.min(this.timeoutMs, 18000);
+    const settleBoost = meetingAgentToken ? 5500 : 1500;
+
+    if (meetingAgentToken) {
+      await page
+        .waitForResponse(
+          (response: any) => {
+            const url = String(response.url?.() ?? '');
+            if (!this.isAuthBootstrapNetworkUrl(url)) {
+              return false;
+            }
+            const status = typeof response.status === 'function' ? Number(response.status()) : 0;
+            return status >= 200 && status < 500;
+          },
+          { timeout: authTimeout },
+        )
+        .catch(() => undefined);
+    }
+
+    const transcriptResponseWait = page
+      .waitForResponse(
+        (response: any) => {
+          const url = String(response.url?.() ?? '');
+          if (!this.isTranscriptBearingNetworkUrl(url)) {
+            return false;
+          }
+          const status = typeof response.status === 'function' ? Number(response.status()) : 0;
+          return status >= 200 && status < 500;
+        },
+        { timeout: transcriptTimeout },
+      )
+      .catch(() => undefined);
+
+    const domWait = page
+      .waitForFunction(
+        () => {
+          const text = (document.body?.innerText || '').replace(/\s+/g, ' ').trim();
+          return (
+            text.includes('AI 纪要') ||
+            text.includes('章节') ||
+            text.includes('发言人') ||
+            text.includes('会议主要围绕') ||
+            text.includes('开票流程') ||
+            text.includes('注册流程')
+          );
+        },
+        { timeout: transcriptTimeout },
+      )
+      .catch(() => undefined);
+
+    await Promise.race([transcriptResponseWait, domWait]);
+    await page.waitForTimeout(settleBoost);
+  }
+
+  private assertNoAuthInterstitial(
+    transcriptText: string,
+    responsePayloads: unknown[],
+  ): void {
+    const normalized = transcriptText.replace(/\s+/g, ' ').trim();
+    if (
+      this.containsMeaningfulTranscript(normalized) ||
+      responsePayloads.some((payload) => this.hasSuccessfulMeetingBrief(payload))
+    ) {
+      return;
+    }
+
+    const authMarkers = [
+      '欢迎使用企业账号',
+      '企业账号支持登录后用于办公',
+      '绑定手机号码',
+      '绑定邮箱',
+      '服务协议、隐私政策、企业账号使用须知',
+    ];
+    const authMarkerHits = authMarkers.reduce(
+      (count, marker) => count + (normalized.includes(marker) ? 1 : 0),
+      0,
+    );
+    if (authMarkerHits >= 2) {
+      throw new Error(
+        '[shanji_auth_required] Extracted page looks like a DingTalk login or enterprise account screen, not transcript content.',
+      );
+    }
+  }
+
+  private hasSuccessfulMeetingBrief(payload: unknown): boolean {
+    if (!payload || typeof payload !== 'object') {
+      return false;
+    }
+    const record = payload as Record<string, unknown>;
+    const data = record.data;
+    if (!data || typeof data !== 'object') {
+      return false;
+    }
+    const result = (data as Record<string, unknown>).result;
+    if (!result || typeof result !== 'object') {
+      return false;
+    }
+    return Boolean(this.readFullTextSummary(result as Record<string, unknown>));
+  }
+
+  private containsMeaningfulTranscript(text: string): boolean {
+    if (!text) {
+      return false;
+    }
+    const positiveMarkers = [
+      '会议主要围绕',
+      'AI 纪要',
+      '发言人',
+      '章节',
+      '税务工单',
+      '开票流程',
+      '发票开具',
+      '注册流程',
+    ];
+    return positiveMarkers.some((marker) => text.includes(marker));
+  }
+
+  private isAuthBootstrapNetworkUrl(url: string): boolean {
+    if (!url) {
+      return false;
+    }
+    return (
+      url.includes('generateDingUserToken') ||
+      url.includes('getUserInfo')
+    );
+  }
+
+  private isTranscriptBearingNetworkUrl(url: string): boolean {
+    if (!url) {
+      return false;
+    }
+    return (
+      url.includes('queryMeetingBrief') ||
+      url.includes('minutesDetailV') ||
+      url.includes('queryRecordingMinutesByBizInfo') ||
+      url.includes('listMinutesTextRecord') ||
+      url.includes('queryAudioSegments')
     );
   }
 }

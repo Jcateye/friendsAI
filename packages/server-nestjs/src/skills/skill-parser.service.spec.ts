@@ -15,6 +15,9 @@ describe('SkillParserService', () => {
 
     const result = service.parse({
       text,
+      composer: {
+        enabledSkills: ['dingtalk_shanji'],
+      },
       catalog,
     });
 
@@ -48,6 +51,9 @@ describe('SkillParserService', () => {
       'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ0ZXN0In0.signature';
     const result = service.parse({
       text: `请解析这个闪记 https://shanji.dingtalk.com/app/transcribes/demo\ndt-meeting-agent-token\n${token}`,
+      composer: {
+        enabledSkills: ['dingtalk_shanji'],
+      },
       catalog,
     });
 
@@ -62,5 +68,35 @@ describe('SkillParserService', () => {
       url: 'https://shanji.dingtalk.com/app/transcribes/demo',
       meetingAgentToken: token,
     });
+  });
+
+  it('should sanitize a pasted meeting token with accidental trailing label text', () => {
+    const catalog = getBuiltinSkillCatalog();
+    const cleanToken =
+      'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ0ZXN0In0.Xur5T8wNLbYOffhOZ2vqWS1xtL-xv7BwLmiyYLk7kOQ';
+    const result = service.parse({
+      text: `请解析这个闪记 https://shanji.dingtalk.com/app/transcribes/demo\ndt-meeting-agent-token\n${cleanToken}token`,
+      composer: {
+        enabledSkills: ['dingtalk_shanji'],
+      },
+      catalog,
+    });
+
+    expect(result.matched).toBe(true);
+    expect(result.args).toMatchObject({
+      url: 'https://shanji.dingtalk.com/app/transcribes/demo',
+      meetingAgentToken: cleanToken,
+    });
+  });
+
+  it('should not parse shanji link when skill is not enabled', () => {
+    const catalog = getBuiltinSkillCatalog();
+    const result = service.parse({
+      text: '请解析这个闪记 https://shanji.dingtalk.com/app/transcribes/demo',
+      catalog,
+    });
+
+    expect(result.matched).toBe(false);
+    expect(result.skillKey).toBeUndefined();
   });
 });

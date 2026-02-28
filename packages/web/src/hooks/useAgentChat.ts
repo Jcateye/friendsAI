@@ -8,7 +8,10 @@ import { useChat } from '@ai-sdk/react';
 import { DefaultChatTransport, type UIMessage } from 'ai';
 import type { AgentLlmRequest, ToolState } from '../lib/api/types';
 import { api, clearAuthToken } from '../lib/api/client';
-import { parseVercelAgentCustomDataLine } from '../lib/agent-stream/parseVercelAgentStream';
+import {
+  parseVercelAgentCustomDataLine,
+  type ParsedExecutionTraceStep,
+} from '../lib/agent-stream/parseVercelAgentStream';
 
 export interface ComposerAttachmentMetadata {
   name: string;
@@ -19,10 +22,12 @@ export interface ComposerAttachmentMetadata {
 
 export interface AgentComposerContext {
   enabledTools?: string[];
+  enabledSkills?: string[];
   attachments?: ComposerAttachmentMetadata[];
   feishuEnabled?: boolean;
   thinkingEnabled?: boolean;
   inputMode?: 'text' | 'voice';
+  skillInputs?: Record<string, Record<string, unknown>>;
   skillActionId?: string;
   rawInputs?: Record<string, unknown>;
 }
@@ -65,6 +70,26 @@ export interface AgentChatMessage {
   createdAt?: Date;
   createdAtMs?: number;
   [key: string]: unknown;
+}
+
+export interface ExecutionTraceStep {
+  id: string;
+  kind: 'agent' | 'tool' | 'skill';
+  itemId: string;
+  title: string;
+  status: string;
+  at?: string;
+  message?: string;
+  input?: unknown;
+  output?: unknown;
+  error?: unknown;
+}
+
+export interface ExecutionTrace {
+  steps: ExecutionTraceStep[];
+  startedAt?: string;
+  finishedAt?: string;
+  status?: string;
 }
 
 export interface UseAgentChatReturn {
@@ -140,6 +165,21 @@ function normalizeComposerContext(context: AgentComposerContext | undefined): Ag
     }
   }
 
+  if (Array.isArray(context.enabledSkills)) {
+    const enabledSkills = Array.from(
+      new Set(
+        context.enabledSkills
+          .filter((name): name is string => typeof name === 'string')
+          .map((name) => name.trim())
+          .filter((name) => name.length > 0),
+      ),
+    ).slice(0, 12);
+
+    if (enabledSkills.length > 0) {
+      normalized.enabledSkills = enabledSkills;
+    }
+  }
+
   if (Array.isArray(context.attachments)) {
     const attachments: ComposerAttachmentMetadata[] = [];
     for (const attachment of context.attachments) {
@@ -193,6 +233,19 @@ function normalizeComposerContext(context: AgentComposerContext | undefined): Ag
 
   if (context.inputMode === 'text' || context.inputMode === 'voice') {
     normalized.inputMode = context.inputMode;
+  }
+
+  if (isRecord(context.skillInputs)) {
+    const skillInputs: Record<string, Record<string, unknown>> = {};
+    for (const [skillKey, value] of Object.entries(context.skillInputs).slice(0, 20)) {
+      if (!isRecord(value)) {
+        continue;
+      }
+      skillInputs[skillKey] = value;
+    }
+    if (Object.keys(skillInputs).length > 0) {
+      normalized.skillInputs = skillInputs;
+    }
   }
 
   if (typeof context.skillActionId === 'string') {
@@ -376,6 +429,30 @@ function toLegacyMessages(messages: UIMessage[]): AgentChatMessage[] {
   }));
 }
 
+function cloneTrace(trace: ExecutionTrace): ExecutionTrace {
+  return {
+    steps: trace.steps.map((step) => ({ ...step })),
+    startedAt: trace.startedAt,
+    finishedAt: trace.finishedAt,
+    status: trace.status,
+  };
+}
+
+function toExecutionTraceStep(step: ParsedExecutionTraceStep): ExecutionTraceStep {
+  return {
+    id: step.id,
+    kind: step.kind,
+    itemId: step.itemId,
+    title: step.title,
+    status: step.status,
+    at: step.at,
+    message: step.message,
+    input: step.input,
+    output: step.output,
+    error: step.error,
+  };
+}
+
 /**
  * 自定义 fetch 函数，添加认证头并处理 401 错误
  */
@@ -422,6 +499,7 @@ function createFetchWithConversationId(
   onConversationCreated?: (conversationId: string) => void,
   getConversationId?: () => string | undefined,
   onAwaitingToolConfirmation?: (tool: ToolState) => void,
+  onExecutionStep?: (step: ExecutionTraceStep) => void,
   getNextComposerContext?: () => AgentComposerContext | undefined,
   getLlmConfig?: () => AgentLlmRequest | undefined,
 ): (input: RequestInfo | URL, init?: RequestInit) => Promise<Response> {
@@ -485,8 +563,8 @@ function createFetchWithConversationId(
     
     const response = await fetchWithAuth(input, modifiedInit);
     
-    // 如果不是流式响应，直接返回
-    if (!response.body || !onConversationCreated) {
+    // 如果没有流式 body，直接返回
+    if (!response.body) {
       return response;
     }
     
@@ -511,7 +589,7 @@ function createFetchWithConversationId(
           for (const line of lines) {
             const customData = parseVercelAgentCustomDataLine(line);
             if (customData) {
-              if (!conversationIdExtracted && customData.conversationId) {
+              if (!conversationIdExtracted && customData.conversationId && onConversationCreated) {
                 onConversationCreated(customData.conversationId);
                 conversationIdExtracted = true;
               }
@@ -527,6 +605,9 @@ function createFetchWithConversationId(
                   input: toolEvent.input as any,
                   message: toolEvent.message,
                 });
+              });
+              customData.executionSteps.forEach((step) => {
+                onExecutionStep?.(toExecutionTraceStep(step));
               });
             }
             
@@ -575,6 +656,17 @@ export function useAgentChat(
   const [input, setInput] = useState('');
 
   const [pendingConfirmations, setPendingConfirmations] = useState<ToolState[]>([]);
+  const activeTraceRef = useRef<ExecutionTrace>({ steps: [] });
+  const pendingTraceRef = useRef<ExecutionTrace | null>(null);
+  const attachedTraceMessageIdRef = useRef<string | null>(null);
+  const [messageTraceMap, setMessageTraceMap] = useState<Record<string, ExecutionTrace>>({});
+
+  useEffect(() => {
+    activeTraceRef.current = { steps: [] };
+    pendingTraceRef.current = null;
+    attachedTraceMessageIdRef.current = null;
+    setMessageTraceMap({});
+  }, [conversationId]);
 
   const fetchWithConversationId = useCallback(
     createFetchWithConversationId(
@@ -587,6 +679,31 @@ export function useAgentChat(
           }
           return [...prev, tool];
         });
+      },
+      (step) => {
+        const nextTrace = cloneTrace(activeTraceRef.current);
+        nextTrace.steps = [...nextTrace.steps, step];
+
+        if (!nextTrace.startedAt) {
+          nextTrace.startedAt = step.at ?? new Date().toISOString();
+        }
+
+        if (step.kind === 'agent' && ['succeeded', 'failed', 'cancelled'].includes(step.status)) {
+          nextTrace.finishedAt = step.at ?? new Date().toISOString();
+          nextTrace.status = step.status;
+          pendingTraceRef.current = cloneTrace(nextTrace);
+        }
+
+        activeTraceRef.current = nextTrace;
+
+        const attachedMessageId = attachedTraceMessageIdRef.current;
+        if (attachedMessageId) {
+          const attachedTrace = cloneTrace(nextTrace);
+          setMessageTraceMap((prev) => ({
+            ...prev,
+            [attachedMessageId]: attachedTrace,
+          }));
+        }
       },
       () => composerContextQueueRef.current.shift(),
       () => llmRef.current,
@@ -618,7 +735,29 @@ export function useAgentChat(
     transport,
     messages: toUiMessages(initialMessages),
   });
-  const messages = useMemo(() => toLegacyMessages(chat.messages), [chat.messages]);
+  const messages = useMemo(
+    () =>
+      toLegacyMessages(chat.messages).map((message) => {
+        const trace = messageTraceMap[message.id];
+        if (!trace) {
+          return message;
+        }
+
+        const existingMetadata =
+          typeof message.metadata === 'object' && message.metadata !== null && !Array.isArray(message.metadata)
+            ? (message.metadata as Record<string, unknown>)
+            : {};
+
+        return {
+          ...message,
+          metadata: {
+            ...existingMetadata,
+            executionTrace: trace,
+          },
+        };
+      }),
+    [chat.messages, messageTraceMap],
+  );
   const isLoading = chat.status === 'submitted' || chat.status === 'streaming';
 
   const messagesIdsStringRef = useRef('');
@@ -644,6 +783,32 @@ export function useAgentChat(
       });
     }
   }, [chat.messages, onToolConfirmation]);
+
+  useEffect(() => {
+    if (!pendingTraceRef.current) {
+      return;
+    }
+
+    const assistantMessages = chat.messages.filter((message) => message.role === 'assistant');
+    const latestAssistant = assistantMessages.at(-1);
+    if (!latestAssistant) {
+      return;
+    }
+
+    const latestAssistantText = getTextFromMessageParts(latestAssistant.parts);
+    if (latestAssistantText.trim().length === 0) {
+      return;
+    }
+
+    const trace = cloneTrace(pendingTraceRef.current);
+    attachedTraceMessageIdRef.current = latestAssistant.id;
+    setMessageTraceMap((prev) => ({
+      ...prev,
+      [latestAssistant.id]: trace,
+    }));
+    pendingTraceRef.current = null;
+    activeTraceRef.current = { steps: [] };
+  }, [chat.messages]);
 
   useEffect(() => {
     if (loadHistory && conversationId && initialMessages.length === 0) {
@@ -729,6 +894,10 @@ export function useAgentChat(
     if (composerContext) {
       composerContextQueueRef.current.push(composerContext);
     }
+
+    activeTraceRef.current = { steps: [] };
+    pendingTraceRef.current = null;
+    attachedTraceMessageIdRef.current = null;
 
     void chat.sendMessage({
       text: message,

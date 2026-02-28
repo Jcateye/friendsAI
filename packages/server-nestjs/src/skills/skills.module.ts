@@ -12,6 +12,7 @@ import {
 import { SkillBindingResolverService } from './skill-binding-resolver.service';
 import { SkillLoaderService } from './skill-loader.service';
 import { SkillParserService } from './skill-parser.service';
+import { ChatSkillsController } from './chat-skills.controller';
 import { SkillsController } from './skills.controller';
 import { SkillsService } from './skills.service';
 
@@ -30,7 +31,7 @@ import { SkillsService } from './skills.service';
       'v3',
     ),
   ],
-  controllers: [SkillsController],
+  controllers: [SkillsController, ChatSkillsController],
   providers: [SkillsService, SkillParserService, SkillBindingResolverService, SkillLoaderService],
   exports: [SkillsService, SkillParserService, SkillBindingResolverService, SkillLoaderService],
 })

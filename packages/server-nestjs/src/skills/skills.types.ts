@@ -6,7 +6,7 @@ export interface SkillManifestOperation {
   displayName?: string;
   description?: string;
   riskLevel?: 'low' | 'medium' | 'high';
-  run: {
+  run?: {
     agentId: SupportedAgentId | string;
     operation?: string | null;
     inputTemplate?: Record<string, unknown>;
@@ -29,7 +29,7 @@ export interface SkillActionOptionV2 {
   operation: string;
   name: string;
   description?: string;
-  run: {
+  run?: {
     agentId: string;
     operation?: string | null;
     inputTemplate?: Record<string, unknown>;

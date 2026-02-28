@@ -83,19 +83,21 @@ export class SkillBindingResolverService {
         version: version.version,
         status: version.status,
         parserRules: version.parserRules ?? undefined,
-        actions: manifest.operations.map((operation) => ({
-          actionId: `${definition.skillKey}:${operation.name}`,
-          skillKey: definition.skillKey,
-          operation: operation.name,
-          name: operation.displayName || operation.name,
-          description: operation.description,
-          run: {
-            agentId: operation.run?.agentId,
-            operation: operation.run?.operation,
-            inputTemplate: operation.run?.inputTemplate,
-          },
-          riskLevel: operation.riskLevel,
-        })),
+        actions: manifest.operations
+          .filter((operation) => operation.run?.agentId)
+          .map((operation) => ({
+            actionId: `${definition.skillKey}:${operation.name}`,
+            skillKey: definition.skillKey,
+            operation: operation.name,
+            name: operation.displayName || operation.name,
+            description: operation.description,
+            run: {
+              agentId: operation.run!.agentId,
+              operation: operation.run?.operation,
+              inputTemplate: operation.run?.inputTemplate,
+            },
+            riskLevel: operation.riskLevel,
+          })),
       });
     }
 
@@ -141,19 +143,21 @@ export class SkillBindingResolverService {
             if (pinnedManifest && Array.isArray(pinnedManifest.operations)) {
               target.version = pinnedVersion.version;
               target.status = pinnedVersion.status;
-              target.actions = pinnedManifest.operations.map((operation) => ({
-                actionId: `${definition.skillKey}:${operation.name}`,
-                skillKey: definition.skillKey,
-                operation: operation.name,
-                name: operation.displayName || operation.name,
-                description: operation.description,
-                run: {
-                  agentId: operation.run?.agentId,
-                  operation: operation.run?.operation,
-                  inputTemplate: operation.run?.inputTemplate,
-                },
-                riskLevel: operation.riskLevel,
-              }));
+              target.actions = pinnedManifest.operations
+                .filter((operation) => operation.run?.agentId)
+                .map((operation) => ({
+                  actionId: `${definition.skillKey}:${operation.name}`,
+                  skillKey: definition.skillKey,
+                  operation: operation.name,
+                  name: operation.displayName || operation.name,
+                  description: operation.description,
+                  run: {
+                    agentId: operation.run!.agentId,
+                    operation: operation.run?.operation,
+                    inputTemplate: operation.run?.inputTemplate,
+                  },
+                  riskLevel: operation.riskLevel,
+                }));
             }
           } else {
             warnings.push(`Pinned version not found: ${binding.skillKey}@${binding.pinnedVersion}`);

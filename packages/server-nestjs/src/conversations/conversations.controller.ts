@@ -75,4 +75,33 @@ export class ConversationsController {
       userId: req.user?.id,
     });
   }
+
+  @Post(':id/messages')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Append a message to a conversation' })
+  @ApiParam({ name: 'id', description: 'Conversation ID', type: String })
+  @ApiResponse({ status: 200, description: 'Message appended successfully' })
+  async appendMessage(
+    @Request() req: any,
+    @Param('id') id: string,
+    @Body()
+    body: {
+      id?: string;
+      role: string;
+      content: string;
+      metadata?: Record<string, unknown>;
+      citations?: Record<string, unknown>;
+      createdAtMs?: number;
+    },
+  ) {
+    return this.messagesService.appendMessage(id, {
+      id: body.id,
+      role: body.role,
+      content: body.content,
+      metadata: body.metadata,
+      citations: body.citations,
+      createdAtMs: body.createdAtMs,
+      userId: req.user?.id,
+    });
+  }
 }

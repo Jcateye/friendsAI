@@ -47,33 +47,6 @@ export class AgentOperationDto {
   outputSchema?: Record<string, unknown>;
 }
 
-export class AgentSkillActionDto {
-  @ApiProperty({ description: '动作 ID，前端可直接回传到 composer.skillActionId' })
-  actionId: string;
-
-  @ApiProperty({ description: '技能 key' })
-  skillKey: string;
-
-  @ApiProperty({ description: '操作名' })
-  operation: string;
-
-  @ApiProperty({ description: '展示名称' })
-  name: string;
-
-  @ApiProperty({ description: '动作描述' })
-  description?: string;
-
-  @ApiProperty({ description: '执行映射配置', type: Object })
-  run?: {
-    agentId: string;
-    operation?: string | null;
-    inputTemplate?: Record<string, unknown>;
-  };
-
-  @ApiProperty({ description: '风险等级' })
-  riskLevel?: 'low' | 'medium' | 'high';
-}
-
 /**
  * Agent 名片信息
  */
@@ -119,9 +92,48 @@ export class AgentInfoDto {
 
   @ApiProperty({ description: 'API 端点' })
   endpoint?: string;
+}
 
-  @ApiProperty({ description: '可触发的 skills actions', type: [AgentSkillActionDto] })
-  skillActions?: AgentSkillActionDto[];
+export class ChatAgentOperationDto {
+  @ApiProperty({ description: '会话内动作 ID' })
+  id: string;
+
+  @ApiProperty({ description: 'Agent ID' })
+  agentId: string;
+
+  @ApiProperty({ description: '动作显示名' })
+  name: string;
+
+  @ApiProperty({ description: '动作描述' })
+  description?: string;
+
+  @ApiProperty({ description: '对应的 operation', nullable: true })
+  operation?: string | null;
+
+  @ApiProperty({ description: '入口模式' })
+  entryMode: 'run';
+
+  @ApiProperty({ description: '默认输入模板', type: Object, required: false })
+  defaultInputTemplate?: Record<string, unknown>;
+}
+
+export class ChatAgentCatalogItemDto {
+  @ApiProperty({ description: 'Agent ID' })
+  agentId: string;
+
+  @ApiProperty({ description: 'Agent 显示名' })
+  name: string;
+
+  @ApiProperty({ description: 'Agent 描述' })
+  description?: string;
+
+  @ApiProperty({ description: '聊天入口可执行动作', type: [ChatAgentOperationDto] })
+  operations: ChatAgentOperationDto[];
+}
+
+export class AgentCatalogResponseDto {
+  @ApiProperty({ description: '聊天内可直达的系统级 Agent', type: [ChatAgentCatalogItemDto] })
+  items: ChatAgentCatalogItemDto[];
 }
 
 /**

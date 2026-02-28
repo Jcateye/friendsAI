@@ -17,15 +17,16 @@ import type {
   AgentRunResponse,
   AgentStreamEvent,
 } from './agent.types';
-import type { AgentError, AgentRunEnd, AgentSseEvent, JsonValue } from './client-types';
+import type { AgentError, AgentRunEnd, AgentSseEvent, JsonValue, SkillStateUpdate } from './client-types';
 import { VercelAiStreamAdapter } from './adapters/vercel-ai-stream.adapter';
 import { AgentListService } from './agent-list.service';
-import { AgentListResponseDto } from './dto/agent-list.dto';
+import { AgentCatalogResponseDto, AgentListResponseDto } from './dto/agent-list.dto';
 import { AgentRuntimeError } from './errors/agent-runtime.error';
 import { AgentRunMetricsService } from '../action-tracking/agent-run-metrics.service';
 import { generateUlid } from '../utils/ulid';
 import { SkillsService } from '../skills/skills.service';
 import { MessagesService } from '../conversations/messages.service';
+import { extractMeetingAgentToken } from '../skills/shanji/meeting-token.util';
 import { ShanjiExtractorService } from '../skills/shanji/shanji-extractor.service';
 import { EngineRouter } from './engines/engine.router';
 import { AgentLlmValidationError, findLegacyLlmFields, parseAgentLlmOrThrow } from './dto/agent-llm.schema';
@@ -37,6 +38,8 @@ const CATALOG_PROVIDER_OPTIONS_KEY_ALIAS_MAP: Record<string, string> = {
   'openai-compatible': 'openaiCompatible',
   openai_compatible: 'openaiCompatible',
 };
+
+type ChatRequestMessage = NonNullable<AgentChatRequest['messages']>[number];
 
 @ApiTags('Agent')
 @ApiBearerAuth()
@@ -163,12 +166,20 @@ export class AgentController {
         userId: resolvedUserId,
         llm: effectiveLlm,
       };
+      const enabledSkills = this.readEnabledSkills(
+        preparedRequest.context?.composer && this.isRecord(preparedRequest.context.composer)
+          ? (preparedRequest.context.composer as Record<string, unknown>)
+          : undefined,
+      );
+
+      if (!this.skillParserEnabled && enabledSkills.length > 0) {
+        console.warn(
+          `[agent.chat] composer.enabledSkills was provided (${enabledSkills.join(', ')}), but SKILL_INPUT_PARSER_ENABLED is not true. Request will fall back to normal chat.`,
+        );
+      }
 
       if (this.skillParserEnabled && this.skillsService && resolvedUserId) {
-        const parserText =
-          typeof body.prompt === 'string' && body.prompt.trim().length > 0
-            ? body.prompt
-            : this.extractLatestUserText(body.messages);
+        const parserText = this.buildSkillParserText(body);
 
         const parsedIntent = await this.skillsService.parseInvocationFromChat({
           tenantId: resolvedUserId,
@@ -342,6 +353,11 @@ export class AgentController {
     const userId = (req.user as { id?: string } | undefined)?.id ?? body.userId;
 
     try {
+      const skillMismatch = await this.resolveRunSurfaceMismatch(body.agentId, userId);
+      if (skillMismatch) {
+        throw new HttpException(skillMismatch.body, skillMismatch.statusCode);
+      }
+
       const normalizedLlm = this.validateAndNormalizeLlm(body);
       const result = await this.engineRouter.run(
         body.agentId,
@@ -359,6 +375,31 @@ export class AgentController {
           llm: normalizedLlm,
         }
       );
+
+      if (body.options?.persistMessage && body.conversationId) {
+        const content = this.buildAgentRunSummary(
+          body.agentId,
+          body.operation ?? null,
+          result.data,
+          result.cached,
+        );
+        const metadata = {
+          surface: 'agent_run',
+          agentId: body.agentId,
+          operation: body.operation ?? null,
+          runId: result.runId,
+          cached: result.cached,
+          dataPreview: this.buildAgentRunPreview(result.data),
+        } as Record<string, JsonValue>;
+        await this.persistAssistantSkillMessage({
+          conversationId: body.conversationId,
+          userId,
+          messageId: generateUlid(),
+          content,
+          createdAtMs: Date.now(),
+          metadata,
+        });
+      }
 
       const now = new Date();
       void this.agentRunMetricsService.recordRun({
@@ -584,8 +625,30 @@ export class AgentController {
     type: AgentListResponseDto,
   })
   async getAgentList(@Req() req: Request): Promise<AgentListResponseDto> {
-    const resolvedUserId = (req.user as { id?: string } | undefined)?.id;
-    return this.agentListService.getAgentList(resolvedUserId);
+    void req;
+    return this.agentListService.getAgentList();
+  }
+
+  @Get('catalog')
+  @ApiOperation({
+    summary: '获取 Chat 可直达的系统级 Agent catalog',
+    description: '返回聊天输入区中的系统级 Agent 分组数据，不包含聊天 skill。',
+  })
+  @ApiQuery({
+    name: 'surface',
+    required: false,
+    description: '当前入口 surface；仅支持 chat，未传默认按 chat 处理',
+  })
+  @ApiResponse({
+    status: 200,
+    description: '成功返回聊天内 Agent catalog',
+    type: AgentCatalogResponseDto,
+  })
+  getAgentCatalog(
+    @Query('surface') surface: 'chat' | string = 'chat',
+  ): AgentCatalogResponseDto {
+    void surface;
+    return this.agentListService.getChatCatalog();
   }
 
   private buildProviderModelsEndpoint(baseURL: string): string {
@@ -727,6 +790,148 @@ export class AgentController {
       }
     }
     return undefined;
+  }
+
+  private buildSkillParserText(body: AgentChatRequest): string | undefined {
+    const latestUserText =
+      typeof body.prompt === 'string' && body.prompt.trim().length > 0
+        ? body.prompt.trim()
+        : this.extractLatestUserText(body.messages)?.trim();
+
+    if (!latestUserText && !Array.isArray(body.messages)) {
+      return undefined;
+    }
+
+    const contextLines = this.extractRecentSkillContextLines(body.messages, latestUserText);
+    const parts = [latestUserText, ...contextLines].filter(
+      (value): value is string => typeof value === 'string' && value.trim().length > 0,
+    );
+
+    if (parts.length === 0) {
+      return undefined;
+    }
+
+    return parts.join('\n\n');
+  }
+
+  private extractRecentSkillContextLines(
+    messages: AgentChatRequest['messages'] | undefined,
+    latestUserText: string | undefined,
+  ): string[] {
+    if (!Array.isArray(messages) || messages.length === 0) {
+      return [];
+    }
+
+    const recentMessages = messages.slice(-8);
+    const latestShanjiUrl = this.findLatestTextMatch(
+      recentMessages,
+      /https?:\/\/shanji\.dingtalk\.com\/app\/transcribes\/[A-Za-z0-9_%\-]+/gi,
+    );
+    const latestMeetingToken = this.findLatestMeetingAgentToken(recentMessages);
+
+    const lines: string[] = [];
+    if (
+      latestShanjiUrl &&
+      !(latestUserText ?? '').includes(latestShanjiUrl)
+    ) {
+      lines.push(`Referenced Shanji URL: ${latestShanjiUrl}`);
+    }
+
+    if (
+      latestMeetingToken &&
+      !(latestUserText ?? '').includes(latestMeetingToken)
+    ) {
+      lines.push(`dt-meeting-agent-token\n${latestMeetingToken}`);
+    }
+
+    const recentUserMessages = recentMessages
+      .filter((message) => message?.role === 'user')
+      .map((message) => this.extractMessageText(message))
+      .filter((content): content is string => Boolean(content))
+      .filter((content) => content !== latestUserText)
+      .slice(-3);
+
+    if (recentUserMessages.length > 0) {
+      lines.push(
+        `Recent user context:\n${recentUserMessages
+          .map((content) => `- ${content.slice(0, 300)}`)
+          .join('\n')}`,
+      );
+    }
+
+    return lines;
+  }
+
+  private findLatestMeetingAgentToken(messages: ChatRequestMessage[]): string | undefined {
+    for (let index = messages.length - 1; index >= 0; index -= 1) {
+      const content = this.extractMessageText(messages[index]);
+      const candidate = extractMeetingAgentToken(content);
+      if (candidate) {
+        return candidate;
+      }
+    }
+
+    return undefined;
+  }
+
+  private findLatestTextMatch(
+    messages: ChatRequestMessage[],
+    pattern: RegExp,
+    projector?: (match: RegExpExecArray) => string | null,
+  ): string | undefined {
+    for (let index = messages.length - 1; index >= 0; index -= 1) {
+      const message = messages[index];
+      const content = this.extractMessageText(message);
+      if (!content) {
+        continue;
+      }
+
+      const matches = Array.from(content.matchAll(pattern));
+      if (matches.length === 0) {
+        continue;
+      }
+
+      for (let matchIndex = matches.length - 1; matchIndex >= 0; matchIndex -= 1) {
+        const match = matches[matchIndex];
+        const projected = projector ? projector(match) : match[0];
+        if (projected && projected.trim().length > 0) {
+          return projected.trim();
+        }
+      }
+    }
+
+    return undefined;
+  }
+
+  private extractMessageText(
+    message: ChatRequestMessage | undefined,
+  ): string | undefined {
+    if (!message) {
+      return undefined;
+    }
+
+    if (typeof message.content === 'string' && message.content.trim().length > 0) {
+      return message.content.trim();
+    }
+
+    if (!Array.isArray(message.content)) {
+      return undefined;
+    }
+
+    const text = message.content
+      .map((part: unknown) => {
+        if (typeof part === 'string') {
+          return part;
+        }
+        if (part && typeof part === 'object' && 'text' in part && typeof (part as any).text === 'string') {
+          return String((part as any).text);
+        }
+        return '';
+      })
+      .join(' ')
+      .trim();
+
+    return text.length > 0 ? text : undefined;
   }
 
   private async executeSkillIntentDirectly(input: {
@@ -900,13 +1105,47 @@ export class AgentController {
         ? input.parsedIntent.args.meetingAgentToken.trim()
         : '';
     const meetingAgentToken = tokenFromExecution || tokenFromArgs;
+    const outputMode =
+      typeof input.executionInput.outputMode === 'string'
+        ? input.executionInput.outputMode.trim()
+        : typeof input.parsedIntent.args?.outputMode === 'string'
+          ? input.parsedIntent.args.outputMode.trim()
+          : 'summary';
+    const skillId = input.parsedIntent.skillKey ?? 'dingtalk_shanji';
 
-    const extractResult = await this.shanjiExtractorService.extractFromUrl({
-      url: sourceUrl,
-      meetingAgentToken: meetingAgentToken || undefined,
+    this.writeSkillState(input.res, input.format, {
+      skillId,
+      status: 'running',
+      at: new Date().toISOString(),
+      input: {
+        url: sourceUrl,
+      },
+      message: '正在解析钉钉闪记',
     });
 
-    const summaryText = this.buildShanjiExecutionSummary(extractResult);
+    let extractResult;
+    try {
+      extractResult = await this.shanjiExtractorService.extractFromUrl({
+        url: sourceUrl,
+        meetingAgentToken: meetingAgentToken || undefined,
+      });
+    } catch (error) {
+      this.writeSkillState(input.res, input.format, {
+        skillId,
+        status: 'failed',
+        at: new Date().toISOString(),
+        input: {
+          url: sourceUrl,
+        },
+        error: {
+          code: 'skill_execution_failed',
+          message: error instanceof Error ? error.message : String(error),
+        },
+        message: '钉钉闪记解析失败',
+      });
+      throw error;
+    }
+    const renderedText = this.buildShanjiExecutionSummary(extractResult, outputMode === 'full_text' ? 'full_text' : 'summary');
     const runId = generateUlid();
     const messageId = generateUlid();
     const createdAtMs = Date.now();
@@ -926,16 +1165,62 @@ export class AgentController {
         transcriptText: extractResult.transcriptText,
         transcriptSegments: this.toJsonSafeTranscriptSegments(extractResult.transcriptSegments),
       },
+      executionTrace: {
+        status: 'succeeded',
+        steps: [
+          {
+            id: `${runId}-skill-running`,
+            kind: 'skill',
+            itemId: skillId,
+            title: skillId,
+            status: 'running',
+            message: '正在解析钉钉闪记',
+            input: {
+              url: sourceUrl,
+            },
+          },
+          {
+            id: `${runId}-skill-succeeded`,
+            kind: 'skill',
+            itemId: skillId,
+            title: skillId,
+            status: 'succeeded',
+            message: '钉钉闪记解析完成',
+            output: {
+              sourceUrl: extractResult.sourceUrl,
+              summary: extractResult.summary,
+              audioUrl: extractResult.audioUrl ?? null,
+              outputMode,
+            },
+          },
+        ],
+      },
     } as Record<string, JsonValue>;
 
     await this.persistAssistantSkillMessage({
       conversationId: input.runRequest.conversationId,
       userId: input.userId,
       messageId,
-      content: summaryText,
+      content: renderedText,
       createdAtMs,
       metadata,
     });
+
+    this.writeSkillState(input.res, input.format, {
+      skillId,
+      status: 'succeeded',
+      at: new Date().toISOString(),
+      input: {
+        url: sourceUrl,
+      },
+      output: {
+        sourceUrl: extractResult.sourceUrl,
+          summary: extractResult.summary,
+          audioUrl: extractResult.audioUrl ?? null,
+          outputMode,
+        },
+        message: '钉钉闪记解析完成',
+      });
 
     if (input.format === 'vercel-ai') {
       const skillAdapter = new VercelAiStreamAdapter();
@@ -944,13 +1229,13 @@ export class AgentController {
         data: {
           runId,
           createdAt,
-          input: summaryText,
+          input: renderedText,
         },
       });
       if (startChunk) input.res.write(startChunk);
       const deltaChunk = skillAdapter.transform({
         event: 'agent.delta',
-        data: { id: generateUlid(), delta: summaryText },
+        data: { id: generateUlid(), delta: renderedText },
       });
       if (deltaChunk) input.res.write(deltaChunk);
       const messageChunk = skillAdapter.transform({
@@ -958,7 +1243,7 @@ export class AgentController {
         data: {
           id: messageId,
           role: 'assistant',
-          content: summaryText,
+          content: renderedText,
           createdAt,
           createdAtMs,
         },
@@ -973,7 +1258,7 @@ export class AgentController {
       data: {
         runId,
         createdAt,
-        input: summaryText,
+        input: renderedText,
       },
     });
     this.writeEvent(input.res, {
@@ -981,7 +1266,7 @@ export class AgentController {
       data: {
         id: messageId,
         role: 'assistant',
-        content: summaryText,
+        content: renderedText,
         createdAt,
         createdAtMs,
         metadata,
@@ -993,7 +1278,7 @@ export class AgentController {
         runId,
         status: 'succeeded',
         finishedAt: new Date().toISOString(),
-        output: summaryText,
+        output: renderedText,
       },
     });
 
@@ -1005,16 +1290,43 @@ export class AgentController {
     keySnippets: string[];
     audioUrl?: string;
     sourceUrl: string;
-  }): string {
+    transcriptText?: string;
+  }, outputMode: 'summary' | 'full_text' = 'summary'): string {
     const snippetLines = result.keySnippets.slice(0, 5).map((snippet, idx) => `${idx + 1}. ${snippet}`);
     const sections = [
       '已解析钉钉闪记链接',
       `来源：${result.sourceUrl}`,
       `摘要：${result.summary}`,
       snippetLines.length > 0 ? `关键片段：\n${snippetLines.join('\n')}` : null,
+      outputMode === 'full_text' && result.transcriptText
+        ? `全文：\n${result.transcriptText.slice(0, 12000)}${result.transcriptText.length > 12000 ? '\n\n[全文过长，已截断展示]' : ''}`
+        : null,
       result.audioUrl ? `音频链接：${result.audioUrl}` : '音频链接：未解析到直链',
     ].filter((item): item is string => Boolean(item));
     return sections.join('\n\n');
+  }
+
+  private buildAgentRunSummary(
+    agentId: string,
+    operation: string | null,
+    data: Record<string, unknown>,
+    cached: boolean,
+  ): string {
+    const title = `${agentId}${operation ? ` / ${operation}` : ''}`;
+    const payload = JSON.stringify(data, null, 2);
+    const clipped = payload.length > 1200 ? `${payload.slice(0, 1197)}...` : payload;
+    return [
+      `已执行系统级 Agent：${title}${cached ? '（缓存命中）' : ''}`,
+      clipped,
+    ].join('\n\n');
+  }
+
+  private buildAgentRunPreview(data: Record<string, unknown>): JsonValue {
+    const payload = JSON.stringify(data);
+    if (payload.length <= 500) {
+      return data as JsonValue;
+    }
+    return payload.slice(0, 497) + '...';
   }
 
   private async persistAssistantSkillMessage(input: {
@@ -1041,6 +1353,62 @@ export class AgentController {
     } catch {
       // Persist failure should not block skill stream response.
     }
+  }
+
+  private async resolveRunSurfaceMismatch(
+    agentId: string,
+    userId?: string,
+  ): Promise<{
+    statusCode: number;
+    body: {
+      code: string;
+      message: string;
+      retryable?: boolean;
+    };
+  } | null> {
+    if (!this.skillsService || !userId) {
+      return null;
+    }
+
+    try {
+      const isChatSkill = await this.skillsService.isChatSkillKey(userId, agentId);
+      if (!isChatSkill) {
+        return null;
+      }
+
+      return {
+        statusCode: HttpStatus.BAD_REQUEST,
+        body: {
+          code: 'surface_mismatch',
+          message: 'Requested capability is a chat skill, not a system agent.',
+          retryable: false,
+        },
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  private writeSkillState(
+    res: Response,
+    format: 'sse' | 'vercel-ai',
+    update: SkillStateUpdate,
+  ): void {
+    const event: AgentStreamEvent = {
+      event: 'skill.state',
+      data: update,
+    };
+
+    if (format === 'vercel-ai') {
+      const adapter = new VercelAiStreamAdapter();
+      const transformed = adapter.transform(event);
+      if (transformed) {
+        res.write(transformed);
+      }
+      return;
+    }
+
+    this.writeEvent(res, event);
   }
 
   private toJsonSafeTranscriptSegments(segments: Array<{
@@ -1130,6 +1498,21 @@ export class AgentController {
       }
     }
 
+    if (Array.isArray(value.enabledSkills)) {
+      const enabledSkills = Array.from(
+        new Set(
+          value.enabledSkills
+            .filter((skill): skill is string => typeof skill === 'string')
+            .map((skill) => skill.trim().slice(0, 64))
+            .filter((skill) => skill.length > 0),
+        ),
+      ).slice(0, this.maxComposerTools);
+
+      if (enabledSkills.length > 0) {
+        sanitized.enabledSkills = enabledSkills;
+      }
+    }
+
     if (Array.isArray(value.attachments)) {
       const attachments = value.attachments
         .map((attachment) => this.sanitizeComposerAttachment(attachment))
@@ -1153,9 +1536,17 @@ export class AgentController {
       sanitized.inputMode = value.inputMode;
     }
 
+    if (value.skillInputs !== undefined) {
+      const skillInputs = this.sanitizeGenericContextValue(value.skillInputs, 0);
+      if (this.isRecord(skillInputs)) {
+        sanitized.skillInputs = skillInputs as Record<string, Record<string, unknown>>;
+      }
+    }
+
     if (typeof value.skillActionId === 'string') {
       const skillActionId = value.skillActionId.trim().slice(0, 160);
       if (skillActionId.length > 0) {
+        console.warn('[agent.chat] composer.skillActionId is deprecated; use enabledSkills/skillInputs instead.');
         sanitized.skillActionId = skillActionId;
       }
     }
@@ -1163,6 +1554,7 @@ export class AgentController {
     if (value.rawInputs !== undefined) {
       const rawInputs = this.sanitizeGenericContextValue(value.rawInputs, 0);
       if (this.isRecord(rawInputs)) {
+        console.warn('[agent.chat] composer.rawInputs is deprecated; use skillInputs instead.');
         sanitized.rawInputs = rawInputs as Record<string, unknown>;
       }
     }
@@ -1172,6 +1564,21 @@ export class AgentController {
     }
 
     return sanitized;
+  }
+
+  private readEnabledSkills(composer: Record<string, unknown> | undefined): string[] {
+    if (!composer || !Array.isArray(composer.enabledSkills)) {
+      return [];
+    }
+
+    return Array.from(
+      new Set(
+        composer.enabledSkills
+          .filter((skill): skill is string => typeof skill === 'string')
+          .map((skill) => skill.trim())
+          .filter((skill) => skill.length > 0),
+      ),
+    );
   }
 
   private sanitizeComposerAttachment(value: unknown): AgentComposerAttachment | undefined {

@@ -17,6 +17,7 @@ import type {
   // Conversation
   Conversation,
   CreateConversationRequest,
+  AppendConversationMessageRequest,
   Message,
   GetMessagesRequest,
   // Event
@@ -46,6 +47,8 @@ import type {
   FeishuOAuthValidResponse,
   FeishuOAuthDeleteResponse,
   FeishuOAuthCallbackResponse,
+  AgentCatalogResponse,
+  ChatSkillCatalogResponse,
   SkillCatalogResponse,
   SkillInvocationIntentResponse,
   AgentLlmRequest,
@@ -369,6 +372,17 @@ export const api = {
       const response = await fetchWithAuth(`${API_BASE}/conversations/${request.conversationId}/messages?${params}`);
       return handleResponse<Message[]>(response);
     },
+
+    async appendMessage(
+      conversationId: string,
+      request: AppendConversationMessageRequest,
+    ): Promise<Message> {
+      const response = await fetchWithAuth(`${API_BASE}/conversations/${conversationId}/messages`, {
+        method: 'POST',
+        body: JSON.stringify(request),
+      });
+      return handleResponse<Message>(response);
+    },
   },
 
   /**
@@ -551,6 +565,16 @@ export const api = {
    * Agent 相关 API（统一的 /agent/run）
    */
   agent: {
+    async getCatalog(params?: {
+      surface?: 'chat';
+    }): Promise<AgentCatalogResponse> {
+      const search = new URLSearchParams();
+      if (params?.surface) search.set('surface', params.surface);
+      const query = search.toString();
+      const response = await fetchWithAuth(`${API_BASE}/agent/catalog${query ? `?${query}` : ''}`);
+      return handleResponse<AgentCatalogResponse>(response);
+    },
+
     /**
      * 获取可选的 LLM provider/model 目录
      */
@@ -753,6 +777,18 @@ export const api = {
   },
 
   skills: {
+    async getChatCatalog(params?: {
+      agentScope?: string;
+      capability?: string;
+    }): Promise<ChatSkillCatalogResponse> {
+      const search = new URLSearchParams();
+      if (params?.agentScope) search.set('agentScope', params.agentScope);
+      if (params?.capability) search.set('capability', params.capability);
+      const query = search.toString();
+      const response = await fetchWithAuth(`${API_BASE}/chat/skills/catalog${query ? `?${query}` : ''}`);
+      return handleResponse<ChatSkillCatalogResponse>(response);
+    },
+
     async getCatalog(params?: {
       agentScope?: string;
       capability?: string;

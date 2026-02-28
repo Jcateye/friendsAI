@@ -6,9 +6,24 @@ export interface ParsedAwaitingToolEvent {
   message?: string;
 }
 
+export interface ParsedExecutionTraceStep {
+  id: string;
+  kind: 'agent' | 'tool' | 'skill';
+  itemId: string;
+  title: string;
+  status: string;
+  at?: string;
+  message?: string;
+  input?: unknown;
+  output?: unknown;
+  error?: unknown;
+  runId?: string;
+}
+
 export interface ParsedVercelAgentCustomData {
   conversationId?: string;
   awaitingTools: ParsedAwaitingToolEvent[];
+  executionSteps: ParsedExecutionTraceStep[];
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -83,6 +98,7 @@ function parseSingleChunk(
       return {
         conversationId: data.conversationId,
         awaitingTools: [],
+        executionSteps: [],
       };
     }
   }
@@ -112,6 +128,43 @@ function parseSingleChunk(
               typeof data.message === 'string' ? data.message : undefined,
           },
         ],
+        executionSteps: [],
+      };
+    }
+  }
+
+  if (
+    chunk.type === 'data-execution-step' &&
+    isRecord(chunk.data) &&
+    typeof chunk.id === 'string'
+  ) {
+    const data = chunk.data;
+    const kind =
+      data.kind === 'agent' || data.kind === 'tool' || data.kind === 'skill'
+        ? data.kind
+        : undefined;
+    const itemId = typeof data.itemId === 'string' ? data.itemId : undefined;
+    const title = typeof data.title === 'string' ? data.title : undefined;
+    const status = typeof data.status === 'string' ? data.status : undefined;
+
+    if (kind && itemId && title && status) {
+      return {
+        awaitingTools: [],
+        executionSteps: [
+          {
+            id: chunk.id,
+            kind,
+            itemId,
+            title,
+            status,
+            at: typeof data.at === 'string' ? data.at : undefined,
+            message: typeof data.message === 'string' ? data.message : undefined,
+            input: data.input,
+            output: data.output,
+            error: data.error,
+            runId: typeof data.runId === 'string' ? data.runId : undefined,
+          },
+        ],
       };
     }
   }
@@ -127,6 +180,7 @@ function parseLegacyArray(
 ): ParsedVercelAgentCustomData | null {
   let conversationId: string | undefined;
   const awaitingTools: ParsedAwaitingToolEvent[] = [];
+  const executionSteps: ParsedExecutionTraceStep[] = [];
 
   for (const event of events) {
     if (!isRecord(event)) {
@@ -159,15 +213,40 @@ function parseLegacyArray(
         message:
           typeof event.message === 'string' ? event.message : undefined,
       });
+      continue;
+    }
+
+    if (
+      event.type === 'execution.step' &&
+      typeof event.id === 'string' &&
+      (event.kind === 'agent' || event.kind === 'tool' || event.kind === 'skill') &&
+      typeof event.itemId === 'string' &&
+      typeof event.title === 'string' &&
+      typeof event.status === 'string'
+    ) {
+      executionSteps.push({
+        id: event.id,
+        kind: event.kind,
+        itemId: event.itemId,
+        title: event.title,
+        status: event.status,
+        at: typeof event.at === 'string' ? event.at : undefined,
+        message: typeof event.message === 'string' ? event.message : undefined,
+        input: event.input,
+        output: event.output,
+        error: event.error,
+        runId: typeof event.runId === 'string' ? event.runId : undefined,
+      });
     }
   }
 
-  if (!conversationId && awaitingTools.length === 0) {
+  if (!conversationId && awaitingTools.length === 0 && executionSteps.length === 0) {
     return null;
   }
 
   return {
     conversationId,
     awaitingTools,
+    executionSteps,
   };
 }

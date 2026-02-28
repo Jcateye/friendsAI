@@ -32,6 +32,23 @@ export interface ToolStateUpdate {
   error?: AgentError;
 }
 
+export type SkillStatus =
+  | 'queued'
+  | 'running'
+  | 'succeeded'
+  | 'failed'
+  | 'skipped';
+
+export interface SkillStateUpdate {
+  skillId: string;
+  status: SkillStatus;
+  at: IsoDateString;
+  message?: string;
+  input?: JsonValue;
+  output?: JsonValue;
+  error?: AgentError;
+}
+
 export type AgentMessageRole = 'system' | 'user' | 'assistant' | 'tool';
 
 export interface AgentReference {
@@ -162,6 +179,7 @@ export type AgentSseEvent =
   | SseEvent<'agent.delta', AgentMessageDelta>
   | SseEvent<'agent.message', AgentMessage>
   | SseEvent<'tool.state', ToolStateUpdate>
+  | SseEvent<'skill.state', SkillStateUpdate>
   | SseEvent<'context.patch', AgentContextPatch>
   | SseEvent<'agent.end', AgentRunEnd>
   | SseEvent<'error', AgentError>

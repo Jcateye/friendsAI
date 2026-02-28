@@ -206,6 +206,15 @@ export interface Message {
   createdAtMs?: number;
 }
 
+export interface AppendConversationMessageRequest {
+  id?: string;
+  role: string;
+  content: string;
+  metadata?: Record<string, unknown>;
+  citations?: Record<string, unknown>;
+  createdAtMs?: number;
+}
+
 export interface GetMessagesRequest {
   conversationId: string;
   limit?: number;
@@ -389,6 +398,27 @@ export interface ToolState {
   };
 }
 
+export interface ChatAgentCatalogOperation {
+  id: string;
+  agentId: string;
+  name: string;
+  description?: string;
+  operation?: string | null;
+  entryMode: 'run';
+  defaultInputTemplate?: Record<string, unknown>;
+}
+
+export interface ChatAgentCatalogItem {
+  agentId: string;
+  name: string;
+  description?: string;
+  operations: ChatAgentCatalogOperation[];
+}
+
+export interface AgentCatalogResponse {
+  items: ChatAgentCatalogItem[];
+}
+
 // ==================== Daily Action Digest ====================
 
 export interface DailyActionDigestItem {
@@ -535,6 +565,11 @@ export interface SkillCatalogItem {
 }
 
 export interface SkillCatalogResponse {
+  items: SkillCatalogItem[];
+  warnings: string[];
+}
+
+export interface ChatSkillCatalogResponse {
   items: SkillCatalogItem[];
   warnings: string[];
 }

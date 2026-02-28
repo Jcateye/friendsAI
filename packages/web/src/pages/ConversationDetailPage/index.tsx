@@ -3,7 +3,13 @@ import { useParams, useLocation, useNavigate } from 'react-router-dom';
 import { Header } from '../../components/layout/Header';
 import { CustomMessageRenderer } from '../../components/chat/CustomMessageRenderer';
 import { ToolConfirmationOverlay } from '../../components/chat/ToolConfirmationOverlay';
-import { ChatInputBox, type ChatComposerSubmitPayload, type SkillActionOption, type ToolOption } from '../../components/chat/ChatInputBox';
+import {
+  ChatInputBox,
+  type ChatAgentActionOption,
+  type ChatComposerSubmitPayload,
+  type ChatSkillOption,
+  type ToolOption,
+} from '../../components/chat/ChatInputBox';
 import { ArchiveApplyPanel } from '../../components/chat/ArchiveApplyPanel';
 import { useConversationHistory } from '../../hooks/useConversationHistory';
 import { useAgentChat, type AgentChatMessage } from '../../hooks/useAgentChat';
@@ -11,7 +17,12 @@ import { useToolConfirmations } from '../../hooks/useToolConfirmations';
 import { sortMessagesByCreatedAt } from '../../lib/messages/sortMessagesByCreatedAt';
 import { resolveEpochMs } from '../../lib/time/timestamp';
 import type { ArchiveExtractData } from '../../lib/api/agent-types';
-import type { AgentLlmCatalogResponse, AgentLlmRequest, SkillCatalogItem } from '../../lib/api/types';
+import type {
+  AgentLlmCatalogResponse,
+  AgentLlmRequest,
+  ChatAgentCatalogItem,
+  SkillCatalogItem,
+} from '../../lib/api/types';
 import { api } from '../../lib/api/client';
 
 type MessageWithMs = AgentChatMessage & {
@@ -66,52 +77,76 @@ const AVAILABLE_CHAT_TOOLS: ToolOption[] = [
   },
 ];
 
-const COMPOSER_SKILL_ACTIONS: SkillActionOption[] = [
+const FALLBACK_AGENT_ACTIONS: ChatAgentActionOption[] = [
   {
-    id: 'skill_archive_extract',
-    name: '会话归档',
+    id: 'archive_brief:archive_extract',
+    name: '提取归档',
     description: '提取归档并显示应用面板',
-    skillId: 'archive_brief',
+    agentId: 'archive_brief',
     operation: 'archive_extract',
+    entryMode: 'run',
   },
   {
-    id: 'skill_brief_generate',
+    id: 'archive_brief:brief_generate',
     name: '生成简报',
-    description: '联系人详情页可生成会前简报',
-    skillId: 'archive_brief',
+    description: '基于当前对话联系人生成会前简报',
+    agentId: 'archive_brief',
     operation: 'brief_generate',
+    entryMode: 'run',
   },
   {
-    id: 'skill_contact_insight',
+    id: 'contact_insight:default',
     name: '联系人洞察',
-    description: '联系人详情页可生成洞察分析',
-    skillId: 'contact_insight',
+    description: '对当前对话联系人生成洞察分析',
+    agentId: 'contact_insight',
+    operation: null,
+    entryMode: 'run',
+    defaultInputTemplate: {
+      depth: 'standard',
+    },
+  },
+  {
+    id: 'network_action:default',
+    name: '生成行动建议',
+    description: '生成全局关系行动建议',
+    agentId: 'network_action',
+    operation: null,
+    entryMode: 'run',
   },
 ];
 
-function mapCatalogToSkillActions(items: SkillCatalogItem[]): SkillActionOption[] {
-  const actions: SkillActionOption[] = [];
-  const seen = new Set<string>();
+const FALLBACK_SKILLS: ChatSkillOption[] = [
+  {
+    key: 'dingtalk_shanji',
+    name: '解析闪记',
+    description: '点亮后可解析钉钉闪记链接',
+  },
+];
 
+function mapAgentCatalogToActions(items: ChatAgentCatalogItem[]): ChatAgentActionOption[] {
+  const actions: ChatAgentActionOption[] = [];
   for (const item of items) {
-    for (const action of item.actions) {
-      const actionId = action.actionId || `${item.key}:${action.operation}`;
-      if (seen.has(actionId)) {
-        continue;
-      }
-      seen.add(actionId);
+    for (const action of item.operations) {
       actions.push({
-        id: actionId,
+        id: action.id,
         name: action.name,
         description: action.description,
-        skillId: action.skillKey,
-        operation: action.operation === 'default' ? undefined : action.operation,
-        run: action.run,
+        agentId: action.agentId,
+        operation: action.operation,
+        entryMode: 'run',
+        defaultInputTemplate: action.defaultInputTemplate,
       });
     }
   }
-
   return actions;
+}
+
+function mapCatalogToSkills(items: SkillCatalogItem[]): ChatSkillOption[] {
+  return items.map((item) => ({
+    key: item.key,
+    name: item.displayName,
+    description: item.description,
+  }));
 }
 
 function toLlmSelectionId(providerKey: string, model: string): string {
@@ -180,9 +215,37 @@ export function ConversationDetailPage() {
         content: message.content,
         createdAt: new Date(createdAtMs),
         createdAtMs,
+        metadata: message.metadata ?? undefined,
       };
     });
   }, [historyMessages]);
+
+  const [conversation, setConversation] = useState<{ id: string; contactId?: string | null } | null>(null);
+  const [localAssistantMessages, setLocalAssistantMessages] = useState<MessageWithMs[]>([]);
+
+  useEffect(() => {
+    if (!conversationId) {
+      setConversation(null);
+      return;
+    }
+
+    let disposed = false;
+    void api.conversations.get(conversationId)
+      .then((result) => {
+        if (!disposed) {
+          setConversation(result);
+        }
+      })
+      .catch(() => {
+        if (!disposed) {
+          setConversation(null);
+        }
+      });
+
+    return () => {
+      disposed = true;
+    };
+  }, [conversationId]);
 
   // 处理后端返回的 conversationId
   const handleConversationCreated = useCallback((newConversationId: string) => {
@@ -416,6 +479,10 @@ export function ConversationDetailPage() {
         }
       }
     });
+
+    localAssistantMessages.forEach((message) => {
+      allMessages.set(message.id, message);
+    });
     
     // 最后，确保所有备份的用户消息都在最终列表中（防止 stop 时被移除）
     userMessagesBackupRef.current.forEach((backupMsg, backupId) => {
@@ -438,7 +505,7 @@ export function ConversationDetailPage() {
     });
 
     return sortMessagesByCreatedAt(Array.from(allMessages.values()));
-  }, [initialMessages, chat.messages]);
+  }, [initialMessages, chat.messages, localAssistantMessages]);
 
   const visibleMessages = useMemo(
     () =>
@@ -557,6 +624,7 @@ export function ConversationDetailPage() {
     chat.sendMessage(payload.content, {
       composerContext: {
         enabledTools: payload.tools,
+        enabledSkills: payload.skills,
         attachments: payload.files.map((item) => ({
           name: item.file.name,
           mimeType: item.file.type || undefined,
@@ -575,12 +643,12 @@ export function ConversationDetailPage() {
     chat.stop();
   }, [chat]);
 
-  // 技能执行状态
-  const [skillLoading, setSkillLoading] = useState(false);
-  const [skillResult, setSkillResult] = useState<string | null>(null);
+  const [agentActionLoading, setAgentActionLoading] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
   const [archiveData, setArchiveData] = useState<ArchiveExtractData | null>(null);
   const [showArchivePanel, setShowArchivePanel] = useState(false);
-  const [dynamicSkillActions, setDynamicSkillActions] = useState<SkillActionOption[]>(COMPOSER_SKILL_ACTIONS);
+  const [dynamicAgentActions, setDynamicAgentActions] = useState<ChatAgentActionOption[]>(FALLBACK_AGENT_ACTIONS);
+  const [dynamicSkills, setDynamicSkills] = useState<ChatSkillOption[]>(FALLBACK_SKILLS);
 
   // 获取现有联系人列表（用于去重检查）
   const [existingContacts, setExistingContacts] = useState<any[]>([]);
@@ -601,54 +669,85 @@ export function ConversationDetailPage() {
   useEffect(() => {
     let disposed = false;
 
-    const loadSkillCatalog = async () => {
+    const loadCatalogs = async () => {
       try {
-        const catalog = await api.skills.getCatalog({
-          agentScope: conversationId || 'chat_conversation',
-          capability: 'chat',
-        });
-        const mappedActions = mapCatalogToSkillActions(catalog.items);
+        const [agentCatalog, skillCatalog] = await Promise.all([
+          api.agent.getCatalog({ surface: 'chat' }),
+          api.skills.getChatCatalog({
+            agentScope: conversationId || 'chat_conversation',
+            capability: 'chat',
+          }),
+        ]);
 
         if (!disposed) {
-          setDynamicSkillActions(
-            mappedActions.length > 0 ? mappedActions : COMPOSER_SKILL_ACTIONS,
+          setDynamicAgentActions(
+            agentCatalog.items.length > 0 ? mapAgentCatalogToActions(agentCatalog.items) : FALLBACK_AGENT_ACTIONS,
+          );
+          setDynamicSkills(
+            skillCatalog.items.length > 0 ? mapCatalogToSkills(skillCatalog.items) : FALLBACK_SKILLS,
           );
         }
       } catch {
         if (!disposed) {
-          setDynamicSkillActions(COMPOSER_SKILL_ACTIONS);
+          setDynamicAgentActions(FALLBACK_AGENT_ACTIONS);
+          setDynamicSkills(FALLBACK_SKILLS);
         }
       }
     };
 
-    void loadSkillCatalog();
+    void loadCatalogs();
     return () => {
       disposed = true;
     };
   }, [conversationId]);
 
-  // 处理技能选择
-  const handleSkillSelect = useCallback(async (action: SkillActionOption) => {
-    const skillId = action.skillId;
-    const operation = action.operation;
-    setSkillLoading(true);
-    setSkillResult(null);
+  const handleRunAgentAction = useCallback(async (action: ChatAgentActionOption) => {
+    setAgentActionLoading(true);
+    setActionError(null);
     setShowArchivePanel(false);
 
     try {
-      if (skillId === 'archive_brief' && operation === 'archive_extract' && conversationId) {
-        const result = await api.agent.runArchiveExtract({
-          conversationId,
-          llm: selectedLlmConfig,
-        });
-        const data = result.data as ArchiveExtractData;
+      const runtimeInput: Record<string, unknown> = {
+        ...(action.defaultInputTemplate ?? {}),
+      };
 
-        // 保存归档数据用于应用面板
+      if (action.agentId === 'archive_brief' && action.operation === 'archive_extract') {
+        if (!conversationId) {
+          throw new Error('当前没有可用会话，无法提取归档。');
+        }
+        runtimeInput.conversationId = conversationId;
+      }
+
+      if (
+        (action.agentId === 'archive_brief' && action.operation === 'brief_generate') ||
+        action.agentId === 'contact_insight'
+      ) {
+        if (!conversation?.contactId) {
+          throw new Error('当前对话未绑定联系人，无法执行该系统级 Agent。');
+        }
+        runtimeInput.contactId = conversation.contactId;
+      }
+
+      const result = await api.agent.runGeneric({
+        agentId: action.agentId,
+        operation: action.operation,
+        input: runtimeInput,
+        conversationId: conversationId ?? undefined,
+        options: {
+          useCache: true,
+        },
+        llm: selectedLlmConfig,
+      });
+
+      let resultText = `已执行系统级 Agent：${action.name}${result.cached ? '（缓存命中）' : ''}`;
+
+      if (action.agentId === 'archive_brief' && action.operation === 'archive_extract') {
+        const data = result.data as unknown as ArchiveExtractData;
+
         setArchiveData(data);
         setShowArchivePanel(true);
 
-        // 生成简短展示文本
-        let resultText = `📋 归档提取完成\n\n`;
+        resultText = `📋 归档提取完成\n\n`;
         resultText += `摘要：${data.summary}\n\n`;
 
         const parts: string[] = [];
@@ -676,52 +775,108 @@ export function ConversationDetailPage() {
         }
         resultText += `💡 请在下方应用面板中选择需要创建/更新的项目`;
 
-        setSkillResult(resultText);
-      } else if (skillId === 'archive_brief' && operation === 'brief_generate' && conversationId) {
-        setSkillResult('💡 生成简报功能需要在联系人详情页使用。\n\n打开联系人详情页后，点击「生成洞察」按钮即可生成会前简报。');
-      } else if (skillId === 'contact_insight') {
-        setSkillResult('👤 联系人洞察功能需要在联系人详情页使用。\n\n打开联系人详情页后，点击「洞察」按钮即可生成完整的联系人洞察分析。');
-      } else if (action.run?.agentId) {
-        const runtimeInput: Record<string, unknown> = {
-          ...(action.run.inputTemplate ?? {}),
-        };
-        if (!runtimeInput.conversationId && conversationId) {
-          runtimeInput.conversationId = conversationId;
-        }
-
-        const result = await api.agent.runGeneric({
-          agentId: action.run.agentId,
-          operation: action.run.operation,
-          input: runtimeInput,
-          conversationId: conversationId ?? undefined,
-          options: {
-            useCache: true,
-          },
-          llm: selectedLlmConfig,
-        });
-
+      } else {
         const payload = JSON.stringify(result.data, null, 2);
         const clippedPayload = payload.length > 1200 ? `${payload.slice(0, 1197)}...` : payload;
-        setSkillResult(
-          `✅ 技能 "${skillId}" 操作 "${operation || '默认'}" 执行成功${result.cached ? '（缓存命中）' : ''}\n\n${clippedPayload}`,
-        );
+        resultText = `${resultText}\n\n${clippedPayload}`;
+      }
+
+      let persistedMessage: MessageWithMs | null = null;
+      if (conversationId) {
+        const stored = await api.conversations.appendMessage(conversationId, {
+          role: 'assistant',
+          content: resultText,
+          metadata: {
+            surface: 'agent_run',
+            agentId: action.agentId,
+            operation: action.operation ?? null,
+            runId: result.runId,
+            cached: result.cached,
+            dataPreview: JSON.stringify(result.data).slice(0, 500),
+            executionTrace: {
+              status: 'succeeded',
+              steps: [
+                {
+                  id: `${result.runId}-start`,
+                  kind: 'agent',
+                  itemId: result.runId,
+                  title: action.name,
+                  status: 'running',
+                },
+                {
+                  id: `${result.runId}-finish`,
+                  kind: 'agent',
+                  itemId: result.runId,
+                  title: action.name,
+                  status: 'succeeded',
+                  output: result.data,
+                },
+              ],
+            },
+          },
+        });
+        const createdAtMs = resolveEpochMs(stored.createdAtMs, stored.createdAt) ?? Date.now();
+        persistedMessage = {
+          id: stored.id,
+          role: stored.role as 'assistant',
+          content: stored.content,
+          createdAt: new Date(createdAtMs),
+          createdAtMs,
+          metadata: stored.metadata,
+        };
       } else {
-        setSkillResult(`✅ 技能 "${skillId}" 操作 "${operation || '默认'}" 触发成功`);
+        const createdAtMs = Date.now();
+        persistedMessage = {
+          id: `local-agent-run-${createdAtMs}`,
+          role: 'assistant',
+          content: resultText,
+          createdAt: new Date(createdAtMs),
+          createdAtMs,
+          metadata: {
+            surface: 'agent_run',
+            agentId: action.agentId,
+            operation: action.operation ?? null,
+            runId: result.runId,
+            cached: result.cached,
+            executionTrace: {
+              status: 'succeeded',
+              steps: [
+                {
+                  id: `${result.runId}-start`,
+                  kind: 'agent',
+                  itemId: result.runId,
+                  title: action.name,
+                  status: 'running',
+                },
+                {
+                  id: `${result.runId}-finish`,
+                  kind: 'agent',
+                  itemId: result.runId,
+                  title: action.name,
+                  status: 'succeeded',
+                  output: result.data,
+                },
+              ],
+            },
+          },
+        };
+      }
+
+      if (persistedMessage) {
+        setLocalAssistantMessages((prev) => [
+          ...prev.filter((message) => message.id !== persistedMessage!.id),
+          persistedMessage!,
+        ]);
       }
     } catch (error) {
-      setSkillResult(`❌ 执行失败：${error instanceof Error ? error.message : String(error)}`);
+      setActionError(`❌ 执行失败：${error instanceof Error ? error.message : String(error)}`);
     } finally {
-      setSkillLoading(false);
-      // 5秒后清除简单结果，保留归档数据
+      setAgentActionLoading(false);
       setTimeout(() => {
-        setSkillResult(null);
+        setActionError(null);
       }, 8000);
     }
-  }, [conversationId, selectedLlmConfig]);
-
-  const handleComposerSkillAction = useCallback((action: SkillActionOption) => {
-    void handleSkillSelect(action);
-  }, [handleSkillSelect]);
+  }, [conversation?.contactId, conversationId, selectedLlmConfig]);
 
   return (
     <div className="flex flex-col h-full bg-bg-page">
@@ -794,18 +949,18 @@ export function ConversationDetailPage() {
                 </div>
               </div>
             )}
-            {/* 技能执行结果 */}
-            {skillResult && (
+            {/* 系统级 Agent 执行错误 */}
+            {actionError && (
               <div className="flex justify-start">
                 <div className="max-w-[80%] rounded-2xl px-4 py-3 bg-accent/10 border border-accent/30 text-text-primary">
                   <div className="flex items-start gap-2">
-                    <span className="text-[13px] font-primary whitespace-pre-wrap">{skillResult}</span>
+                    <span className="text-[13px] font-primary whitespace-pre-wrap">{actionError}</span>
                   </div>
                 </div>
               </div>
             )}
-            {/* 技能加载状态 */}
-            {skillLoading && (
+            {/* 系统级 Agent 加载状态 */}
+            {agentActionLoading && (
               <div className="flex justify-start">
                 <div className="max-w-[80%] rounded-2xl px-4 py-3 bg-bg-card text-text-primary">
                   <div className="flex items-center gap-2">
@@ -814,7 +969,7 @@ export function ConversationDetailPage() {
                       <div className="w-2 h-2 bg-accent rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
                       <div className="w-2 h-2 bg-accent rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
                     </div>
-                    <span className="text-[13px] text-accent font-primary">执行技能中...</span>
+                    <span className="text-[13px] text-accent font-primary">执行系统级 Agent 中...</span>
                   </div>
                 </div>
               </div>
@@ -870,8 +1025,9 @@ export function ConversationDetailPage() {
         isLoading={chat.isLoading}
         placeholder="输入消息..."
         availableTools={AVAILABLE_CHAT_TOOLS}
-        skillActions={dynamicSkillActions}
-        onSelectSkillAction={handleComposerSkillAction}
+        availableAgents={dynamicAgentActions}
+        availableSkills={dynamicSkills}
+        onRunAgentAction={handleRunAgentAction}
         disabled={false}
       />
 

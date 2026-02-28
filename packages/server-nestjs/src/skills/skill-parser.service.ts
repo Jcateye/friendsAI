@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { generateUlid } from '../utils/ulid';
+import { extractMeetingAgentToken } from './shanji/meeting-token.util';
 import type { SkillCatalogItem, SkillInvocationIntent } from './skills.types';
 
 interface ParserInput {
@@ -37,7 +38,12 @@ export class SkillParserService {
       return fromCodeBlock;
     }
 
-    const fromShanjiLink = this.parseShanjiLink(text, input.catalog, traceId);
+    const fromShanjiLink = this.parseShanjiLink(
+      text,
+      input.composer,
+      input.catalog,
+      traceId,
+    );
     if (fromShanjiLink) {
       return fromShanjiLink;
     }
@@ -86,6 +92,17 @@ export class SkillParserService {
 
     const args = this.parseRawInputs(composer.rawInputs);
 
+    if (!action.run) {
+      return {
+        matched: false,
+        status: 'failed',
+        source: 'composer_action',
+        confidence: 1,
+        traceId,
+        warnings: [`Skill action is not executable via chat composer: ${skillActionId}`],
+      };
+    }
+
     return {
       matched: true,
       status: 'parsed',
@@ -96,14 +113,16 @@ export class SkillParserService {
       confidence: 1,
       traceId,
       warnings: [],
-      execution: {
-        agentId: action.run.agentId,
-        operation: action.run.operation,
-        input: {
-          ...(action.run.inputTemplate ?? {}),
-          ...args,
-        },
-      },
+      execution: action.run
+        ? {
+            agentId: action.run.agentId,
+            operation: action.run.operation,
+            input: {
+              ...(action.run.inputTemplate ?? {}),
+              ...args,
+            },
+          }
+        : undefined,
     };
   }
 
@@ -141,6 +160,19 @@ export class SkillParserService {
       warnings.push('Failed to parse slash payload, fallback to empty args');
     }
 
+    if (!action.run) {
+      return {
+        matched: false,
+        status: 'failed',
+        skillKey: action.skillKey,
+        operation: action.operation,
+        source: 'slash',
+        confidence: 1,
+        traceId,
+        warnings: ['Skill action is not executable via /skill slash command'],
+      };
+    }
+
     return {
       matched: true,
       status: 'parsed',
@@ -151,14 +183,16 @@ export class SkillParserService {
       confidence: 1,
       traceId,
       warnings,
-      execution: {
-        agentId: action.run.agentId,
-        operation: action.run.operation,
-        input: {
-          ...(action.run.inputTemplate ?? {}),
-          ...args,
-        },
-      },
+      execution: action.run
+        ? {
+            agentId: action.run.agentId,
+            operation: action.run.operation,
+            input: {
+              ...(action.run.inputTemplate ?? {}),
+              ...args,
+            },
+          }
+        : undefined,
     };
   }
 
@@ -220,6 +254,19 @@ export class SkillParserService {
             Object.entries(parsed).filter(([key]) => !['skill', 'skillKey', 'operation'].includes(key)),
           );
 
+    if (!action.run) {
+      return {
+        matched: false,
+        status: 'failed',
+        source: 'codeblock',
+        confidence: 1,
+        traceId,
+        skillKey: action.skillKey,
+        operation: action.operation,
+        warnings: ['Skill action is not executable via skill codeblock'],
+      };
+    }
+
     return {
       matched: true,
       status: 'parsed',
@@ -243,10 +290,15 @@ export class SkillParserService {
 
   private parseShanjiLink(
     text: string,
+    composer: Record<string, unknown> | undefined,
     catalog: SkillCatalogItem[],
     traceId: string,
   ): SkillInvocationIntent | null {
     if (!text) {
+      return null;
+    }
+
+    if (!this.isShanjiContextActive(text, composer)) {
       return null;
     }
 
@@ -264,6 +316,10 @@ export class SkillParserService {
     const args: Record<string, unknown> = {
       url,
     };
+    const outputMode = this.extractShanjiOutputMode(text);
+    if (outputMode) {
+      args.outputMode = outputMode;
+    }
     if (meetingAgentToken) {
       args.meetingAgentToken = meetingAgentToken;
     }
@@ -279,48 +335,54 @@ export class SkillParserService {
       traceId,
       warnings: [],
       execution: {
-        agentId: action.run.agentId,
-        operation: action.run.operation,
-        input: {
-          ...(action.run.inputTemplate ?? {}),
-          ...args,
-        },
+        agentId: 'dingtalk_shanji',
+        operation: 'extract',
+        input: args,
       },
     };
   }
 
   private extractShanjiUrl(text: string): string | undefined {
-    const match = text.match(
-      /https?:\/\/shanji\.dingtalk\.com\/app\/transcribes\/[A-Za-z0-9_%\-]+/i,
+    const matches = text.match(
+      /https?:\/\/shanji\.dingtalk\.com\/app\/transcribes\/[A-Za-z0-9_%\-]+/gi,
     );
-    if (!match) {
+    if (!matches || matches.length === 0) {
       return undefined;
     }
-    return match[0].trim();
+    return matches[matches.length - 1].trim();
   }
 
   private extractShanjiMeetingToken(text: string): string | undefined {
+    return extractMeetingAgentToken(text);
+  }
+
+  private extractShanjiOutputMode(text: string): 'summary' | 'full_text' | undefined {
     if (!text) {
       return undefined;
     }
 
-    const explicitMatch = text.match(
-      /dt-meeting-agent-token[\s:=："']*([A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+)/i,
+    if (/(全文|完整文本|完整原文|全部内容|原文|完整提取)/i.test(text)) {
+      return 'full_text';
+    }
+
+    return 'summary';
+  }
+
+  private isShanjiContextActive(
+    text: string,
+    composer: Record<string, unknown> | undefined,
+  ): boolean {
+    if (this.isSkillEnabled(composer, 'dingtalk_shanji')) {
+      return true;
+    }
+
+    const normalized = this.normalize(text);
+    return (
+      normalized.includes('前面的闪记') ||
+      normalized.includes('提取闪记内容') ||
+      normalized.includes('全文都提取出来') ||
+      normalized.includes('已解析钉钉闪记链接')
     );
-    if (explicitMatch?.[1]) {
-      return explicitMatch[1].trim();
-    }
-
-    const jwtMatches = text.match(/[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g);
-    if (!jwtMatches || jwtMatches.length === 0) {
-      return undefined;
-    }
-
-    const likelyJwt = jwtMatches.find((item) => item.startsWith('eyJ'));
-    if (!likelyJwt) {
-      return undefined;
-    }
-    return likelyJwt.trim();
   }
 
   private parseNaturalLanguage(
@@ -414,6 +476,17 @@ export class SkillParserService {
             confidence: top.confidence,
           },
         ],
+      };
+    }
+
+    if (!top.action.run) {
+      return {
+        matched: false,
+        status: 'failed',
+        source: 'natural_language',
+        confidence: top.confidence,
+        traceId,
+        warnings: ['Skill action is not executable via natural language routing'],
       };
     }
 
@@ -561,6 +634,19 @@ export class SkillParserService {
     }
 
     return skill.actions.find((action) => action.operation === operation) ?? null;
+  }
+
+  private isSkillEnabled(
+    composer: Record<string, unknown> | undefined,
+    skillKey: string,
+  ): boolean {
+    if (!composer || !Array.isArray(composer.enabledSkills)) {
+      return false;
+    }
+
+    return composer.enabledSkills.some(
+      (item) => typeof item === 'string' && item.trim() === skillKey,
+    );
   }
 
   private tokenize(value: string): string[] {

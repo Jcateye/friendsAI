@@ -2,6 +2,8 @@ import { useMessage } from '@assistant-ui/react';
 import { A2UIRenderer, ToolTraceCard } from '../a2ui';
 import type { A2UIDocument, A2UIAction } from '../a2ui/types';
 import { ThinkingProcess } from './ThinkingProcess';
+import { ExecutionTimeline } from './ExecutionTimeline';
+import type { ExecutionTrace } from '../../hooks/useAgentChat';
 
 function normalizeThinkTags(content: string): string {
   return content
@@ -53,6 +55,13 @@ interface MessageLike {
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
+}
+
+function isExecutionTrace(value: unknown): value is ExecutionTrace {
+  return (
+    isObject(value) &&
+    Array.isArray((value as { steps?: unknown }).steps)
+  );
 }
 
 function renderMessageContent(content: unknown): React.ReactNode {
@@ -204,6 +213,9 @@ function InlineMessageRenderer({ message }: { message: MessageLike }) {
     ? (message.metadata as Record<string, unknown>)
     : undefined;
   const a2uiData = metadata?.a2ui as A2UIDocument | undefined;
+  const executionTrace = isExecutionTrace(metadata?.executionTrace)
+    ? metadata.executionTrace
+    : undefined;
 
   const toolInvocations = Array.isArray(message.toolInvocations)
     ? message.toolInvocations
@@ -260,6 +272,10 @@ function InlineMessageRenderer({ message }: { message: MessageLike }) {
 
   return (
     <div className="flex flex-col gap-2">
+      {executionTrace && executionTrace.steps.length > 0 ? (
+        <ExecutionTimeline trace={executionTrace} />
+      ) : null}
+
       {thinkingContent && <ThinkingProcess content={thinkingContent} />}
 
       {actualContent !== undefined && actualContent !== null && actualContent !== '' && (

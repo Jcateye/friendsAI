@@ -4,6 +4,7 @@ import type {
   AgentMessage,
   AgentMessageDelta,
   AgentRunEnd,
+  SkillStateUpdate,
   ToolStateUpdate,
   AgentContextPatch,
 } from '../client-types';
@@ -54,6 +55,9 @@ export class VercelAiStreamAdapter {
       case 'tool.state':
         return this.transformToolState(event.data);
 
+      case 'skill.state':
+        return this.transformSkillState(event.data);
+
       case 'error':
         return this.transformError(event.data);
 
@@ -88,7 +92,19 @@ export class VercelAiStreamAdapter {
     this.messageId = generateUlid();
     this.messageStarted = true;
     this.messageFinished = false;
-    return this.sse({ type: 'start', messageId: this.messageId });
+    return [
+      this.sse({ type: 'start', messageId: this.messageId }),
+      this.sse({
+        type: 'data-execution-step',
+        id: generateUlid(),
+        data: {
+          kind: 'agent',
+          itemId: this.messageId,
+          title: '智能体执行',
+          status: 'running',
+        },
+      }),
+    ].join('');
   }
 
   /**
@@ -172,6 +188,15 @@ export class VercelAiStreamAdapter {
             dynamic: true,
           }),
         );
+        parts.push(this.buildExecutionStepChunk({
+          kind: 'tool',
+          itemId: update.toolId,
+          title: update.name,
+          status: update.status,
+          at: update.at,
+          message: update.message,
+          input: update.input || {},
+        }));
         return parts.join('');
 
       case 'succeeded':
@@ -183,6 +208,16 @@ export class VercelAiStreamAdapter {
             dynamic: true,
           }),
         );
+        parts.push(this.buildExecutionStepChunk({
+          kind: 'tool',
+          itemId: update.toolId,
+          title: update.name,
+          status: update.status,
+          at: update.at,
+          message: update.message,
+          input: update.input ?? {},
+          output: update.output ?? null,
+        }));
         return parts.join('');
 
       case 'failed':
@@ -197,6 +232,16 @@ export class VercelAiStreamAdapter {
             dynamic: true,
           }),
         );
+        parts.push(this.buildExecutionStepChunk({
+          kind: 'tool',
+          itemId: update.toolId,
+          title: update.name,
+          status: update.status,
+          at: update.at,
+          message: update.message,
+          input: update.input ?? {},
+          error: update.error ?? null,
+        }));
         return parts.join('');
 
       case 'awaiting_input':
@@ -214,11 +259,49 @@ export class VercelAiStreamAdapter {
             },
           }),
         );
+        parts.push(this.buildExecutionStepChunk({
+          kind: 'tool',
+          itemId: update.toolId,
+          title: update.name,
+          status: update.status,
+          at: update.at,
+          message: update.message,
+          input: update.input || {},
+        }));
         return parts.join('');
 
       default:
         return null;
     }
+  }
+
+  private transformSkillState(update: SkillStateUpdate): string | null {
+    return [
+      this.sse({
+        type: 'data-skill-state',
+        id: update.skillId,
+        data: {
+          skillId: update.skillId,
+          status: update.status,
+          message: update.message,
+          input: update.input ?? {},
+          output: update.output ?? null,
+          error: update.error,
+          at: update.at,
+        },
+      }),
+      this.buildExecutionStepChunk({
+        kind: 'skill',
+        itemId: update.skillId,
+        title: update.skillId,
+        status: update.status,
+        at: update.at,
+        message: update.message,
+        input: update.input ?? {},
+        output: update.output ?? null,
+        error: update.error ?? null,
+      }),
+    ].join('');
   }
 
   /**
@@ -264,6 +347,39 @@ export class VercelAiStreamAdapter {
       this.messageFinished = true;
     }
 
+    if (this.messageId) {
+      parts.push(this.buildExecutionStepChunk({
+        kind: 'agent',
+        itemId: this.messageId,
+        title: '智能体执行',
+        status: end.status,
+        at: end.finishedAt,
+        message: end.error?.message,
+        output: end.output ?? null,
+        error: end.error ?? null,
+      }));
+    }
+
     return parts.length > 0 ? parts.join('') : null;
+  }
+
+  private buildExecutionStepChunk(step: {
+    kind: 'agent' | 'tool' | 'skill';
+    itemId: string;
+    title: string;
+    status: string;
+    at?: string;
+    message?: string;
+    input?: unknown;
+    output?: unknown;
+    error?: unknown;
+  }): string {
+    return this.sse({
+      type: 'data-execution-step',
+      id: generateUlid(),
+      data: {
+        ...step,
+      },
+    });
   }
 }
