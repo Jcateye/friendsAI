@@ -520,6 +520,21 @@ export function ConversationDetailPage() {
     [sortedMessages],
   );
 
+  const streamingAssistantMessageId = useMemo(() => {
+    if (!chat.isLoading) {
+      return null;
+    }
+
+    for (let index = chat.messages.length - 1; index >= 0; index -= 1) {
+      const message = chat.messages[index];
+      if (message.role === 'assistant') {
+        return message.id;
+      }
+    }
+
+    return null;
+  }, [chat.isLoading, chat.messages]);
+
   // 当对话消息数量达到一定阈值时，触发标题 & 摘要生成
   const hasRequestedTitleSummaryRef = useRef(false);
   const initialConversationMessageCountRef = useRef<number>(0);
@@ -906,16 +921,19 @@ export function ConversationDetailPage() {
                 className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
               >
                 <div
-                  className={`max-w-[80%] rounded-2xl px-4 py-3 ${
+                  className={`min-w-0 max-w-[80%] rounded-2xl px-4 py-3 ${
                     message.role === 'user'
                       ? 'bg-primary text-white'
                       : 'bg-bg-card text-text-primary'
                   }`}
                 >
                   {message.role === 'assistant' ? (
-                    <CustomMessageRenderer message={message} />
+                    <CustomMessageRenderer
+                      message={message}
+                      isStreaming={chat.isLoading && message.id === streamingAssistantMessageId}
+                    />
                   ) : (
-                    <p className="text-[15px] font-primary whitespace-pre-wrap">
+                    <p className="break-words text-[15px] font-primary whitespace-pre-wrap [overflow-wrap:anywhere]">
                       {message.content}
                     </p>
                   )}

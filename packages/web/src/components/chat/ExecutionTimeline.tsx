@@ -1,3 +1,5 @@
+import { useEffect, useState } from 'react';
+import { ChevronDown, ChevronUp } from 'lucide-react';
 import type { ExecutionTrace } from '../../hooks/useAgentChat';
 
 function statusLabel(status: string): string {
@@ -66,61 +68,91 @@ function renderPayload(payload: unknown): string | null {
   }
 }
 
-export function ExecutionTimeline({ trace }: { trace: ExecutionTrace }) {
+export function ExecutionTimeline({
+  trace,
+  isStreaming = false,
+}: {
+  trace: ExecutionTrace;
+  isStreaming?: boolean;
+}) {
+  const [isExpanded, setIsExpanded] = useState(isStreaming);
+
+  useEffect(() => {
+    setIsExpanded(isStreaming);
+  }, [isStreaming]);
+
   if (!trace.steps.length) {
     return null;
   }
 
   return (
-    <div className="w-full rounded-[14px] border border-border bg-bg-surface/80 px-3 py-3">
-      <div className="mb-3 flex items-center justify-between">
-        <div className="text-[12px] font-semibold text-text-secondary">执行过程</div>
-        <div className="text-[11px] text-text-muted">
+    <div className="w-full min-w-0 rounded-[14px] border border-border bg-bg-surface/80 px-3 py-3">
+      <button
+        type="button"
+        aria-expanded={isExpanded}
+        className="mb-0 flex w-full items-center justify-between gap-3 border-none bg-transparent p-0 text-left"
+        onClick={() => setIsExpanded(!isExpanded)}
+      >
+        <div className="flex min-w-0 items-center gap-2">
+          <div className="text-[12px] font-semibold text-text-secondary">
+            执行过程{isExpanded ? '' : '（已折叠）'}
+          </div>
+          {isExpanded ? (
+            <ChevronUp className="h-3.5 w-3.5 shrink-0 text-text-muted" />
+          ) : (
+            <ChevronDown className="h-3.5 w-3.5 shrink-0 text-text-muted" />
+          )}
+        </div>
+        <div className="shrink-0 text-[11px] text-text-muted">
           {trace.status ? statusLabel(trace.status) : `${trace.steps.length} 个节点`}
         </div>
-      </div>
+      </button>
 
-      <div className="space-y-3">
-        {trace.steps.map((step, index) => {
-          const payloadText = renderPayload(step.output ?? step.input);
-          const errorText = renderPayload(step.error);
+      {isExpanded ? (
+        <div className="mt-3 space-y-3">
+          {trace.steps.map((step, index) => {
+            const payloadText = renderPayload(step.output ?? step.input);
+            const errorText = renderPayload(step.error);
 
-          return (
-            <div key={step.id} className="flex gap-3">
-              <div className="flex w-4 flex-col items-center">
-                <span className={`mt-1 h-2.5 w-2.5 rounded-full ${statusDotClass(step.status)}`} />
-                {index < trace.steps.length - 1 ? (
-                  <span className="mt-1 h-full min-h-[28px] w-px bg-border" />
-                ) : null}
-              </div>
-
-              <div className="min-w-0 flex-1 pb-1">
-                <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                  <span className="text-[13px] font-medium text-text-primary">{step.title}</span>
-                  <span className="text-[11px] text-text-muted">{kindLabel(step.kind)}</span>
-                  <span className="text-[11px] text-text-muted">{statusLabel(step.status)}</span>
+            return (
+              <div key={step.id} className="flex gap-3">
+                <div className="flex w-4 flex-col items-center">
+                  <span className={`mt-1 h-2.5 w-2.5 rounded-full ${statusDotClass(step.status)}`} />
+                  {index < trace.steps.length - 1 ? (
+                    <span className="mt-1 h-full min-h-[28px] w-px bg-border" />
+                  ) : null}
                 </div>
 
-                {step.message ? (
-                  <div className="mt-1 text-[12px] leading-relaxed text-text-secondary">{step.message}</div>
-                ) : null}
+                <div className="min-w-0 flex-1 pb-1">
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                    <span className="text-[13px] font-medium text-text-primary">{step.title}</span>
+                    <span className="text-[11px] text-text-muted">{kindLabel(step.kind)}</span>
+                    <span className="text-[11px] text-text-muted">{statusLabel(step.status)}</span>
+                  </div>
 
-                {payloadText ? (
-                  <pre className="mt-2 overflow-x-auto rounded-[10px] bg-bg-card px-2.5 py-2 text-[11px] leading-relaxed text-text-muted">
-                    {payloadText}
-                  </pre>
-                ) : null}
+                  {step.message ? (
+                    <div className="mt-1 break-words text-[12px] leading-relaxed text-text-secondary [overflow-wrap:anywhere]">
+                      {step.message}
+                    </div>
+                  ) : null}
 
-                {errorText ? (
-                  <pre className="mt-2 overflow-x-auto rounded-[10px] bg-red-500/10 px-2.5 py-2 text-[11px] leading-relaxed text-red-300">
-                    {errorText}
-                  </pre>
-                ) : null}
+                  {payloadText ? (
+                    <pre className="mt-2 overflow-x-hidden whitespace-pre-wrap break-all rounded-[10px] bg-bg-card px-2.5 py-2 text-[11px] leading-relaxed text-text-muted">
+                      {payloadText}
+                    </pre>
+                  ) : null}
+
+                  {errorText ? (
+                    <pre className="mt-2 overflow-x-hidden whitespace-pre-wrap break-all rounded-[10px] bg-red-500/10 px-2.5 py-2 text-[11px] leading-relaxed text-red-300">
+                      {errorText}
+                    </pre>
+                  ) : null}
+                </div>
               </div>
-            </div>
-          );
-        })}
-      </div>
+            );
+          })}
+        </div>
+      ) : null}
     </div>
   );
 }

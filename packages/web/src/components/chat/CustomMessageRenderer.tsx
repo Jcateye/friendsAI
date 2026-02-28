@@ -53,6 +53,11 @@ interface MessageLike {
   toolInvocations?: ToolInvocation[];
 }
 
+interface CustomMessageRendererProps {
+  message?: MessageLike;
+  isStreaming?: boolean;
+}
+
 function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
 }
@@ -150,7 +155,7 @@ function renderMarkdown(content: string): React.ReactNode {
           href={url}
           target="_blank"
           rel="noopener noreferrer"
-          className="text-primary hover:underline"
+          className="break-all text-primary hover:underline [overflow-wrap:anywhere]"
         >
           {label}
         </a>
@@ -208,7 +213,13 @@ function renderMarkdown(content: string): React.ReactNode {
   );
 }
 
-function InlineMessageRenderer({ message }: { message: MessageLike }) {
+function InlineMessageRenderer({
+  message,
+  isStreaming = false,
+}: {
+  message: MessageLike;
+  isStreaming?: boolean;
+}) {
   const metadata = isObject(message.metadata)
     ? (message.metadata as Record<string, unknown>)
     : undefined;
@@ -273,13 +284,13 @@ function InlineMessageRenderer({ message }: { message: MessageLike }) {
   return (
     <div className="flex flex-col gap-2">
       {executionTrace && executionTrace.steps.length > 0 ? (
-        <ExecutionTimeline trace={executionTrace} />
+        <ExecutionTimeline trace={executionTrace} isStreaming={isStreaming} />
       ) : null}
 
-      {thinkingContent && <ThinkingProcess content={thinkingContent} />}
+      {thinkingContent && <ThinkingProcess content={thinkingContent} isStreaming={isStreaming} />}
 
       {actualContent !== undefined && actualContent !== null && actualContent !== '' && (
-        <div className="text-[15px] text-text-primary font-primary leading-relaxed">
+        <div className="min-w-0 break-words text-[15px] font-primary leading-relaxed text-text-primary [overflow-wrap:anywhere]">
           {renderMessageContent(actualContent)}
         </div>
       )}
@@ -319,9 +330,12 @@ function InlineMessageRenderer({ message }: { message: MessageLike }) {
   );
 }
 
-export function CustomMessageRenderer({ message: messageProp }: { message?: MessageLike } = {}) {
+export function CustomMessageRenderer({
+  message: messageProp,
+  isStreaming = false,
+}: CustomMessageRendererProps = {}) {
   if (messageProp) {
-    return <InlineMessageRenderer message={messageProp as MessageLike} />;
+    return <InlineMessageRenderer message={messageProp as MessageLike} isStreaming={isStreaming} />;
   }
 
   const message = useMessage();
@@ -330,5 +344,5 @@ export function CustomMessageRenderer({ message: messageProp }: { message?: Mess
     return null;
   }
 
-  return <InlineMessageRenderer message={message as unknown as MessageLike} />;
+  return <InlineMessageRenderer message={message as unknown as MessageLike} isStreaming={isStreaming} />;
 }
