@@ -74,7 +74,11 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+repo_root="$(
+  git -C "$script_dir" rev-parse --show-toplevel 2>/dev/null \
+    || (cd "$script_dir/../../.." && pwd)
+)"
 if [[ -z "$project_name" ]]; then
   project_name="$(basename "$repo_root")"
 fi

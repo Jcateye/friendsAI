@@ -40,7 +40,24 @@ def parse_story_frontmatter(md: str) -> Dict[str, Any] | None:
         import yaml  # type: ignore
         data = yaml.safe_load(m.group(1))
     except Exception:
-        return None
+        data = {}
+        for raw_line in m.group(1).splitlines():
+            line = raw_line.strip()
+            if not line or line.startswith('#') or ':' not in line:
+                continue
+            key, value = line.split(':', 1)
+            key = key.strip()
+            value = value.strip()
+            if not key:
+                continue
+            if value.startswith('[') and value.endswith(']'):
+                inner = value[1:-1].strip()
+                data[key] = [part.strip() for part in inner.split(',') if part.strip()] if inner else []
+                continue
+            if value.isdigit():
+                data[key] = int(value)
+                continue
+            data[key] = value
     return data if isinstance(data, dict) else None
 
 
