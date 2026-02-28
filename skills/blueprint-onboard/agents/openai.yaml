@@ -1,0 +1,4 @@
+interface:
+  display_name: "Blueprint Onboard"
+  short_description: "Guided blueprint generation and append from design docs"
+  default_prompt: "Guide the user through generating and appending Blueprint V3 content from a design document."
